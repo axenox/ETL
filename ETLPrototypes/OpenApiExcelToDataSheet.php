@@ -154,6 +154,9 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
 
         $sheetname = $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_EXCEL_SHEET];
         foreach ($toObjectSchema['properties'] as $propertyValue) {
+            if ($propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN] == NULL || $propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN] == '') {
+                throw new InvalidArgumentException('No ' . self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN . ' expression given for attribute_alias ' .$propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS]);
+            }
             $excelColumnMapping[$propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN]] = [
                 "attribute-alias" => $propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS],
                 "datatype" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_DATATYPE),
