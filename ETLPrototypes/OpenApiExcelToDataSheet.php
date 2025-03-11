@@ -3,6 +3,7 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
+use exface\Core\CommonLogic\Model\Attribute;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -170,7 +171,7 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         );
         foreach ($excelColumnMapping as $excelDataAddress => $propertyInfomation) {
             $dataType = $this->getInternalDatatype($propertyInfomation['datatype'], $propertyInfomation['format'], $propertyInfomation['enum-values']);
-            MetaObjectFactory::addAttributeTemporary($fakeObj, $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], '[' .$excelDataAddress . ']', $dataType);
+            MetaObjectFactory::addAttributeTemporary($fakeObj, new Attribute($fakeObj), $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], '[' .$excelDataAddress . ']', $dataType);
         }
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
