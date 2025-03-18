@@ -132,8 +132,8 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
         $ds->getColumns()->addMultiple(
             ['UID', 'type__schema_json', 'swagger_json', 'enabled']);
-        $ds->getFilters()->addConditionFromString('alias', $webservice['alias']);
-        $ds->getFilters()->addConditionFromString('version', $webservice['version']);
+        $ds->getFilters()->addConditionFromString('alias', $webservice['alias'], '==');
+        $ds->getFilters()->addConditionFromString('version', $webservice['version'], '==');
         $ds->dataRead();
 
         $webservice = $ds->getSingleRow();
