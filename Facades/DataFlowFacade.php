@@ -5,11 +5,13 @@ use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
 use exface\Core\Behaviors\CustomAttributesJsonBehavior;
+use exface\Core\CommonLogic\Model\CustomAttribute;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\UnavailableError;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaAttributeGroupInterface;
+use exface\Core\Interfaces\Model\MetaObjectInterface;
 use Flow\JSONPath\JSONPathException;
 use GuzzleHttp\Psr7\Response;
 use Intervention\Image\Exception\NotFoundException;
@@ -354,7 +356,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	        return null;
 	    }
         
-        $json = $this->injectCustomAttributes($json);
+        $json = $this->injectAttributeGroups($json);
 	    JsonDataType::validateJsonSchema($json, $routeData['type__schema_json']);
         
 	    return json_encode($json);
@@ -372,7 +374,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
      * @param string $json
      * @return stdClass
      */
-    protected function injectCustomAttributes(string $json) : stdClass
+    protected function injectAttributeGroups(string $json) : stdClass
     {
         $json = json_decode($json);
         $schemas = $json->components->schemas;
@@ -384,26 +386,76 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             }
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            foreach($object->getAttributeGroup(MetaAttributeGroupInterface::CUSTOM) as $attribute) {
-                if(!$attribute->getSource() instanceof CustomAttributesJsonBehavior) {
+            $properties = $schema->properties;
+            foreach ($properties as $propertyName => $property) {
+                $result = $this->toGroup($property, $object);
+                if($result === false) {
                     continue;
                 }
                 
-                $alias = $attribute->getAlias();
-                $aliasToUpper = strtoupper($alias);
-                $properties = $schema->properties ?? $schema->properties = new stdClass();
-                $property = $properties->{$aliasToUpper} = new stdClass();
-                foreach (MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType()) as $prop => $val){
-                    $property->$prop = $val;
+                foreach ($result as $key => $value) {
+                    if(!empty($properties->{$key})) {
+                        continue;
+                    }
+                    
+                    $properties->{$key} = $value;
                 }
-                $property->nullable = true;
-                $property->description = $attribute->getShortDescription();
-                $property->{'x-attribute-alias'} = $alias;
-                $property->{'x-excel-column'} = $aliasToUpper;
+                
+                unset($properties->{$propertyName});
             }
         }
         
         return $json;
+    }
+
+    /**
+     * Converts a given stdClass instance to an attribute group.
+     * 
+     * If the given instance does not contain a property `x-attribute-group-alias` this
+     * function will return FALSE. If it does, it will return an array containing schema
+     * conform instances of all attributes belonging to that attribute group.
+     * 
+     * @param stdClass            $property
+     * @param MetaObjectInterface $object
+     * @return array|false
+     */
+    protected function toGroup(stdClass $property, MetaObjectInterface $object) : array|false
+    {
+        $attributeGroup = $property->{'x-attribute-group-alias'};
+        if(empty($attributeGroup)) {
+            return false;
+        }
+
+        $result = [];
+        foreach($object->getAttributeGroup($attributeGroup) as $attribute) {
+            if( $attribute instanceof CustomAttribute &&
+                !$attribute->getSource() instanceof CustomAttributesJsonBehavior) {
+                continue;
+            }
+
+            $alias = $attribute->getAlias();
+            $aliasToUpper = strtoupper($alias);
+            $property = new stdClass();
+
+            try {
+                $propertySchema = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
+            } catch (InvalidArgumentException $e) {
+                continue;
+            }
+            
+            foreach ($propertySchema as $prop => $val){
+                $property->$prop = $val;
+            }
+            
+            $property->nullable = true;
+            $property->description = $attribute->getShortDescription() ?? "";
+            $property->{'x-attribute-alias'} = $alias;
+            $property->{'x-excel-column'} = $aliasToUpper;
+            
+            $result[$aliasToUpper] = $property;
+        }
+        
+        return $result;
     }
 
     /**
