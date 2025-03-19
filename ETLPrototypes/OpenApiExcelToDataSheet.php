@@ -172,8 +172,7 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         );
         foreach ($excelColumnMapping as $excelDataAddress => $propertyInfomation) {
             $dataType = $this->getInternalDatatype($propertyInfomation['datatype'], $propertyInfomation['format'], $propertyInfomation['enum-values']);
-            $attr = new CustomAttribute($fakeObj, $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], $this);
-            MetaObjectFactory::addAttributeTemporary($attr, '[' .$excelDataAddress . ']', $dataType);
+            MetaObjectFactory::addAttributeTemporary($fakeObj, $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], '[' .$excelDataAddress . ']', $dataType);
         }
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
