@@ -229,8 +229,7 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
             $dataAddress = $property[$dataAddressKey];
             if ($dataAddress !== null) {
                 // data address like: ´CASE WHEN [#Status#] > 10 THEN 'Ja' ELSE 'Nein'´
-                $att = new Attribute($fromSheet->getMetaObject());
-                $att->setAlias($alias);
+                $att = new Attribute($fromSheet->getMetaObject(), $alias, $alias);
                 // objects are represented as json strings in OneLink attributes
                 $definedType =  $property['type'] === 'object' ? 'string' : $property['type'];
                 // API Definitions only contain core data types.
