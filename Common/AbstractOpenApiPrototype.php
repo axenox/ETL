@@ -4,21 +4,21 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
-use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\CommonLogic\DataSheets\DataSheet;
+use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\FormulaFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Widgets\DebugMessage;
 use Flow\JSONPath\JSONPath;
 use Flow\JSONPath\JSONPathException;
 use Psr\Http\Message\ServerRequestInterface;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
-use exface\Core\Exceptions\RuntimeException;
 use axenox\ETL\Interfaces\OpenApiFacadeInterface;
 
 abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
@@ -28,12 +28,15 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
     const OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS = 'x-attribute-alias';
     const OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_CALCULATION = 'x-attribute-calculation';
     const OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS = 'x-attribute-dataaddress';
+    const OPEN_API_ATTRIBUTE_LOOKUP = 'x-lookup';
 
     const OPEN_API_ATTRIBUTE_TO_DATATYPE = 'type';
     const OPEN_API_ATTRIBUTE_TO_FORMAT = 'format';
     const OPEN_API_ATTRIBUTE_TO_ENUM_VALUES = 'enum';
 
-    protected $baseSheet = null;
+    protected $toSheet = null;
+
+    private $baseDataSheetUxon = null;
 
     /**
      * Finds the object schema by mapping the datasheet to the ´x-object-alias´ in the OpenApi schema.
@@ -43,16 +46,16 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
      * @return array
      * @throws InvalidArgumentException
      */
-    protected function findObjectSchema(DataSheetInterface $dataSheet, array $schemas): array
+    protected function findObjectSchema(MetaObjectInterface $object, array $schemas): array
     {
         switch(true) {
-            case array_key_exists($dataSheet->getMetaObject()->getAliasWithNamespace(), $schemas):
-                $fromObjectSchema = $schemas[$dataSheet->getMetaObject()->getAliasWithNamespace()];
+            case array_key_exists($object->getAliasWithNamespace(), $schemas):
+                $fromObjectSchema = $schemas[$object->getAliasWithNamespace()];
                 break;
-            case array_key_exists($dataSheet->getMetaObject()->getAlias(), $schemas):
-                $fromObjectSchema = $schemas[$key[0] ?? $dataSheet->getMetaObject()->getAlias()];
+            case array_key_exists($object->getAlias(), $schemas):
+                $fromObjectSchema = $schemas[$key[0] ?? $object->getAlias()];
 
-                if ($fromObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS] !== $dataSheet->getMetaObject()->getAliasWithNamespace()) {
+                if ($fromObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS] !== $object->getAliasWithNamespace()) {
                     throw new InvalidArgumentException('From sheet does not match ' .
                         self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS .
                         ' of found schema in the OpenApi definition!');
@@ -60,7 +63,7 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
                 break;
             default:
                 foreach ($schemas as $schema) {
-                    if ($schema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS] === $dataSheet->getMetaObject()->getAliasWithNamespace()) {
+                    if ($schema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS] === $object->getAliasWithNamespace()) {
                         return $schema;
                     }
                 }
@@ -93,6 +96,33 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
             throw new InvalidArgumentException('Cannot load OpenAPI definition from HTTP task!');
         }
         return $json;
+    }
+
+    protected function getOpenApiSchemaForObject(MetaObjectInterface $object, string $openApiJson, string $customSchema = null) : array
+    {
+        $schemas = (new JSONPath(json_decode($openApiJson, false)))
+            ->find(self::JSON_PATH_TO_OPEN_API_SCHEMAS)->getData()[0];
+        $schemas = json_decode(json_encode($schemas), true);
+
+        if ($customSchema !== null && array_key_exists($customSchema, $schemas)) {
+            $toObjectSchema = $schemas[$customSchema];
+        } else {
+            $toObjectSchema = $this->findObjectSchema($object, $schemas);
+        }
+        return $toObjectSchema;
+    }
+
+    protected function getOpenApiSchemaForRequest(ServerRequestInterface $request, string $openApiJson) : array
+    {
+        $jsonPath = '$.paths.[#routePath#].[#methodType#].requestBody.content.[#ContentType#].schema';
+        $requestSchema = $this->getSchema($request, $openApiJson, $jsonPath);
+
+        if ($requestSchema === null) {
+            throw new InvalidArgumentException('Cannot find necessary request schema in OpenApi. Please check the OpenApi definition!´.'
+                . $jsonPath
+                . '´ Please check the OpenApi definition!');
+        }
+        return $requestSchema;
     }
 
     /**
@@ -133,9 +163,9 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
     /**
      * @param ETLStepDataInterface $stepData
      * @param array $requestedColumns
-     * @return DataSheet|DataSheetInterface
+     * @return DataSheetInterface
      */
-    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheet|DataSheetInterface
+    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheetInterface
     {
         $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
         $requestLogData->getColumns()->addFromSystemAttributes();
@@ -203,5 +233,41 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
                 $dataSheet->getColumns()->remove($column);
             }
         }
+    }
+    
+    /**
+     * 
+     * {@inheritDoc}
+     * @see \exface\Core\Interfaces\iCanGenerateDebugWidgets::createDebugWidget()
+     */
+    public function createDebugWidget(DebugMessage $debug_widget)
+    {
+        if ($this->toSheet !== null) {
+            $debug_widget = $this->toSheet->createDebugWidget($debug_widget);
+        }
+        return $debug_widget;
+    }
+
+    protected function setBaseDataSheet(UxonObject $uxon) : AbstractOpenApiPrototype
+    {
+        $this->baseDataSheetUxon = $uxon;
+        return $this;
+    }
+
+    protected function createBaseDataSheet(array $placeholders = []) : DataSheetInterface
+    {
+        if ($this->baseDataSheetUxon !== null) {
+            if (! empty($placeholders)) {
+                $json = $this->baseDataSheetUxon->toJson();
+                $json = StringDataType::replacePlaceholders($json, $placeholders);
+                $uxon = UxonObject::fromJson($json);
+            } else {
+                $uxon = $this->baseDataSheetUxon;
+            }
+            $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $this->getToObject());
+        } else {
+            $ds = DataSheetFactory::createFromObject($this->getToObject());
+        }
+        return $ds;
     }
 }

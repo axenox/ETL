@@ -25,7 +25,10 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataTypes\EnumDataTypeInterface;
+use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Model\Behaviors\FileBehaviorInterface;
+use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\QueryBuilders\ExcelBuilder;
 use exface\Core\Widgets\DebugMessage;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
@@ -94,28 +97,11 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
     {
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
-        $baseSheet = DataSheetFactory::createFromObject($this->getToObject());
         $result = new UxonEtlStepResult($stepRunUid);
-        $task = $stepData->getTask();
 
-        // If the task has input data and that data is a file, use it here.
-        // Otherwise look for the flow run UID in the data of axenox.ETL.file_upload object.
-        $fileData = $task->getInputData();
-        if (
-            $fileData !== null
-            && ! $fileData->isEmpty()
-            && $fileData->hasUidColumn(true)
-            && ! $fileData->getMetaObject()->getBehaviors()->getByPrototypeClass(FileBehaviorInterface::class)->isEmpty()
-        ) {
-            $fileObj = $task->getMetaObject();
-        } else {
-            $fileObj = MetaObjectFactory::createFromString($this->getWorkbench(), 'axenox.ETL.file_upload');
-            $fileData = DataSheetFactory::createFromObject($fileObj);
-            $fileData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid(), ComparatorDataType::EQUALS);
-            $fileData->getColumns()->addFromUidAttribute();
-            $fileData->dataRead();
-        }
-        $uploadUid = $fileData->getUidColumn()->getValue(0);
+        // Read the upload info (in particular the UID) into a data sheet
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);;
         $placeholders['upload_uid'] = $uploadUid;
 
         // If there is no file to read, stop here.
@@ -126,82 +112,39 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         }
 
         // Create a FileInfo object for the Excel file
-        $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileObj, $uploadUid);
+        $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileData->getMetaObject(), $uploadUid);
         yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
 
-        // Reads the OpenAPI specification from the configrued webservice and transforms it into an excel column mapping
-        $webservice = $this->getWebservice();
-        $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-        $ds->getColumns()->addMultiple(
-            ['UID', 'type__schema_json', 'swagger_json', 'enabled']);
-        $ds->getFilters()->addConditionFromString('alias', $webservice['alias'], '==');
-        $ds->getFilters()->addConditionFromString('version', $webservice['version'], '==');
-        $ds->dataRead();
+        $openApiJson = $this->getOpenApiJsonForWebservice();
+        $toObjectSchema = $this->getOpenApiSchemaForObject($this->getToObject(), $openApiJson, $this->getSchemaName());
 
-        $webservice = $ds->getSingleRow();
-        $openApiJson = $webservice['swagger_json'];
-        $schemas = (new JSONPath(json_decode($openApiJson, false)))
-            ->find(self::JSON_PATH_TO_OPEN_API_SCHEMAS)->getData()[0];
-        $schemas = json_decode(json_encode($schemas), true);
-        if (($schemaName = $this->getSchemaName()) !== null && array_key_exists($schemaName, $schemas)) {
-            $toObjectSchema = $schemas[$schemaName];
-        } else {
-            $toObjectSchema = $this->findObjectSchema($baseSheet, $schemas);
-        }
-
-        $excelColumnMapping = [];
-
-        $sheetname = $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_EXCEL_SHEET];
-        foreach ($toObjectSchema['properties'] as $propertyValue) {
-            $excelColumnMapping[$propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN]] = [
-                "attribute-alias" => $propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS],
-                "datatype" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_DATATYPE),
-                "format" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_FORMAT),
-                "enum-values" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_ENUM_VALUES)
-            ];
-        }
-
-        // Create fake meta object with the expected attributes and use the regular
-        // ExcelBuilder to read it.
-        $fakeObj = MetaObjectFactory::createTemporary(
-            $this->getWorkbench(),
-            'Temp. Excel',
-            $fileInfo->getPathAbsolute() . '/*[' . $sheetname . ']',
-            ExcelBuilder::class,
-            'exface.Core.objects_with_filebehavior'
-        );
-        foreach ($excelColumnMapping as $excelDataAddress => $propertyInfomation) {
-            $dataType = $this->getInternalDatatype($propertyInfomation['datatype'], $propertyInfomation['format'], $propertyInfomation['enum-values']);
-            MetaObjectFactory::addAttributeTemporary($fakeObj, $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], '[' .$excelDataAddress . ']', $dataType);
-        }
-        $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
-        $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
-        $fakeSheet->dataRead();
+        $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+        $toSheet = $this->createBaseDataSheet($placeholders);
 
         // Transform into Datasheet to Import
-        $dsToImport = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS]);
-        $dsToImport->getColumns()->addFromSystemAttributes();
+        $toSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS]);
+        $toSheet->getColumns()->addFromSystemAttributes();
 
         // transforms and validates excel data
-        $this->fillDataSheetWithExcelResult($dsToImport, $fakeSheet, $placeholders);
+        $this->fillDataSheetWithExcelResult($toSheet, $fromSheet, $placeholders);
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
-        $this->removeRelationColumns($dsToImport);
+        $this->removeRelationColumns($toSheet);
 
-        yield 'Importing rows ' . $dsToImport->countRows() . ' for ' . $dsToImport->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
+        yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
 
         $transaction = $this->getWorkbench()->data()->startTransaction();
         try {
             // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
             // that can be used to update known entire
-            $dsToImport->dataCreate(false, $transaction);
+            $toSheet->dataCreate(false, $transaction);
         } catch (\Throwable $e) {
             $transaction->rollback();
             throw $e;
         }
         $transaction->commit();
 
-        return $result->setProcessedRowsCounter($dsToImport->countRows());
+        return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 
     /**
@@ -216,7 +159,6 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         DataSheetInterface $excelResult,
         array $placeholder) : void
     {
-        $rowsToImport = [];
         $rowIndex = 0;
         foreach ($excelResult->getRows() as $row) {
             // validate row values with OpenApi definition present in meta object
@@ -368,19 +310,6 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
     {
         return new UxonEtlStepResult($stepRunUid, $resultData);
     }
-    
-    /**
-     * 
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\iCanGenerateDebugWidgets::createDebugWidget()
-     */
-    public function createDebugWidget(DebugMessage $debug_widget)
-    {
-        if ($this->baseSheet !== null) {
-            $debug_widget = $this->baseSheet->createDebugWidget($debug_widget);
-        }
-        return $debug_widget;
-    }
 
     /**
      *
@@ -390,5 +319,89 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
     public function isIncremental(): bool
     {
         return false;
+    }
+
+    /**
+     * Reads the OpenAPI specification from the configrued webservice and transforms it into an excel column mapping
+     * @return string
+     */
+    protected function getOpenApiJsonForWebservice() : string
+    {
+        $webservice = $this->getWebservice();
+        $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
+        $ds->getColumns()->addMultiple(
+            ['UID', 'type__schema_json', 'swagger_json', 'enabled']);
+        $ds->getFilters()->addConditionFromString('alias', $webservice['alias'], '==');
+        $ds->getFilters()->addConditionFromString('version', $webservice['version'], '==');
+        $ds->dataRead();
+
+        $webservice = $ds->getSingleRow();
+        $openApiJson = $webservice['swagger_json'];
+        return $openApiJson;
+    }
+
+    /**
+     * 
+     * @param \exface\Core\Interfaces\Tasks\TaskInterface $task
+     */
+    protected function getUploadData(ETLStepDataInterface $stepData) : DataSheetInterface
+    {
+        $task = $stepData->getTask();
+        // If the task has input data and that data is a file, use it here.
+        // Otherwise look for the flow run UID in the data of axenox.ETL.file_upload object.
+        $fileData = $task->getInputData();
+        if (
+            $fileData !== null
+            && ! $fileData->isEmpty()
+            && $fileData->hasUidColumn(true)
+            && ! $fileData->getMetaObject()->getBehaviors()->getByPrototypeClass(FileBehaviorInterface::class)->isEmpty()
+        ) {
+            $fileObj = $task->getMetaObject();
+        } else {
+            $fileObj = MetaObjectFactory::createFromString($this->getWorkbench(), 'axenox.ETL.file_upload');
+            $fileData = DataSheetFactory::createFromObject($fileObj);
+            $fileData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid(), ComparatorDataType::EQUALS);
+            $fileData->getColumns()->addFromUidAttribute();
+            $fileData->dataRead();
+        }
+        return $fileData;
+    }
+
+    /**
+     * 
+     * @param \exface\Core\Interfaces\Filesystem\FileInfoInterface $fileInfo
+     * @param array $toObjectSchema
+     * @return DataSheetInterface
+     */
+    protected function readExcel(FileInfoInterface $fileInfo, array $toObjectSchema) : DataSheetInterface
+    {
+        $excelColumnMapping = [];
+        $sheetname = $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_EXCEL_SHEET];
+        foreach ($toObjectSchema['properties'] as $propertyValue) {
+            $excelColumnMapping[$propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN]] = [
+                "attribute-alias" => $propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS],
+                "datatype" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_DATATYPE),
+                "format" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_FORMAT),
+                "enum-values" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_ENUM_VALUES)
+            ];
+        }
+
+        // Create fake meta object with the expected attributes and use the regular
+        // ExcelBuilder to read it.
+        $fakeObj = MetaObjectFactory::createTemporary(
+            $this->getWorkbench(),
+            'Temp. Excel',
+            $fileInfo->getPathAbsolute() . '/*[' . $sheetname . ']',
+            ExcelBuilder::class,
+            'exface.Core.objects_with_filebehavior'
+        );
+        foreach ($excelColumnMapping as $excelDataAddress => $propertyInfomation) {
+            $dataType = $this->getInternalDatatype($propertyInfomation['datatype'], $propertyInfomation['format'], $propertyInfomation['enum-values']);
+            MetaObjectFactory::addAttributeTemporary($fakeObj, $propertyInfomation['attribute-alias'], $propertyInfomation['attribute-alias'], '[' .$excelDataAddress . ']', $dataType);
+        }
+        $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
+        $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
+        $fakeSheet->dataRead();
+        return $fakeSheet;
     }
 }
