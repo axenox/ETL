@@ -15,23 +15,29 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataTypeFactory;
+use exface\Core\Factories\ExpressionFactory;
+use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
+use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
-use stdClass;
 
 class OpenAPI3Property implements APIPropertyInterface
 {
     const X_ATTRIBUTE_ALIAS = 'x-attribute-alias';
     const X_LOOKUP = 'x-lookup';
+    const X_CALCULATION = 'x-calculation';
+    const X_DATA_ADDRESS = 'x-data-address';
 
     private $objectSchema = null;
     private $jsonSchema = null;
     private $attribute = null;
+    private $workbench = null;
 
     public function __construct(OpenAPI3ObjectSchema $objectSchema, array $jsonSchema)
     {
         $this->objectSchema = $objectSchema;
         $this->jsonSchema = $jsonSchema;
+        $this->workbench = $objectSchema->getAPI()->getWorkbench();
     }
 
     public function getObjectSchema(): APIObjectSchemaInterface
@@ -64,10 +70,16 @@ class OpenAPI3Property implements APIPropertyInterface
 
     public function getAttribute() : ?MetaAttributeInterface
     {
-        if (null !== $alias = $this->getAttributeAlias()) {
-            return $this->getObjectSchema()->getMetaObject()->getAttribute($alias);
+        if ($this->attribute === null) {
+            if (null !== $alias = $this->getAttributeAlias()) {
+                if (null !== $customAddress = $this->jsonSchema[self::X_DATA_ADDRESS]) {
+                    $this->attribute = MetaObjectFactory::addAttributeTemporary($this->getObjectSchema()->getMetaObject(), $alias, $alias, $customAddress, $this->guessDataType());
+                } else {
+                    $this->attribute = $this->getObjectSchema()->getMetaObject()->getAttribute($alias);
+                }
+            }
         }
-        return null;
+        return $this->attribute;
     }
 
     public function isBoundToFormat(string $format) : bool
@@ -90,14 +102,31 @@ class OpenAPI3Property implements APIPropertyInterface
         return $this->jsonSchema['type'];
     }
 
-    public function getDataType() : DataTypeInterface
+    public function guessDataType() : DataTypeInterface
     {
         return $this->findDataType($this->jsonSchema['type'], $this->jsonSchema['format'], $this->jsonSchema['enum']);
     }
 
+    public function isBoundToMetamodel() : bool
+    {
+        return $this->isBoundToAttribute();
+    }
+
+    public function isBoundToCalculation() : bool
+    {
+        return null !== $this->jsonSchema[self::X_CALCULATION];
+    }
+
+    public function getCalculationExpression() : ?ExpressionInterface
+    {
+        if (! $this->isBoundToCalculation()) {
+            return null;
+        }
+        return ExpressionFactory::createFromString($this->workbench, $this->jsonSchema[self::X_CALCULATION], $this->getObjectSchema()->getMetaObject());
+    }
     protected function findDataType($openApiType, $format, $enumValues) : DataTypeInterface
     {
-        $workbench = $this->getObjectSchema()->getAPI()->getWorkbench();
+        $workbench = $this->workbench;
         switch ($openApiType) {
             case 'integer':
                 return DataTypeFactory::createFromString($workbench, IntegerDataType::class);

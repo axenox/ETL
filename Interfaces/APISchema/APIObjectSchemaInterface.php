@@ -28,4 +28,6 @@ interface APIObjectSchemaInterface
      * @return null|string|number|bool|array
      */
     public function getFormatOption(string $format, string $option) : mixed;
+
+    public function getJsonSchema() : array;
 }

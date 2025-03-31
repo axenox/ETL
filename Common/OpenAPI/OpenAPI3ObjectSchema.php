@@ -55,4 +55,9 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     {
         return $this->jsonSchema['x-' . $format . '-' . $option] ?? null;
     }
+
+    public function getJsonSchema() : array
+    {
+        return $this->jsonSchema;
+    }
 }

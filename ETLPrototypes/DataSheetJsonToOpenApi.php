@@ -24,6 +24,8 @@ use Flow\JSONPath\JSONPathException;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
+ * DEPRECATED use DataSheetToJsonApi instead!
+ * 
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases like:
  * ´´´
  * {
