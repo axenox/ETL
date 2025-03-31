@@ -20,7 +20,6 @@ use cebe\openapi\ReferenceContext;
 use exface\Core\Exceptions\Facades\HttpBadRequestError;
 use League\OpenAPIValidation\Schema\Exception\SchemaMismatch;
 use GuzzleHttp\Exception\BadResponseException;
-use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
  * This middleware adds request and response validation to facades implementing OpenApiFacadeInterface
@@ -34,11 +33,14 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
     private OpenApiFacadeInterface $facade;
     
     private array $excludePatterns = [];
+
+    private $verboseUrlParam = null;
     
-    public function __construct(OpenApiFacadeInterface $facade, array $excludePatterns = [])
+    public function __construct(OpenApiFacadeInterface $facade, array $excludePatterns = [], string $verboseUrlParam = null)
     {
         $this->facade = $facade;
         $this->excludePatterns = $excludePatterns;
+        $this->verboseUrlParam = $verboseUrlParam;
     }
 
     /**
@@ -156,11 +158,15 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
     
     protected function isVerbose(ServerRequestInterface $request) : bool
     {
-        $verbose = $this->facade->getVerbose();
+        // TODO replace this ugly method check by an interface or something more elegant
+        if (method_exists($this->facade, 'isVerbose')) {
+            $verbose = $this->facade->isVerbose();
+        }
         if (is_bool($verbose) === true) {
             return $verbose;
-        } else {
-            return $request->getQueryParams()[$this->verbose] === 'true';
+        } elseif ($this->verboseUrlParam !== null) {
+            return $request->getQueryParams()[$this->verboseUrlParam] === 'true';
         }
+        return false;
     }
 }

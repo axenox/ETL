@@ -20,6 +20,8 @@ use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 
 /**
+ * DEPRECATED use JsonApiToDataSheet instead!
+ * 
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases like:
  * ´´´
  * {
