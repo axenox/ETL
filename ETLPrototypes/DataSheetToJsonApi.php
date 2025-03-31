@@ -174,17 +174,14 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             }
         }
 
-        $index = 0;
         $content = [];
-        $rows = $fromSheet->getRows();
         // enforce from sheet defined data types
         foreach ($fromSheet->getColumns() as $column) {
+            $colName = $column->getName();
             $values = $column->getValuesNormalized();
-            foreach ($rows as &$row) {
-                $content[$index][$column->getName()] = $values[$index];
-                $index++;
+            foreach ($values as $i => $val) {
+                $content[$i][$colName] = $val;
             }
-            $index = 0;
         }
 
         $requestLogData = $this->loadRequestData($stepData, ['response_body', 'response_header']);
