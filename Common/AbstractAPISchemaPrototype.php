@@ -166,18 +166,25 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
 
     protected function createBaseDataSheet(array $placeholders = []) : DataSheetInterface
     {
-        if ($this->baseDataSheetUxon !== null) {
+        if (null !== $uxon = $this->getBaseDataSheetUxon()) {
             if (! empty($placeholders)) {
-                $json = $this->baseDataSheetUxon->toJson();
+                $json = $uxon->toJson();
                 $json = StringDataType::replacePlaceholders($json, $placeholders);
                 $uxon = UxonObject::fromJson($json);
-            } else {
-                $uxon = $this->baseDataSheetUxon;
-            }
+            } 
             $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $this->getToObject());
         } else {
             $ds = DataSheetFactory::createFromObject($this->getToObject());
         }
         return $ds;
+    }
+
+    /**
+     * 
+     * @return UxonObject|null
+     */
+    protected function getBaseDataSheetUxon() : ?UxonObject
+    {
+        return $this->baseDataSheetUxon;
     }
 }

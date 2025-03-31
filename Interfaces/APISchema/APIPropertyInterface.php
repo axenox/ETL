@@ -3,6 +3,7 @@ namespace axenox\ETL\Interfaces\APISchema;
 
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
+use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
 
 interface APIPropertyInterface
@@ -38,7 +39,13 @@ interface APIPropertyInterface
      */
     public function getFormatOption(string $format, string $option) : mixed;
 
+    public function isBoundToMetamodel() : bool;
+
+    public function isBoundToCalculation() : bool;
+
+    public function getCalculationExpression() : ?ExpressionInterface;
+
     public function getPropertyType() : string;
 
-    public function getDataType() : DataTypeInterface;
+    public function guessDataType() : DataTypeInterface;
 }

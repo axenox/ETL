@@ -280,7 +280,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
                 $fakeObj, 
                 $propSchema->getAttributeAlias(), 
                 $excelAddress, 
-                $propSchema->getDataType()
+                $propSchema->guessDataType()
             );
         }
 
