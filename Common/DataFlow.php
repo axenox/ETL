@@ -20,12 +20,11 @@ class DataFlow implements DataFlowInterface
 {
     use ImportUxonObjectTrait;
     
+    private $workbench = null;
+    private $name = null;
     private $alias = null;
-    
     private $version = null;
-    
     private $uid;
-    
     private $rootStepGroup = null;
     
     public function __construct(WorkbenchInterface $workbench, string $uid, string $name, string $alias, string $version = null)

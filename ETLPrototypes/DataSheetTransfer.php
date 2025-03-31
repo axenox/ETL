@@ -1,14 +1,12 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
+use axenox\ETL\Common\Traits\DataSheetMapperStepTrait;
+use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Factories\DataSheetFactory;
-use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
-use exface\Core\Factories\DataSheetMapperFactory;
-use exface\Core\Factories\BehaviorFactory;
-use exface\Core\Behaviors\PreventDuplicatesBehavior;
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\DataTypes\StringDataType;
@@ -18,10 +16,7 @@ use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\DateTimeDataType;
 use exface\Core\Widgets\DebugMessage;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
-use exface\Core\Exceptions\UxonParserError;
-use exface\Core\DataTypes\PhpClassDataType;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
-use exface\Core\DataTypes\IntegerDataType;
 
 /**
  * Reads a data sheet from the from-object and maps it to the to-object similarly to an actions `input_mapper`.
@@ -88,11 +83,13 @@ use exface\Core\DataTypes\IntegerDataType;
  */
 class DataSheetTransfer extends AbstractETLPrototype
 {
+    use PreventDuplicatesStepTrait;
+
+    use DataSheetMapperStepTrait;
+
     private $mapperUxon = null;
     
     private $sourceSheetUxon = null;
-    
-    private $updateIfMatchingAttributeAliases = [];
     
     private $pageSize = null;
     
@@ -186,60 +183,6 @@ class DataSheetTransfer extends AbstractETLPrototype
         
         return $result->setProcessedRowsCounter($cntFrom);
     }
-    
-    /**
-     * 
-     * @param MetaObjectInterface $object
-     */
-    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object)
-    {
-        $behavior = BehaviorFactory::createFromUxon($object, PreventDuplicatesBehavior::class, new UxonObject([
-            'compare_attributes' => $this->getUpdateIfMatchingAttributeAliases(),
-            'on_duplicate_multi_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE,
-            'on_duplicate_single_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE
-        ]));
-        $object->getBehaviors()->add($behavior);
-        return;
-    }
-    
-    /**
-     * 
-     * @return string[]
-     */
-    protected function getUpdateIfMatchingAttributeAliases() : array
-    {
-        return $this->updateIfMatchingAttributeAliases;
-    }
-    
-    /**
-     * The attributes to compare when searching for existing data rows.
-     * 
-     * If an existing item of the to-object with exact the same values in all of these attributes
-     * is found, the step will perform an update and will not create a new item.
-     * 
-     * **NOTE:** this will overwrite data in all the attributes affected by the `mapper`.
-     *
-     * @uxon-property update_if_matching_attributes
-     * @uxon-type metamodel:attribute[]
-     * @uxon-template [""]
-     * 
-     * @param UxonObject $uxon
-     * @return DataSheetTransfer
-     */
-    protected function setUpdateIfMatchingAttributes(UxonObject $uxon) : DataSheetTransfer
-    {
-        $this->updateIfMatchingAttributeAliases = $uxon->toArray();
-        return $this;
-    }
-    
-    /**
-     * 
-     * @return bool
-     */
-    protected function isUpdateIfMatchingAttributes() : bool
-    {
-        return empty($this->updateIfMatchingAttributeAliases) === false;
-    }
 
     /**
      * 
@@ -283,57 +226,6 @@ class DataSheetTransfer extends AbstractETLPrototype
     protected function setFromDataSheet(UxonObject $uxon) : DataSheetTransfer
     {
         $this->sourceSheetUxon = $uxon;
-        return $this;
-    }
-    
-    /**
-     * 
-     * @param MetaObjectInterface $fromObject
-     * @param MetaObjectInterface $toObject
-     * @return DataSheetMapperInterface
-     */
-    protected function getMapper(array $placeholders = []) : DataSheetMapperInterface
-    {
-        if (! $this->mapperUxon || $this->mapperUxon->isEmpty()) {
-            throw new UxonParserError($this->exportUxonObject(), 'Missing `mapper` in property in configuration of ETL prototype ' . PhpClassDataType::findClassNameWithoutNamespace(get_class($this)));
-        }
-        
-       $json = $this->mapperUxon->toJson();
-       $json = StringDataType::replacePlaceholders($json, $placeholders);
-       
-       return DataSheetMapperFactory::createFromUxon($this->getWorkbench(), UxonObject::fromJson($json), $this->getFromObject(), $this->getToObject()); 
-    }
-    
-    /**
-     * Data sheet mapper to be applied to the `from_data_sheet` in order to get the data for the to-object.
-     * 
-     * The syntax and functionality is the same as that of `input_mapper` in actions.
-     * 
-     * Example:
-     * 
-     * ```
-     *  {
-     *      "column_to_column_mappings": [
-     *          {
-     *              "from": "attribute_of_your_from_object", 
-     *              "to": "attribute_of_your_to_object"
-     *          }
-     *      ]
-     *  }
-     * 
-     * ```
-     * 
-     * @uxon-property mapper
-     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
-     * @uxon-template {"column_to_column_mappings": [{"from": "", "to": ""}]}
-     * @uxon-required true
-     * 
-     * @param UxonObject $uxon
-     * @return DataSheetTransfer
-     */
-    protected function setMapper(UxonObject $uxon) : DataSheetTransfer
-    {
-        $this->mapperUxon = $uxon;
         return $this;
     }
     

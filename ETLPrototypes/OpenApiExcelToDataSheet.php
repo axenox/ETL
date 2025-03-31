@@ -34,6 +34,8 @@ use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 
 /**
+ * DEPRECATED use ExcelApiToDataSheet instead!
+ * 
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
  * AND x-excel-sheet and with x-excel-column for the information where to read the information in the excel
  * like:
