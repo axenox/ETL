@@ -10,7 +10,6 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\UnavailableError;
 use exface\Core\Factories\MetaObjectFactory;
-use exface\Core\Interfaces\Model\MetaAttributeGroupInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use Flow\JSONPath\JSONPathException;
 use GuzzleHttp\Psr7\Response;
@@ -687,7 +686,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         return $this;
     }
 
-    public function getVerbose(): ?bool
+    public function isVerbose(): ?bool
     {
         return $this->verbose;
     }
