@@ -148,7 +148,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
-        $this->removeRelationColumns($toSheet);
+        // $toSheet = $this->removeRelationColumns($toSheet);
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
 
@@ -206,10 +206,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         if (! empty($col2col)) {
             $uxon->setProperty('column_to_column_mappings', new UxonObject($col2col));
         }
-        /*
         if (! empty($lookups)) {
-            $uxon->setProperty('lookup_mappings', $lookups);
-        }*/
+            $uxon->setProperty('lookup_mappings', new UxonObject($lookups));
+        }
         // TODO Add DataColumnToJsonMapping's here
         return DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $uxon);
     }

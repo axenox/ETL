@@ -308,7 +308,7 @@ class OpenApiJsonToDataSheet extends AbstractOpenApiPrototype
 
     protected function getAdditionalColumn() : array
     {
-        return $this->additionalColumns;
+        return $this->additionalColumns ?? [];
     }
 
     /**
