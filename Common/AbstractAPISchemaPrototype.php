@@ -11,9 +11,7 @@ use exface\Core\DataTypes\DataSheetDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
-use exface\Core\Factories\FormulaFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Widgets\DebugMessage;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
@@ -81,39 +79,6 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
         }
 
         return $requestLogData;
-    }
-
-    /**
-     * Adds additional data provided by the ´additional_rows´ config within the step to given row into the given datasheet.
-     *
-     * @param DataSheetInterface $dataSheet
-     * @param array $placeholder
-     * @param array $row
-     * @param int $rowIndex
-     * @return void
-     */
-    protected function addRowToDataSheetWithAdditionalColumns(DataSheetInterface $dataSheet, array $placeholder, array $row, int $rowIndex) : void
-    {
-        $additionalColumn = $this->getAdditionalColumn();
-        // add row data to placeholders so they can be used in formulars
-        $placeholder = array_merge($placeholder, $row);
-        $dataSheet->addRow($row);
-        foreach ($additionalColumn as $column) {
-            $value = $column['value'];
-            switch (true) {
-                case str_contains($value, '='):
-                    // replace placeholder to ensure static if possible
-                    $value = StringDataType::replacePlaceholders($value, $placeholder, false);
-                    $expression = FormulaFactory::createFromString($this->getWorkbench(), $value);
-                    $dataSheet->setCellValue($column['attribute_alias'], $rowIndex,  $expression->evaluate($dataSheet, $rowIndex));
-                    break;
-                case empty(StringDataType::findPlaceholders($value)) === false:
-                    $dataSheet->setCellValue($column['attribute_alias'], $rowIndex,  StringDataType::replacePlaceholders($value, $placeholder));
-                    break;
-                default:
-                    $dataSheet->setCellValue($column['attribute_alias'], $rowIndex, $value);
-            }
-        }
     }
 
     /**
