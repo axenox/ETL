@@ -7,11 +7,13 @@ use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\DataSheetDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\FormulaFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Widgets\DebugMessage;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
@@ -122,17 +124,18 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
      * @param DataSheetInterface $dataSheet
      * @return void
      */
-    protected function removeRelationColumns(DataSheetInterface $dataSheet): void
+    protected function removeRelationColumns(DataSheetInterface $dataSheet): DataSheetInterface
     {
         foreach ($dataSheet->getColumns() as $column) {
             if ($column->getExpressionObj()->isMetaAttribute() === false) {
                 continue;
             }
 
-            if ($column->getAttribute()->getObject()->isExactly($dataSheet->getMetaObject()) == false) {
+            if ($column->getAttribute()->isRelated() === true && ! $column->getDataType() instanceof DataSheetDataType) {
                 $dataSheet->getColumns()->remove($column);
             }
         }
+        return $dataSheet;
     }
     
     /**

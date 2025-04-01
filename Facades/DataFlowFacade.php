@@ -156,7 +156,11 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             return $requestLogData->getRow()['response_body'];
         }
 
-		$flowResponse = json_decode($requestLogData->getRow()['response_body'], true);
+        $flowResponse = null;
+        $body = $requestLogData->getRow()['response_body'];
+        if ($body !== null) {
+		    $flowResponse = json_decode($body, true);
+        }
         $responseModel = null;
 		
 		// load response model from swagger
@@ -427,13 +431,11 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         $result = [];
         foreach($object->getAttributeGroup($attributeGroup) as $attribute) {
-            if( $attribute instanceof CustomAttribute &&
-                !$attribute->getSource() instanceof CustomAttributesJsonBehavior) {
+            if(! $attribute->isWritable()) {
                 continue;
             }
 
             $alias = $attribute->getAlias();
-            $aliasToUpper = strtoupper($alias);
             $property = new stdClass();
 
             try {
@@ -446,12 +448,12 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
                 $property->$prop = $val;
             }
             
-            $property->nullable = true;
+            $property->nullable = $attribute->isRequired() !== true;
             $property->description = $attribute->getShortDescription() ?? "";
             $property->{'x-attribute-alias'} = $alias;
-            $property->{'x-excel-column'} = $aliasToUpper;
+            $property->{'x-excel-column'} = $attribute->getName();
             
-            $result[$aliasToUpper] = $property;
+            $result[$alias] = $property;
         }
         
         return $result;
@@ -578,7 +580,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $routePath = StringDataType::substringAfter($path, $basePath, $path);
         $webserviceBase = StringDataType::substringBefore($routePath, '/', '', true, true) . '/';
         $basePath .= '/' . ltrim($webserviceBase, "/");
-        foreach ($this->getWorkbench()->getConfig()->getOption('SERVER.BASE_URLS') as $baseUrl) {
+        $baseUrls = $this->getWorkbench()->getConfig()->getOption('SERVER.BASE_URLS')->toArray();
+        foreach (array_reverse($baseUrls) as $baseUrl) {
             // prepend entry to array
             array_unshift($swaggerArray['servers'], ['url' => $baseUrl . $basePath]);
         }
