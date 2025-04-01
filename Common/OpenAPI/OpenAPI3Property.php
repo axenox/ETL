@@ -3,6 +3,7 @@ namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
+use exface\Core\CommonLogic\Model\Expression;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -14,6 +15,7 @@ use exface\Core\DataTypes\NumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Factories\ExpressionFactory;
 use exface\Core\Factories\MetaObjectFactory;
@@ -94,7 +96,10 @@ class OpenAPI3Property implements APIPropertyInterface
 
     public function getFormatOption(string $format, string $option) : mixed 
     {
-        return $this->jsonSchema['x-' . $format . '-' . $option] ?? null;
+        $value = $this->jsonSchema['x-' . $format . '-' . $option] ?? null;
+        $value = $this->replacePlaceholders($value);
+        $value = $this->evaluateFormulas($value);
+        return $value;
     }
 
     public function getPropertyType() : string
@@ -172,5 +177,23 @@ class OpenAPI3Property implements APIPropertyInterface
             default:
                 throw new InvalidArgumentException('Openapi schema type: ' . $openApiType . ' not recognized.');
         }
+    }
+
+    protected function replacePlaceholders(string $value) : string
+    {
+        return StringDataType::replacePlaceholders($value, $this->jsonSchema);
+    }
+
+    protected function evaluateFormulas(string $value) : string
+    {
+        if (Expression::detectFormula($value) === true) {
+            $expr = ExpressionFactory::createFromString($this->workbench, $value);
+            if ($expr->isStatic()) {
+                return $expr->evaluate() ?? '';
+            } else {
+                throw new RuntimeException('Cannot use dynamic formula "' . $value . '" in an OpenAPI custom attribute!');
+            }
+        }
+        return $value;
     }
 }
