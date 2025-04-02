@@ -102,6 +102,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
     private $additionalColumns = null;
     private $schemaName = null;
+    private $mapperUxon = null;
 
     /**
      *
@@ -203,6 +204,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
             'to_object_alias' => $toObjectSchema->getMetaObject()->getAliasWithNamespace()
         ]);
+        if (null !== $customMapperUxon = $this->getMapperUxon()) {
+            $uxon = $customMapperUxon->extend($uxon);
+        }
         if (! empty($col2col)) {
             $uxon->setProperty('column_to_column_mappings', new UxonObject($col2col));
         }
@@ -211,6 +215,27 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
         // TODO Add DataColumnToJsonMapping's here
         return DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $uxon);
+    }
+
+    /**
+     * Custom mapper 
+     * 
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper;
+     * @uxon-property mapper
+     * @uxon-template {"column_to_column_mappings": [{"from": "", "to": ""}]}
+     * 
+     * @param \exface\Core\CommonLogic\UxonObject $uxon
+     * @return JsonApiToDataSheet
+     */
+    protected function setMapper(UxonObject $uxon) : JsonApiToDataSheet 
+    {
+        $this->mapperUxon = $uxon;
+        return $this;
+    }
+
+    protected function getMapperUxon() : ?UxonObject
+    {
+        return $this->mapperUxon;
     }
 
     /**
