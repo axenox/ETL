@@ -31,6 +31,14 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
         return array_keys($this->getProperties());
     }
 
+    /**
+     * Properties of this data object
+     * 
+     * @uxon-property properties
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3Property
+     * 
+     * @return OpenAPI3Property[]
+     */
     public function getProperties() : array
     {
         if ($this->properties === null) {
@@ -41,6 +49,14 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
         return $this->properties;
     }
 
+    /**
+     * The meta model object represented by this schema
+     * 
+     * @uxon-property x-object-alias
+     * @uxon-type metamodel:object
+     * 
+     * @return MetaObjectInterface
+     */
     public function getMetaObject() : ?MetaObjectInterface
     {
         if ($this->object === null) {

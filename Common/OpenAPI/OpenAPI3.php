@@ -4,8 +4,11 @@ namespace axenox\ETL\Common\OpenAPI;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use axenox\ETL\Uxon\OpenAPISchema;
 use cebe\openapi\ReferenceContext;
 use cebe\openapi\spec\OpenApi;
+use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
+use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -15,6 +18,8 @@ use Flow\JSONPath\JSONPath;
 
 class OpenAPI3 implements APISchemaInterface
 {
+    use ImportUxonObjectTrait;
+
     private $workbench = null;
     private $openAPIJson = null;
     private $openAPIJsonObj = null;
@@ -107,6 +112,12 @@ class OpenAPI3 implements APISchemaInterface
         return $fromObjectSchema;
     }
 
+    /**
+     * @uxon-property components
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema[]
+     * 
+     * @return mixed
+     */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
@@ -119,5 +130,15 @@ class OpenAPI3 implements APISchemaInterface
     public function getWorkbench()
     {
         return $this->workbench;
+    }
+
+    public function exportUxonObject()
+    {
+        return new UxonObject($this->openAPIJsonArray);
+    }
+
+    public static function getUxonSchemaClass() : ?string
+    {
+        return OpenAPISchema::class;
     }
 }

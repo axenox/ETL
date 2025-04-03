@@ -1,11 +1,12 @@
 <?php
 namespace axenox\ETL\Interfaces\APISchema;
 
+use exface\Core\Interfaces\iCanBeConvertedToUxon;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-interface APISchemaInterface extends WorkbenchDependantInterface
+interface APISchemaInterface extends WorkbenchDependantInterface, iCanBeConvertedToUxon
 {
     public function getObjectSchema(MetaObjectInterface $object, string $customSchemaName = null) : APIObjectSchemaInterface;
 
