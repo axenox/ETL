@@ -14,135 +14,29 @@ use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
- * UXON-schema class for Composer auth.json.
- * 
- * @link https://getcomposer.org/doc/articles/authentication-for-private-packages.md
+ * UXON-schema class for OpenAPI.json.
  * 
  * @author Andrej Kabachnik
  *
  */
-class OpenAPISchema implements UxonSchemaInterface
+class OpenAPISchema extends UxonSchema
 {
-    private $parentSchema = null;
-    private $workbench = null;
-    
-    /**
-     *
-     * @param WorkbenchInterface $workbench
-     */
-    public function __construct(WorkbenchInterface $workbench, UxonSchema $parentSchema = null)
-    {
-        $this->parentSchema = $parentSchema;
-        $this->workbench = $workbench;
-    }
-    
     /**
      *
      * @return string
      */
     public static function getSchemaName() : string
     {
-        return 'composer.json Config';
+        return 'OpenAPI.json';
     }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getValidValues()
-     */
-    public function getValidValues(UxonObject $uxon, array $path, string $search = null, string $rootPrototypeClass = null, MetaObjectInterface $rootObject = null): array
+
+    public function getMetaObject(UxonObject $uxon, array $path, MetaObjectInterface $rootObject = null) : MetaObjectInterface
     {
-        return [];
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getParentSchema()
-     */
-    public function getParentSchema(): UxonSchemaInterface
-    {
-        return $this->parentSchema ?? new UxonSchema($this->getWorkbench(), $this);
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getPrototypeClass()
-     */
-    public function getPrototypeClass(UxonObject $uxon, array $path, string $rootPrototypeClass = null): string
-    {
-        return '\\' . __CLASS__;
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getPropertiesTemplates()
-     */
-    public function getPropertiesTemplates(string $prototypeClass, UxonObject $uxon, array $path): array
-    {
-        return [];
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getPropertyValueRecursive()
-     */
-    public function getPropertyValueRecursive(UxonObject $uxon, array $path, string $propertyName, string $rootValue = '', string $prototypeClass = null)
-    {
-        return null;
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getProperties()
-     */
-    public function getProperties(string $prototypeClass, UxonObject $uxon, array $path): array
-    {
-        return [];
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::hasParentSchema()
-     */
-    public function hasParentSchema()
-    {
-        return $this->parentSchema !== null;
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\WorkbenchDependantInterface::getWorkbench()
-     */
-    public function getWorkbench()
-    {
-        return $this->workbench;
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getPropertyTypes()
-     */
-    public function getPropertyTypes(string $prototypeClass, string $property): array
-    {
-        return [];
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getMetaObject()
-     */
-    public function getMetaObject(UxonObject $uxon, array $path, MetaObjectInterface $rootObject = null): MetaObjectInterface
-    {
-        return $rootObject;
+        $objectAlias = $this->getPropertyValueRecursive($uxon, $path, 'x-object-alias', ($rootObject !== null ? $rootObject->getAliasWithNamespace() : ''));
+        if ($objectAlias !== '' && $objectAlias !== null) {
+            return MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
+        }
+        return parent::getMetaObject($uxon, $path, $rootObject);
     }
     
     /**
@@ -206,25 +100,5 @@ class OpenAPISchema implements UxonSchemaInterface
         }
         
         return $ds->getRows();
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getUxonType()
-     */
-    public function getUxonType(UxonObject $uxon, array $path, string $rootPrototypeClass = null) : ?string
-    {
-        return 'string';
-    }
-    
-    /**
-     *
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\UxonSchemaInterface::getPropertiesByAnnotation()
-     */
-    public function getPropertiesByAnnotation(string $annotation, $value, string $prototypeClass = null): array
-    {
-        return [];
     }
 }

@@ -65,6 +65,12 @@ class OpenAPI3Property implements APIPropertyInterface
         return null !== $this->getAttributeAlias();
     }
 
+    /**
+     * The meta model attribute this property is bound to
+     * 
+     * @uxon-property x-attribute-alias
+     * @uxon-type metamodel:attribute
+     */
     public function getAttributeAlias() : ?string
     {
         return $this->jsonSchema[self::X_ATTRIBUTE_ALIAS] ?? null;
