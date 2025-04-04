@@ -6,10 +6,36 @@ use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
 
+/**
+ * Interface for API schema properties, that represent business object attributes or data columns
+ * 
+ * @author Andrej Kabachnik
+ */
 interface APIPropertyInterface
 {
+    /**
+     * 
+     * @return APIObjectSchemaInterface
+     */
     public function getObjectSchema() : APIObjectSchemaInterface;
 
+    /**
+     * 
+     * @return string
+     */
+    public function getPropertyName() : string;
+
+    /**
+     * Returns the type of this property according to the type system of the API schema
+     * 
+     * @return string
+     */
+    public function getPropertyType() : string;
+
+    /**
+     * 
+     * @return bool
+     */
     public function isBoundToAttribute() : bool;
 
     /**
@@ -18,10 +44,22 @@ interface APIPropertyInterface
      */
     public function getAttributeAlias() : ?string;
 
+    /**
+     * 
+     * @return MetaAttributeInterface|null
+     */
     public function getAttribute() : ?MetaAttributeInterface;
 
+    /**
+     * 
+     * @return bool
+     */
     public function hasLookup() : bool;
 
+    /**
+     * 
+     * @return UxonObject|null
+     */
     public function getLookupUxon() : ?UxonObject;
 
     /**
@@ -39,13 +77,40 @@ interface APIPropertyInterface
      */
     public function getFormatOption(string $format, string $option) : mixed;
 
+    /**
+     * 
+     * @return bool
+     */
     public function isBoundToMetamodel() : bool;
 
+    /**
+     * 
+     * @return bool
+     */
     public function isBoundToCalculation() : bool;
 
+    /**
+     * 
+     * @return ExpressionInterface|null
+     */
     public function getCalculationExpression() : ?ExpressionInterface;
 
-    public function getPropertyType() : string;
-
+    /**
+     * Returns the best-matching meta model data type for this property
+     * 
+     * @return DataTypeInterface
+     */
     public function guessDataType() : DataTypeInterface;
+
+    /**
+     * 
+     * @return bool
+     */
+    public function isNullable() : bool;
+
+    /**
+     * 
+     * @return bool
+     */
+    public function isRequired() : bool;
 }

@@ -23,6 +23,18 @@ use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
 
+/**
+ * Represents an OpenAPI 3.x property with additional annotations connecting it to the meta model
+ * 
+ * Allows the following cusotm OpenAPI properties:
+ * 
+ * - `x-attribute-alias` - the meta model attribute this property is bound to
+ * - `x-lookup` - the Uxon object to look up for this property
+ * - `x-calculation` - the calculation expression for this property
+ * - `x-data-address` - the data address for this property
+ * 
+ * @author  Andrej Kabachnik
+ */
 class OpenAPI3Property implements APIPropertyInterface
 {
     const X_ATTRIBUTE_ALIAS = 'x-attribute-alias';
@@ -31,27 +43,50 @@ class OpenAPI3Property implements APIPropertyInterface
     const X_DATA_ADDRESS = 'x-data-address';
 
     private $objectSchema = null;
+    private $name = null;
     private $jsonSchema = null;
     private $attribute = null;
     private $workbench = null;
 
-    public function __construct(OpenAPI3ObjectSchema $objectSchema, array $jsonSchema)
+    public function __construct(OpenAPI3ObjectSchema $objectSchema, string $propertyName, array $jsonSchema)
     {
+        $this->name = $propertyName;
         $this->objectSchema = $objectSchema;
         $this->jsonSchema = $jsonSchema;
         $this->workbench = $objectSchema->getAPI()->getWorkbench();
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getObjectSchema()
+     */
     public function getObjectSchema(): APIObjectSchemaInterface
     {
         return $this->objectSchema;
     }
+    
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getPropertyName()
+     */
+    public function getPropertyName() : string
+    {
+        return $this->name;
+    }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::hasLookup()
+     */
     public function hasLookup() : bool
     {
         return null !== $this->jsonSchema[self::X_LOOKUP] ?? null;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getLookupUxon()
+     */
     public function getLookupUxon() : ?UxonObject
     {
         if (! $this->hasLookup()) {
@@ -60,6 +95,10 @@ class OpenAPI3Property implements APIPropertyInterface
         return new UxonObject($this->jsonSchema[self::X_LOOKUP]);
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToAttribute()
+     */
     public function isBoundToAttribute() : bool
     {
         return null !== $this->getAttributeAlias();
@@ -70,12 +109,18 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-attribute-alias
      * @uxon-type metamodel:attribute
+     *
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeAlias()
      */
     public function getAttributeAlias() : ?string
     {
         return $this->jsonSchema[self::X_ATTRIBUTE_ALIAS] ?? null;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttribute()
+     */
     public function getAttribute() : ?MetaAttributeInterface
     {
         if ($this->attribute === null) {
@@ -90,6 +135,10 @@ class OpenAPI3Property implements APIPropertyInterface
         return $this->attribute;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToFormat()
+     */
     public function isBoundToFormat(string $format) : bool
     {
         foreach (array_keys($this->jsonSchema) as $prop) {
@@ -100,34 +149,60 @@ class OpenAPI3Property implements APIPropertyInterface
         return false;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getFormatOption()
+     */
     public function getFormatOption(string $format, string $option) : mixed 
     {
         $value = $this->jsonSchema['x-' . $format . '-' . $option] ?? null;
-        $value = $this->replacePlaceholders($value);
-        $value = $this->evaluateFormulas($value);
+        if (is_string($value)) {
+            $value = $this->replacePlaceholders($value);
+            $value = $this->evaluateFormulas($value);
+        }
         return $value;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getPropertyType()
+     */
     public function getPropertyType() : string
     {
         return $this->jsonSchema['type'];
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::guessDataType()
+     */
     public function guessDataType() : DataTypeInterface
     {
         return $this->findDataType($this->jsonSchema['type'], $this->jsonSchema['format'], $this->jsonSchema['enum']);
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToMetamodel()
+     */
     public function isBoundToMetamodel() : bool
     {
         return $this->isBoundToAttribute();
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToCalculation()
+     */
     public function isBoundToCalculation() : bool
     {
         return null !== $this->jsonSchema[self::X_CALCULATION];
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getCalculationExpression()
+     */
     public function getCalculationExpression() : ?ExpressionInterface
     {
         if (! $this->isBoundToCalculation()) {
@@ -135,7 +210,16 @@ class OpenAPI3Property implements APIPropertyInterface
         }
         return ExpressionFactory::createFromString($this->workbench, $this->jsonSchema[self::X_CALCULATION], $this->getObjectSchema()->getMetaObject());
     }
-    protected function findDataType($openApiType, $format, $enumValues) : DataTypeInterface
+    
+    /**
+     * 
+     * @param string $openApiType
+     * @param string $format
+     * @param array $enumValues
+     * @throws \exface\Core\Exceptions\InvalidArgumentException
+     * @return BinaryDataType|DataTypeInterface|EnumDataTypeInterface
+     */
+    protected function findDataType(string $openApiType, string $format = null, array $enumValues = null) : DataTypeInterface
     {
         $workbench = $this->workbench;
         switch ($openApiType) {
@@ -185,11 +269,22 @@ class OpenAPI3Property implements APIPropertyInterface
         }
     }
 
+    /**
+     * 
+     * @param string $value
+     * @return string
+     */
     protected function replacePlaceholders(string $value) : string
     {
         return StringDataType::replacePlaceholders($value, $this->jsonSchema);
     }
 
+    /**
+     * 
+     * @param string $value
+     * @throws \exface\Core\Exceptions\RuntimeException
+     * @return array|string
+     */
     protected function evaluateFormulas(string $value) : string
     {
         if (Expression::detectFormula($value) === true) {
@@ -201,5 +296,23 @@ class OpenAPI3Property implements APIPropertyInterface
             }
         }
         return $value;
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    public function isNullable() : bool
+    {
+        return $this->jsonSchema['nullable'] ?? true;
+    }
+
+    /**
+     * 
+     * @return bool
+     */
+    public function isRequired() : bool
+    {
+        return $this->objectSchema->isRequiredProperty($this);
     }
 }

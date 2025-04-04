@@ -1,33 +1,18 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
-use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
-use exface\Core\DataTypes\ArrayDataType;
-use exface\Core\DataTypes\BinaryDataType;
-use exface\Core\DataTypes\BooleanDataType;
 use exface\Core\DataTypes\ComparatorDataType;
-use exface\Core\DataTypes\DateDataType;
-use exface\Core\DataTypes\DateTimeDataType;
-use exface\Core\DataTypes\IntegerDataType;
-use exface\Core\DataTypes\NumberDataType;
-use exface\Core\DataTypes\StringEnumDataType;
-use exface\Core\Exceptions\InvalidArgumentException;
-use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
-use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\DataTypes\EnumDataTypeInterface;
 use exface\Core\Interfaces\Filesystem\FileInfoInterface;
 use exface\Core\Interfaces\Model\Behaviors\FileBehaviorInterface;
-use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\QueryBuilders\ExcelBuilder;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
@@ -81,8 +66,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     const API_OPTION_COLUMN = 'column';
 
     private $schemaName = null;
-    private array $webservice;
-    private $filepath;
+    private ?array $webservice = null;
 
     /**
      *
@@ -113,7 +97,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
 
         $toSheet = $this->createBaseDataSheet($placeholders);
-        $apiSchema = $this->getAPISchema($stepData->getTask());
+        $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
@@ -145,25 +129,25 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      *
      * @uxon-property webservice
      * @uxon-type object
-     * @uxon-template {"webservice": {"alias": "service_name", "version": "^1.25.x"}}
+     * @uxon-template {"alias": "alias", "version": "^1.25.x"}
      *
      * @param UxonObject $webserviceConfig
      * @return ExcelApiToDataSheet
      */
     protected function setWebservice(UxonObject $webserviceConfig) : ExcelApiToDataSheet
     {
-        $this->webservice = $webserviceConfig->toArray()['webservice'];
+        $this->webservice = $webserviceConfig->toArray();
         return $this;
     }
 
-    protected function getWebserviceAlias() : string
+    protected function getWebserviceAlias() : ?string
     {
-        return $this->webservice['alias'];
+        return $this->webservice['alias'] ?? null;
     }
 
-    protected function getWebserviceVersion() : string
+    protected function getWebserviceVersion() : ?string
     {
-        return $this->webservice['version'];
+        return $this->webservice['version'] ?? null;
     }
 
     /**
@@ -214,17 +198,25 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      * 
      * @return string
      */
-    protected function getAPISchema(TaskInterface $task) : APISchemaInterface
+    protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-        $ds->getColumns()->addMultiple(
-            ['UID', 'type__schema_json', 'swagger_json', 'enabled']);
-        $ds->getFilters()->addConditionFromString('alias', $this->getWebserviceAlias(), '==');
-        $ds->getFilters()->addConditionFromString('version', $this->getWebserviceVersion(), '==');
-        $ds->dataRead();
+        $ds->getColumns()->addMultiple([
+            'UID', 
+            'type__schema_json', 
+            'swagger_json', 
+            'enabled'
+        ]);
+        if ((null !== $customWebservice = $this->getWebserviceAlias()) && (null !== $customWebserviceVersion = $this->getWebserviceVersion())) {
+            $ds->getFilters()->addConditionFromString('alias', $customWebservice, '==');
+            $ds->getFilters()->addConditionFromString('version', $customWebserviceVersion, '==');
+        } else {
+            //$ds->getFilters()->addConditionFromString('webservice_flow__flow__step', $this->getid);
+        }
+        $ds->dataRead();        
 
         $webservice = $ds->getSingleRow();
-        $openApiJson = $webservice['swagger_json'];
+        $openApiJson = json_encode(OpenAPI3::enhanceSchema($webservice['swagger_json'], $this->getWorkbench()));
         return new OpenAPI3($this->getWorkbench(), $openApiJson);
     }
 
@@ -275,10 +267,17 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             'exface.Core.objects_with_filebehavior'
         );
         foreach ($toObjectSchema->getProperties() as $propSchema) {
-            $excelAddress = '[' .$propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN) . ']';
+            $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
+            if ($excelColName === null) {
+                continue;
+            }
+            
+            $attrAlias = $propSchema->getPropertyName();
+            $excelAddress = '[' . $excelColName . ']';
             MetaObjectFactory::addAttributeTemporary(
                 $fakeObj, 
-                $propSchema->getAttributeAlias(), 
+                $attrAlias, 
+                $excelColName,
                 $excelAddress, 
                 $propSchema->guessDataType()
             );
