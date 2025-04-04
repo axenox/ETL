@@ -132,7 +132,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $toObject = $this->getToObject();
-        $apiSchema = $this->getAPISchema($task);
+        $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toObject, $this->getSchemaName());
         
         if ($this->isUpdateIfMatchingAttributes()) {
@@ -180,6 +180,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $mappedSheet;
     }
 
+    /**
+     * 
+     * @param \exface\Core\Interfaces\Model\MetaObjectInterface $fromObj
+     * @param \axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface $toObjectSchema
+     * @return DataSheetMapperInterface
+     */
     protected function getMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
     {
         $col2col = [];
@@ -195,7 +201,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 case null !== $attr = $propSchema->getAttribute():
                     $col2col[] = [
                         'from' => $propName,
-                        'to' => $attr->getAlias()
+                        'to' => $attr->getAlias(),
+                        'ignore_if_missing_from_column' => ! $propSchema->isRequired()
                     ];
                     break;
             }
@@ -233,6 +240,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $this;
     }
 
+    /**
+     * 
+     * @return UxonObject
+     */
     protected function getMapperUxon() : ?UxonObject
     {
         return $this->mapperUxon;
@@ -319,17 +330,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function getSchemaName() : ?string
     {
         return $this->schemaName;
-    }
-
-    protected function setAllowDataMappers(bool $trueOrFalse) : JsonApiToDataSheet
-    {
-        $this->allowMappers = $trueOrFalse;
-        return $this;
-    }
-
-    protected function getAllowDataMappers() : bool
-    {
-        return $this->allowMappers ?? true;
     }
 
     /**

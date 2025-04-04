@@ -17,6 +17,9 @@ use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Interfaces\OpenApiFacadeInterface;
 
+/**
+ * Base class for automated flow steps, that use standardized API schemas like OpenAPI or OData
+ */
 abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
 {
     protected $toSheet = null;
@@ -31,8 +34,9 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
      * @throws InvalidArgumentException
      * @return string
      */
-    protected function getAPISchema(TaskInterface $task) : APISchemaInterface
+    protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
     {
+        $task = $stepData;
         foreach ($this->taskSchemas as $taskSchema) {
             if ($taskSchema['task'] === $task) {
                 return $taskSchema['model'];
