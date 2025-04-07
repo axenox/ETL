@@ -99,6 +99,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
+        
+        if ($this->isUpdateIfMatchingAttributes()) {
+            $this->addDuplicatePreventingBehavior($this->getToObject());
+        }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
         $mapper = $this->getMapper($fromSheet->getMetaObject(), $toObjectSchema);
@@ -211,7 +215,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $ds->getFilters()->addConditionFromString('alias', $customWebservice, '==');
             $ds->getFilters()->addConditionFromString('version', $customWebserviceVersion, '==');
         } else {
-            //$ds->getFilters()->addConditionFromString('webservice_flow__flow__step', $this->getid);
+            $ds->getFilters()->addConditionFromString('webservice_flow__flow__flow_run__UID', $stepData->getFlowRunUid());
         }
         $ds->dataRead();        
 
