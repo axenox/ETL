@@ -7,6 +7,7 @@ use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Uxon\OpenAPISchema;
 use cebe\openapi\ReferenceContext;
 use cebe\openapi\spec\OpenApi;
+use cebe\openapi\SpecBaseObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
@@ -120,14 +121,41 @@ class OpenAPI3 implements APISchemaInterface
     }
 
     /**
-     * @uxon-property components
-     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema[]
-     * 
      * @return mixed
      */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
+    }
+
+    protected function getAttributesFunctionName() : string
+    {
+        return 'attributes';
+    }
+    
+    public function getAttributes($class) : array 
+    {
+        if(is_a($class, OpenAPI3::class, true)) {
+            $class = OpenApi::class;
+        }
+        
+        if(!is_a($class, SpecBaseObject::class, true)) {
+            return [];
+        }
+        
+        $object = new $class([]);
+        $functionName = $this->getAttributesFunctionName();
+        
+        // Workaround to access protected method. The alternative is to manually create
+        // stubs with uxon-property annotation for each attribute. Both options are brittle,
+        // but this approach is easier to maintain.
+        return call_user_func(\Closure::bind(
+            function () use ($object, $functionName) {
+                return $object->{$functionName}();
+            },
+            null,
+            $object
+        ));
     }
 
     /**
