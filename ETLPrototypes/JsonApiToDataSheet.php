@@ -193,7 +193,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         foreach ($toObjectSchema->getProperties() as $propName => $propSchema) {
             switch (true) {
                 case null !== $lookup = $propSchema->getLookupUxon():
-                    if (null !== $attr = $propSchema->getAttribute()) {
+                    $attr = $propSchema->getAttribute();
+                    if ($attr !== null && $lookup->hasProperty('to') === false) {
                         $lookup->setProperty('to', $attr->getAliasWithRelationPath());
                     }
                     $lookups[] = $lookup;
