@@ -7,6 +7,8 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 
 class OpenAPI3Route implements APIRouteInterface
 {
+    use OpenAPI3UxonTrait;
+    
     private $openAPISchema = null;
     private $routeSchema = null;
 

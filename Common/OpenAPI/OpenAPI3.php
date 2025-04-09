@@ -27,7 +27,7 @@ use stdClass;
  */
 class OpenAPI3 implements APISchemaInterface
 {
-    use ImportUxonObjectTrait;
+    use OpenAPI3UxonTrait;
 
     protected ?Workbench $workbench;
     protected ?array $openAPIJsonArray;
@@ -154,6 +154,12 @@ class OpenAPI3 implements APISchemaInterface
         return $fromObjectSchema;
     }
     
+    /**
+     * @uxon-property components
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema[]
+     * 
+     * @return mixed
+     */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];

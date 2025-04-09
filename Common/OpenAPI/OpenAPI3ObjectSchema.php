@@ -20,6 +20,7 @@ use stdClass;
  */
 class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 {
+    use OpenAPI3UxonTrait;
     const X_OBJECT_ALIAS = 'x-object-alias';
 
     private $openAPISchema = null;
@@ -45,6 +46,9 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     /**
      * Properties of this data object
+     * 
+     * @uxon-property properties
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3Property[]
      * 
      * @return OpenAPI3Property[]
      */
