@@ -1,11 +1,20 @@
 <?php
 namespace axenox\ETL\Uxon;
 
+use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
+use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
+use cebe\openapi\spec\PathItem;
+use cebe\openapi\spec\Paths;
+use cebe\openapi\spec\Type;
+use cebe\openapi\SpecObjectInterface;
+use exface\Core\CommonLogic\Uxon\UxonSnippetCall;
 use exface\Core\CommonLogic\UxonObject;
-use exface\Core\Interfaces\UxonSchemaInterface;
+use exface\Core\Factories\DataTypeFactory;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\UxonSchemaInterface;
 use exface\Core\Uxon\UxonSchema;
-use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\DataTypes\SortingDirectionsDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -21,6 +30,8 @@ use exface\Core\Interfaces\Log\LoggerInterface;
  */
 class OpenAPISchema extends UxonSchema
 {
+    private array $representationMappings = [];
+    
     /**
      *
      * @return string
@@ -100,5 +111,183 @@ class OpenAPISchema extends UxonSchema
         }
         
         return $ds->getRows();
+    }
+
+    /**
+     * @see UxonSchema::getDefaultPrototypeClass()
+     */
+    protected function getDefaultPrototypeClass() : string
+    { 
+        return OpenAPI3::class;
+    }
+
+    /**
+     * @inheritdoc 
+     * @see UxonSchema::loadPropertiesSheet()
+     */
+    protected function loadPropertiesSheet(string $prototypeClass, string $notationObjectAlias): DataSheetInterface
+    {
+        $schema = new OpenAPI3($this->getWorkbench(), '{}');
+
+        // Load properties from class annotations.
+        $ds = parent::loadPropertiesSheet($prototypeClass, $notationObjectAlias);
+        $existingProperties = $ds->getColumnValues('PROPERTY');
+
+        // Load properties from OpenAPI and use mapping, if available.
+        $prototypeClass = $this->representationMappings[$prototypeClass] ?? $prototypeClass;
+        foreach ($schema->getAttributes($prototypeClass) as $name => $value) {
+            if(in_array($name, $existingProperties)) {
+                continue;
+            }
+
+            $ds->addRow($this->openApiAttributeToUxonProperty($name, $value));
+        }
+
+        return $ds;
+    }
+
+    /**
+     * @inheritdoc 
+     * @see UxonSchemaInterface::getPrototypeClass()
+     */
+    public function getPrototypeClass(UxonObject $uxon, array $path, string $rootPrototypeClass = null): string
+    {
+        $rootPrototypeClass = $rootPrototypeClass ?? $this->getDefaultPrototypeClass();
+
+        foreach ($uxon as $key => $value) {
+            if (strcasecmp($key, UxonObject::PROPERTY_SNIPPET) === 0) {
+                $rootPrototypeClass = '\\' . UxonSnippetCall::class;
+            }
+        }
+
+        if ($rootPrototypeClass === '') {
+            return $rootPrototypeClass;
+        }
+
+        if (count($path) > 0 && ($uxon->getProperty($path[0]) instanceof UxonObject)) {
+            $prop = array_shift($path);
+
+            if (is_numeric($prop) === false) {
+                $propType = $this->getPropertyTypes($rootPrototypeClass, $prop)[0];
+                if (mb_substr($propType, 0, 1) === '\\') {
+                    $class = $propType;
+                    $class = str_replace('[]', '', $class);
+                    $class = $this->mapToRepresentationClass($prop, $class);
+                } else {
+                    $class = $rootPrototypeClass;
+                }
+            } else {
+                $class = $rootPrototypeClass;
+            }
+
+            $schema = $class === $rootPrototypeClass ? $this : $this->getSchemaForClass($class);
+            $propVal = $uxon->getProperty($prop);
+            if ($propVal instanceof UxonObject) {
+                if (null !== $value = $propVal->getProperty(UxonObject::PROPERTY_SNIPPET)) {
+                    $class = '\\' . UxonSnippetCall::class;
+                }
+            }
+            
+            return $schema->getPrototypeClass($propVal, $path, $class);
+        }
+
+        return $rootPrototypeClass;
+    }
+
+    /**
+     * Checks if the given class has a representation class and returns the representation class, should it exist. 
+     * Otherwise, the original class is returned.
+     * 
+     * @param string $property
+     * @param string $prototypeClass
+     * @return string
+     */
+    protected function mapToRepresentationClass(string $property, string $prototypeClass) : string
+    {
+        $result = match ($property) {
+            'schemas' => OpenAPI3ObjectSchema::class,
+            'properties' => OpenAPI3Property::class,
+            default => $prototypeClass
+        };
+        
+        if($result !== $prototypeClass) {
+            $result = '\\' . $result;
+            $this->representationMappings[$result] = $prototypeClass;
+        }
+        
+        return $result;
+    }
+
+    /**
+     * Transforms an OpenAPI attribute into a row that can be added to a properties sheet.
+     * 
+     * The resulting array has the following structure:
+     * 
+     * ```
+     *  
+     *  [
+     *      'PROPERTY' => $name,
+     *      'TYPE' => $type,        // Converted to matching DataTypeInterface
+     *      'TEMPLATE' => $template // Can be '""', '[""]', '{"":""}', '[{"":""}]' or '{"":{"":""}}'
+     *  ]
+     * 
+     * ```
+     * 
+     * @param string       $name
+     * @param array|string $value
+     * @return array
+     */
+    protected function openApiAttributeToUxonProperty(string $name, array|string $value) : array
+    {
+        $value = $value === Paths::class ? [Type::STRING, PathItem::class] : $value;
+
+        if(is_array($value)) {
+            // OpenAPI uses two kinds of array definitions: [Type] for numeric and [Key, Type] for
+            // associative arrays (called "maps" in OpenAPI). In either case, we need the last array element.
+            $type = end($value);
+
+            if(count($value) > 1) {
+                // Associative
+                $template = '{"":*}';
+            } else {
+                // Numeric
+                $template = '[*]';
+            }
+        } else {
+            $template = '*';
+            $type = $value;
+        }
+
+        $classPath = explode('\\', $type);
+        if(count($classPath) > 1) {
+            // If the type is a class with namespace, we apply an object template.
+            $type = '\\' . $type;
+            $template = str_replace('*','{"":""}', $template);
+        } else {
+            $type = Type::ANY ? Type::STRING : $type;
+            $type = get_class(DataTypeFactory::createFromString($this->getWorkbench(), 'exface.core.' . $type));
+            // If the type is primitive, but is part of an associative array, we also need the object template.
+            // Otherwise, we can use an empty template.
+            $template = str_replace('*','""', $template);
+        }
+
+        return [
+            'PROPERTY' => $name,
+            'TYPE' => $type,
+            'TEMPLATE' => $template
+        ];
+    }
+
+    /**
+     * @inheritdoc 
+     * @see UxonSchema::getSchemaForClass()
+     */
+    public function getSchemaForClass(string $prototypeClass): UxonSchema
+    {
+        if(is_a($prototypeClass, SpecObjectInterface::class, true)) {
+            return $this;
+        }
+        
+        return parent::getSchemaForClass($prototypeClass);
     }
 }
