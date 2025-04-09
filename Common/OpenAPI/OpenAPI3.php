@@ -10,6 +10,7 @@ use cebe\openapi\spec\OpenApi;
 use cebe\openapi\SpecBaseObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\CommonLogic\Workbench;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
@@ -28,11 +29,11 @@ class OpenAPI3 implements APISchemaInterface
 {
     use ImportUxonObjectTrait;
 
-    private $workbench = null;
-    private $openAPIJson = null;
-    private $openAPIJsonObj = null;
-    private $openAPIJsonArray = null;
-    private $openAPISchema = null;
+    protected ?Workbench $workbench;
+    protected ?array $openAPIJsonArray;
+    protected ?string $openAPIJson;
+    protected mixed $openAPIJsonObj;
+    protected ?OpenApi $openAPISchema;
 
     public function __construct(WorkbenchInterface $workbench, string $openAPIJson)
     {
@@ -46,19 +47,49 @@ class OpenAPI3 implements APISchemaInterface
             . 'Common' . DIRECTORY_SEPARATOR
             . 'JSONPath' . DIRECTORY_SEPARATOR
             . 'JSONPathLexer.php';
-            
+
         $this->workbench = $workbench;
         $this->openAPIJson = $openAPIJson;
-        
+
         $schema = new OpenApi(json_decode($openAPIJson, true));
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
-        
+
         $this->openAPIJsonObj = $schema->getSerializableData();
         $this->openAPIJsonArray = json_decode(json_encode($this->openAPIJsonObj), true);
 
         $this->openAPISchema = $schema;
     }
 
+    /**
+     * {@inheritDoc}
+     * @see \exface\Core\Interfaces\WorkbenchDependantInterface::getWorkbench()
+     */
+    public function getWorkbench() : Workbench
+    {
+        return $this->workbench;
+    }
+
+    /**
+     * @inheritdoc 
+     * @see APISchemaInterface::exportUxonObject()
+     */
+    public function exportUxonObject() : UxonObject
+    {
+        return new UxonObject($this->openAPIJsonArray);
+    }
+
+    /**
+     * @inheritdoc 
+     * @see APISchemaInterface::getUxonSchemaClass()
+     */
+    public static function getUxonSchemaClass() : ?string
+    {
+        return OpenAPISchema::class;
+    }
+
+    /**
+     * @see APISchemaInterface::getRouteForRequest()
+     */
     public function getRouteForRequest(ServerRequestInterface $request) : APIRouteInterface
     {
         $jsonPath = '$.paths.[#routePath#].[#methodType#].requestBody.content.[#ContentType#].schema';
@@ -82,6 +113,9 @@ class OpenAPI3 implements APISchemaInterface
         return new OpenAPI3Route($this, (array) $data);
     }
 
+    /**
+     * @see APISchemaInterface::getObjectSchema()
+     */
     public function getObjectSchema(MetaObjectInterface $object, string $customSchemaName = null) : APIObjectSchemaInterface
     {
         $schemas = $this->getSchemas();
@@ -99,7 +133,7 @@ class OpenAPI3 implements APISchemaInterface
         }
         return new OpenAPI3ObjectSchema($this, $schemaArray);
     }
-
+    
     protected function findObjectSchema(MetaObjectInterface $object): array
     {
         $schemas = $this->getSchemas();
@@ -119,74 +153,23 @@ class OpenAPI3 implements APISchemaInterface
 
         return $fromObjectSchema;
     }
-
-    /**
-     * @return mixed
-     */
+    
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
     }
 
-    protected function getAttributesFunctionName() : string
-    {
-        return 'attributes';
-    }
-    
-    public function getAttributes($class) : array 
-    {
-        if(is_a($class, OpenAPI3::class, true)) {
-            $class = OpenApi::class;
-        }
-        
-        if(!is_a($class, SpecBaseObject::class, true)) {
-            return [];
-        }
-        
-        $object = new $class([]);
-        $functionName = $this->getAttributesFunctionName();
-        
-        // Workaround to access protected method. The alternative is to manually create
-        // stubs with uxon-property annotation for each attribute. Both options are brittle,
-        // but this approach is easier to maintain.
-        return call_user_func(\Closure::bind(
-            function () use ($object, $functionName) {
-                return $object->{$functionName}();
-            },
-            null,
-            $object
-        ));
-    }
-
-    /**
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\WorkbenchDependantInterface::getWorkbench()
-     */
-    public function getWorkbench()
-    {
-        return $this->workbench;
-    }
-
-    public function exportUxonObject()
-    {
-        return new UxonObject($this->openAPIJsonArray);
-    }
-
-    public static function getUxonSchemaClass() : ?string
-    {
-        return OpenAPISchema::class;
-    }    
-
     /**
      * Injects custom attributes into a given JSON string.
-     * 
+     *
      * Custom attributes are fetched based on `x-object-alias` properties detected within
-     * `'json' => 'components' => 'schemas'`. Custom attributes are filtered based on their 
-     * source, discarding all attributes that were not generated by `CustomAttributesJsonBehavior`. 
-     * 
+     * `'json' => 'components' => 'schemas'`. Custom attributes are filtered based on their
+     * source, discarding all attributes that were not generated by `CustomAttributesJsonBehavior`.
+     *
      * TODO geb 2025-03-11: We could make this filter configurable, but only if needed.
-     * 
-     * @param string $json
+     *
+     * @param string             $json
+     * @param WorkbenchInterface $workbench
      * @return stdClass
      */
     public static function enhanceSchema(string $json, WorkbenchInterface $workbench) : stdClass
@@ -221,5 +204,48 @@ class OpenAPI3 implements APISchemaInterface
         }
         
         return $json;
+    }
+
+    /**
+     * Return the name for the OpenAPI function that gets all attributes for a `SpecBaseObject`.
+     * 
+     * @return string
+     * @see SpecBaseObject::attributes()
+     */
+    protected function getSpecBaseAttributesFunctionName() : string
+    {
+        return 'attributes';
+    }
+
+    /**
+     * Get all attributes for a `SpecBaseObject` class. 
+     * 
+     * If the given class name is not a subclass of `SpecBaseObject`, an empty array will be returned.
+     * If the given class is `OpenApi3::class`, then all attributes of `OpenApi::class` will be used instead.
+     * 
+     * @param $specBaseObjectClass
+     * @return array
+     * @see SpecBaseObject::attributes()
+     */
+    public function getAttributes($specBaseObjectClass) : array
+    {
+        $specBaseObjectClass = $specBaseObjectClass === OpenAPI3::class ? OpenApi::class : $specBaseObjectClass;
+        if(!is_a($specBaseObjectClass, SpecBaseObject::class, true)) {
+            return [];
+        }
+
+        $object = new $specBaseObjectClass([]);
+        $functionName = $this->getSpecBaseAttributesFunctionName();
+
+        // Workaround to access protected method. The alternative is to manually create
+        // stubs with uxon-property annotation for each attribute. Both options are brittle,
+        // but this approach is easier to maintain.
+        return call_user_func(\Closure::bind(
+            function () use ($object, $functionName) {
+                return $object->{$functionName}();
+            },
+            null,
+            $object
+        ));
     }
 }
