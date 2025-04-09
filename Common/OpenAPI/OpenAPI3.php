@@ -113,7 +113,7 @@ class OpenAPI3 implements APISchemaInterface
                     }
                 }
 
-                throw new InvalidArgumentException('From object not found in OpenApi schema!');
+                throw new InvalidArgumentException('Object ' . $object->__toString() . ' not found in OpenApi schema `x-object-alias` properties!');
         }
 
         return $fromObjectSchema;

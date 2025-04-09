@@ -84,7 +84,74 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
-     * {@inheritDoc}
+     * Use the property to lookup a value in the data of a meta object instead of using the property value directly
+     * 
+     * ## Examples:
+     * 
+     * ### Lookup the UID of a country while receiving its name
+     * 
+     * The data received by the web service will expect the name of a country in the property `Country`, but we need
+     * to write the UID of that country into our data. The `x-lookup` custom property describes, how to find the
+     * UID using the name.
+     * 
+     * In this simple scenario, the UID will be used instead of the name and will be saved to the `COUNTRY` attribute
+     * of the to-object.
+     * 
+     * ```
+     * {
+     *      "Country": {
+     *          "type": "string",
+     *          "nullable": true,
+     *          "example": "Germany",
+     *          "x-attribute-alias": "COUNTRY",
+     *          "x-lookup": {
+     *              "lookup_object_alias": "my.APP.COUNTRY",
+     *              "lookup_column": "UID",
+     *              "matches": [
+     *                  {
+     *                      "from": "Country",
+     *                      "lookup": "NAME"
+     *                  }
+     *              ]
+     *          }
+     *      }
+     * }
+     * 
+     * ```
+     * 
+     * ### Lookup the UID of a country by name, but keep both: name and UID
+     * 
+     * In this example, we want to keep the name of the country in the attribute `CONTRY_NAME` and place the UID next to it
+     * into the attribute "COUNTRY". Our attribute binding (`x-attribute-alias`) is `COUNTRY_NAME` in this case, while the
+     * `x-lookup` now explicitly specifies a `to`-column to place the UID into. 
+     * 
+     * ```
+     * {
+     *      "Country": {
+     *          "type": "string",
+     *          "nullable": true,
+     *          "example": "Germany",
+     *          "x-attribute-alias": "COUNTRY_NAME",
+     *          "x-lookup": {
+     *              "lookup_object_alias": "my.APP.COUNTRY",
+     *              "lookup_column": "UID",
+     *              "to": "COUNTRY",
+     *              "matches": [
+     *                  {
+     *                      "from": "Country",
+     *                      "lookup": "NAME"
+     *                  }
+     *              ]
+     *          }
+     *      }
+     * }
+     * 
+     * ```
+     * 
+     * @uxon-property x-lookup
+     * @xon-type \exface\Core\DataSheets\Mappings\LookupMapping
+     * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
+     * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getLookupUxon()
      */
     public function getLookupUxon() : ?UxonObject
