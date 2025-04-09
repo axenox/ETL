@@ -228,7 +228,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     /**
      * Custom mapper 
      * 
-     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper;
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
      * @uxon-property mapper
      * @uxon-template {"column_to_column_mappings": [{"from": "", "to": ""}]}
      * 

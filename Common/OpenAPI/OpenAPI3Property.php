@@ -37,6 +37,8 @@ use exface\Core\Interfaces\Model\MetaAttributeInterface;
  */
 class OpenAPI3Property implements APIPropertyInterface
 {
+    use OpenAPI3UxonTrait;
+    
     const X_ATTRIBUTE_ALIAS = 'x-attribute-alias';
     const X_LOOKUP = 'x-lookup';
     const X_CALCULATION = 'x-calculation';
@@ -149,7 +151,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * ```
      * 
      * @uxon-property x-lookup
-     * @xon-type \exface\Core\DataSheets\Mappings\LookupMapping
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\Mappings\LookupMapping
      * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
      * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getLookupUxon()
