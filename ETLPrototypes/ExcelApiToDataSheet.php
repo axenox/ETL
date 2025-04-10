@@ -96,16 +96,19 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileData->getMetaObject(), $uploadUid);
         yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
 
+        $toObject = $this->getToObject();
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
         
         if ($this->isUpdateIfMatchingAttributes()) {
             $this->addDuplicatePreventingBehavior($this->getToObject());
+        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-        $mapper = $this->getMapper($fromSheet->getMetaObject(), $toObjectSchema);
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
