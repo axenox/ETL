@@ -40,7 +40,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private $disabled = null;
     
     private $timeout = 30;
-    
+    private ?UxonObject $noteUxon = null;
+
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
         $this->workbench = $toObject->getWorkbench();
@@ -137,7 +138,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
     
     /**
-     * Alias of the attribute of the to-object where the UID of the flow run is to be saved (same value for all steps in a flow)
+     * Alias of the attribute of the to-object where the UID of the flow run is to be saved (same value for all steps
+     * in a flow)
      * 
      * @uxon-property flow_run_uid_attribute
      * @uxon-type metamodel:attribute
@@ -260,5 +262,35 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         	$phs[self::PH_PARAMETER_PREFIX . $name] = $value;
         }
         return $phs;
+    }
+
+    /**
+     * @uxon-property note
+     * @uxon-type \axenox\etl\Common\StepNote
+     * @uxon-template {"message":"", "log_level":"info"}
+     * 
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    public function setNote(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->noteUxon = $uxon;
+        return $this;
+    }
+    
+    public function getNoteUxon() : ?UxonObject
+    {
+        return $this->noteUxon;
+    }
+    
+    protected function generateNote(ETLStepDataInterface $data, bool $success) : StepNote
+    {
+        return new StepNote(
+            $this->getWorkbench(),
+            $data->getFlowRunUid(),
+            $data->getStepRunUid(),
+            !$success,
+            $this->getNoteUxon()
+        );
     }
 }
