@@ -3,6 +3,7 @@ namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
+use exface\Core\CommonLogic\Model\CustomAttribute;
 use exface\Core\CommonLogic\Model\Expression;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
@@ -18,7 +19,6 @@ use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Factories\ExpressionFactory;
-use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
@@ -31,7 +31,7 @@ use exface\Core\Interfaces\Model\MetaAttributeInterface;
  * - `x-attribute-alias` - the meta model attribute this property is bound to
  * - `x-lookup` - the Uxon object to look up for this property
  * - `x-calculation` - the calculation expression for this property
- * - `x-data-address` - the data address for this property
+ * - `x-custom-attribute` - create a custom attribute for the object right here
  * 
  * @author  Andrej Kabachnik
  */
@@ -42,7 +42,7 @@ class OpenAPI3Property implements APIPropertyInterface
     const X_ATTRIBUTE_ALIAS = 'x-attribute-alias';
     const X_LOOKUP = 'x-lookup';
     const X_CALCULATION = 'x-calculation';
-    const X_DATA_ADDRESS = 'x-data-address';
+    const X_CUSTOM_ATTRIBUTE = 'x-custom-attribute';
 
     private $objectSchema = null;
     private $name = null;
@@ -187,18 +187,42 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
+     * Create a custom attribute for the object right here and use any data address - even an SQL query
+     * 
+     * **NOTE:** This property will not be visible in the OpenAPI json or Swagger UI!
+     * 
+     * @uxon-property x-custom-attribute
+     * @uxon-type \exface\core\CommonLogic\Model\CustomAttribute
+     * @uxon-template {"alias":"// The alias of the attribute","data_address":"// The data address of the attribute","data_type":"exface.Core.String"}
+     * 
+     * @return string|null
+     */
+    protected function getAttributeCustomUxon() : ?UxonObject
+    {
+        $model = $this->jsonSchema[self::X_CUSTOM_ATTRIBUTE] ?? null;
+        if ($model === null) {
+            return null;
+        }
+        return new UxonObject($model);
+    }
+
+    /**
      * {@inheritDoc}
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttribute()
      */
     public function getAttribute() : ?MetaAttributeInterface
     {
         if ($this->attribute === null) {
-            if (null !== $alias = $this->getAttributeAlias()) {
-                if (null !== $customAddress = $this->jsonSchema[self::X_DATA_ADDRESS]) {
-                    $this->attribute = MetaObjectFactory::addAttributeTemporary($this->getObjectSchema()->getMetaObject(), $alias, $alias, $customAddress, $this->guessDataType());
-                } else {
-                    $this->attribute = $this->getObjectSchema()->getMetaObject()->getAttribute($alias);
+            $alias = $this->getAttributeAlias();
+            $customUxon = $this->getAttributeCustomUxon();
+            if ($customUxon !== null) {
+                if ($alias === null && $customUxon->hasProperty('alias')) {
+                    $alias = $customUxon->getProperty('alias');
                 }
+                $this->attribute = new CustomAttribute($this->getObjectSchema()->getMetaObject(), $alias, $alias, $this);
+                $this->attribute->importUxonObject($customUxon);
+            } else {
+                $this->attribute = $this->getObjectSchema()->getMetaObject()->getAttribute($alias);
             }
         }
         return $this->attribute;
@@ -269,7 +293,12 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
-     * {@inheritDoc}
+     * Read this property from a formula (only for reading, no writing possible!)
+     * 
+     * @uxon-property calculation
+     * @uxon-type metamodel:formula
+     * @uxon-template =
+     * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getCalculationExpression()
      */
     public function getCalculationExpression() : ?ExpressionInterface
