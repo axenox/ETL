@@ -137,13 +137,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         if ($this->isUpdateIfMatchingAttributes()) {
             $this->addDuplicatePreventingBehavior($this->getToObject());
+        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
         
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
-        $mapper = $this->getMapper($fromSheet->getMetaObject(), $toObjectSchema);
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
@@ -186,7 +188,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param \axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface $toObjectSchema
      * @return DataSheetMapperInterface
      */
-    protected function getMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
+    protected function getPropertiesToDataSheetMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
     {
         $col2col = [];
         $lookups = [];
@@ -212,7 +214,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
             'to_object_alias' => $toObjectSchema->getMetaObject()->getAliasWithNamespace()
         ]);
-        if (null !== $customMapperUxon = $this->getMapperUxon()) {
+        if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
             $uxon = $customMapperUxon->extend($uxon);
         }
         if (! empty($col2col)) {
@@ -226,26 +228,31 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * Custom mapper 
+     * Custom mapper to map properties of the API schema to the data sheet.
      * 
      * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
-     * @uxon-property mapper
+     * @uxon-property properties_to_data_sheet_mapper
      * @uxon-template {"column_to_column_mappings": [{"from": "", "to": ""}]}
      * 
      * @param \exface\Core\CommonLogic\UxonObject $uxon
      * @return JsonApiToDataSheet
      */
-    protected function setMapper(UxonObject $uxon) : JsonApiToDataSheet 
+    protected function setPropertiesToDataSheetMapper(UxonObject $uxon) : JsonApiToDataSheet 
     {
         $this->mapperUxon = $uxon;
         return $this;
+    }
+
+    protected function setMapper(UxonObject $uxon) : JsonApiToDataSheet 
+    {
+        return $this->setPropertiesToDataSheetMapper($uxon);
     }
 
     /**
      * 
      * @return UxonObject
      */
-    protected function getMapperUxon() : ?UxonObject
+    protected function getPropertiesToDataMapperUxon() : ?UxonObject
     {
         return $this->mapperUxon;
     }

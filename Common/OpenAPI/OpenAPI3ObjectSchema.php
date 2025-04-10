@@ -4,6 +4,7 @@ namespace axenox\ETL\Common\OpenAPI;
 use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
+use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -21,12 +22,14 @@ use stdClass;
 class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 {
     use OpenAPI3UxonTrait;
+
     const X_OBJECT_ALIAS = 'x-object-alias';
 
     private $openAPISchema = null;
     private $jsonSchema = null;
     private $properties = null;
     private $object = null;
+    private $updateIfMatchingAttributeAliases = [];
 
     public function __construct(OpenAPI3 $model, array $jsonSchema)
     {
@@ -146,5 +149,48 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function isRequiredProperty(OpenAPI3Property $property) : bool
     {
         return in_array($property->getPropertyName(), $this->jsonSchema['required']);
+    }
+    
+    /**
+     * 
+     * @param MetaObjectInterface $object
+     */
+    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object)
+    {
+        $behavior = BehaviorFactory::createFromUxon($object, PreventDuplicatesBehavior::class, new UxonObject([
+            'compare_attributes' => $this->getUpdateIfMatchingAttributeAliases(),
+            'on_duplicate_multi_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE,
+            'on_duplicate_single_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE
+        ]));
+        $object->getBehaviors()->add($behavior);
+        return;
+    }
+    
+    /**
+     * 
+     * @return string[]
+     */
+    public function getUpdateIfMatchingAttributeAliases() : array
+    {
+        return $this->jsonSchema['x-update-if-matching-attributes'] ?? [];
+    }
+    
+    /**
+     * The attributes to compare when searching for existing data rows.
+     * 
+     * If an existing item of the to-object with exact the same values in all of these attributes
+     * is found, the step will perform an update and will not create a new item.
+     * 
+     * **NOTE:** this will overwrite data in all the attributes affected by the `mapper`.
+     *
+     * @uxon-property x-update-if-matching-attributes
+     * @uxon-type metamodel:attribute[]
+     * @uxon-template [""]
+     * 
+     * @return bool
+     */
+    public function isUpdateIfMatchingAttributes() : bool
+    {
+        return empty($this->jsonSchema['x-update-if-matching-attributes'] ?? []) === false;
     }
 }
