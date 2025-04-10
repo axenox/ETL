@@ -2,11 +2,7 @@ IF OBJECT_ID('dbo.etl_sankey_webservices', 'V') IS NOT NULL
     DROP VIEW dbo.etl_sankey_webservices;
 GO
 
-IF OBJECT_ID('dbo.etl_flow_sankey', 'V') IS NOT NULL
-    DROP VIEW dbo.etl_flow_sankey;
-GO
-
-CREATE VIEW dbo.etl_flow_sankey AS
+CREATE OR ALTER VIEW dbo.etl_flow_sankey AS
 SELECT
 	source_level,
 	target_level,
@@ -100,6 +96,35 @@ FROM
 			LEFT JOIN exf_object fofo ON fofo.oid = fof.object_oid
 		WHERE 
 		    fof.level = (SELECT MIN(fo1.level) FROM etl_flow_objects fo1 WHERE fof.flow_oid = fo1.flow_oid) 
+		    AND s.from_object_oid != 0x11ef97055df83b389705025041000001
+	    
+    )
+    UNION ALL 
+    (		    	
+    	SELECT 
+		    fof.level - 1 AS source_level,
+		    fof.level AS target_level,
+		    0x11ef97055df83b389705025041000001 AS source_object_oid, -- UID of the object axenox.ETL.webservice_request
+		    ff.oid AS source_oid,
+		    'upload_flow' AS source_type,
+		    CONCAT('File upload [', ff.name, ']') AS source_name,
+		    s.from_object_oid AS target_object_oid,
+		    s.from_object_oid AS target_oid,
+		    'object' AS target_type,
+		    CONCAT(fofo.object_name, ' [', fofo.object_alias, ']') AS target_name,
+		    'Upload file' AS name,
+		    NULL AS step_oid,
+		    fof.flow_oid AS flow_oid
+		FROM
+		    etl_step s
+            INNER JOIN etl_file_flow ff ON ff.flow_oid = s.flow_oid
+		    INNER JOIN etl_flow_objects fof ON s.flow_oid = fof.flow_oid 
+		    	AND fof.object_oid = s.from_object_oid
+			LEFT JOIN exf_object fofo ON fofo.oid = fof.object_oid
+		WHERE 
+		    fof.level = (SELECT MIN(fo1.level) FROM etl_flow_objects fo1 WHERE fof.flow_oid = fo1.flow_oid) 
+		    AND s.from_object_oid = 0x11ef97055df83b389705025041000001
 	    
     )
 ) sankeydata
+-- WHERE flow_oid = 0x11ef97c581880b0497c5005056bef75d
