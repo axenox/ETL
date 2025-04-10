@@ -205,8 +205,8 @@ class OpenAPISchema extends UxonSchema
     protected function mapToRepresentationClass(string $property, string $prototypeClass) : string
     {
         $result = match ($property) {
-            'schemas' => OpenAPI3ObjectSchema::class,
-            'properties' => OpenAPI3Property::class,
+            'schema', 'schemas' => OpenAPI3ObjectSchema::class,
+            'property', 'properties' => OpenAPI3Property::class,
             default => $prototypeClass
         };
         
