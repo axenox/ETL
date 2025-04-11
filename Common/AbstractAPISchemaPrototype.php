@@ -36,7 +36,7 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
      */
     protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
     {
-        $task = $stepData;
+        $task = $stepData->getTask();
         foreach ($this->taskSchemas as $taskSchema) {
             if ($taskSchema['task'] === $task) {
                 return $taskSchema['model'];

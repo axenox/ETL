@@ -13,7 +13,6 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\Interfaces\UxonSchemaInterface;
 use exface\Core\Uxon\UxonSchema;
 use exface\Core\DataTypes\SortingDirectionsDataType;
 use exface\Core\Factories\DataSheetFactory;
@@ -65,7 +64,7 @@ class OpenAPISchema extends UxonSchema
             ->addFromString('NAME', SortingDirectionsDataType::ASC);
         $ds->dataRead();
         
-             
+        // Create some presets for meta object schemas
         $objectAlias = empty($path) ? '' : end($path);
         if (($objectAlias ?? '') !== ''){
             $objectSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'exface.Core.OBJECT');
@@ -76,26 +75,59 @@ class OpenAPISchema extends UxonSchema
                 'APP__ALIAS',
                 'ALIAS_WITH_NS'
             ]);
-            $objectSheet->dataRead();
+            $objectSheet->dataRead(50);
             $schemaBuilder = new MetaModelSchemaBuilder(onlyReturnProperties: true, forceSchema: true, loadExamples: true);
+            $allAttrRows = [];
+            $editbaleAttrRows = [];
             foreach ($objectSheet->getRows() as $objRow) {
                 try {
                     $obj = MetaObjectFactory::createFromString($this->getWorkbench(), $objRow['ALIAS_WITH_NS']);
                     $json = $schemaBuilder->transformIntoJsonSchema($obj);
-            
-                    $ds->addRow([
+                    $presetName = "<b>{$obj->getName()}</b><br>Alias: {$objRow['ALIAS']}<br>App: {$objRow['APP__ALIAS']}";
+                    // Add export template for 
+                    $allAttrRows[] = [
                         'UID' => $obj->getId(),
-                        'NAME' => $obj->getName() . '<br>Alias: ' . $objRow['ALIAS'] . '<br>App: ' . $objRow['APP__ALIAS'], 
-                        'PROTOTYPE__LABEL' => 'Meta objects', 
+                        'NAME' => $presetName, 
+                        'PROTOTYPE__LABEL' => 'Meta objects for export (all attributes)', 
                         'DESCRIPTION' => '', 
                         'PROTOTYPE' => 'object', 
                         'UXON' => json_encode($json), 
                         'WRAP_PATH' => null, 
                         'WRAP_FLAG' => 0
-                    ]);
+                    ];
+
+                    if (! $obj->isWritable()) {
+                        continue;
+                    }
+
+                    $editableAttrs = $obj->getAttributes()->getEditable();
+                    if (! $editableAttrs->isEmpty()) {
+                        foreach ($editableAttrs as $attr) {
+                            unset($json['properties'][$attr->getAlias()]);
+                            if (is_array($json['required']) && in_array($attr->getAlias(), $json['required'])) {
+                                unset($json['required'][array_search($attr->getAlias(), $json['required'])]);
+                            }
+                        }
+                        $editbaleAttrRows[] = [
+                            'UID' => $obj->getId(),
+                            'NAME' => $presetName, 
+                            'PROTOTYPE__LABEL' => 'Meta objects for import (editable attributes)', 
+                            'DESCRIPTION' => '', 
+                            'PROTOTYPE' => 'object', 
+                            'UXON' => json_encode($json), 
+                            'WRAP_PATH' => null, 
+                            'WRAP_FLAG' => 0
+                        ];
+                    }
                 } catch (\Throwable $e) {
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::WARNING);
                 }
+            }
+            foreach ($allAttrRows as $row) {
+                $ds->addRow($row);
+            }
+            foreach ($editbaleAttrRows as $row) {
+                $ds->addRow($row);
             }
         } else {
             $ds->addRow([
