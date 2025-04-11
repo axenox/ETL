@@ -8,7 +8,10 @@ use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 
-
+/**
+ * @inheritdoc 
+ * @see NoteTakerInterface
+ */
 class NoteTaker implements NoteTakerInterface
 {
     /**
@@ -18,16 +21,26 @@ class NoteTaker implements NoteTakerInterface
     protected DataSheetInterface $pendingNotes;
     protected bool $hasPendingNotes = false;
 
+    /**
+     * @param MetaObjectInterface $storageObject
+     */
     public function __construct(MetaObjectInterface $storageObject)
     {
         $this->pendingNotes = DataSheetFactory::createFromObject($storageObject);
     }
 
+    /**
+     * @inheritdoc
+     */
     public function __destruct()
     {
         $this->commitPendingNotes();
     }
-    
+
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::commitPendingNotes() 
+     */
     public function commitPendingNotes() : void
     {
         if(!$this->hasPendingNotes()) {
@@ -39,29 +52,49 @@ class NoteTaker implements NoteTakerInterface
 
         $this->hasPendingNotes = false;
     }
-    
+
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::getPendingNotes()
+     */
     public function getPendingNotes() : DataSheetInterface
     {
         return $this->pendingNotes->copy();
     }
-    
+
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::hasPendingNotes()
+     */
     public function hasPendingNotes() : bool
     {
         return $this->hasPendingNotes;
     }
-    
+
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::addNote()
+     */
     public function addNote(NoteInterface $note) : void
     {
         $this->pendingNotes->addRow($note->getNoteData());
         $this->hasPendingNotes = true;
     }
-    
+
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::takeNote()
+     */
     public static function takeNote(NoteInterface $note) : void
     {
         $storageObject = $note->getStorageObject();
         self::getNoteTakerInstance($storageObject)->addNote($note);
     }
 
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::getNoteTakerInstance()
+     */
     public static function getNoteTakerInstance(MetaObjectInterface $storageObject) : NoteTakerInterface
     {
         $alias = $storageObject->getAlias();
@@ -75,6 +108,10 @@ class NoteTaker implements NoteTakerInterface
         return $noteTaker;
     }
 
+    /**
+     * @inheritdoc
+     * @see NoteTakerInterface::commitPendingNotesAll()
+     */
     public static function commitPendingNotesAll() : void
     {
         foreach (self::$noteTakers as $noteTaker) {
