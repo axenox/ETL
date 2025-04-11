@@ -87,9 +87,9 @@
         {
             "_EXPORT_SUMMARY": "Web service type [axenox.ETL.webservice_type]",
             "CREATED_ON": "2023-12-11 09:45:32",
-            "MODIFIED_ON": "2023-12-15 09:10:45",
+            "MODIFIED_ON": "2025-04-11 14:38:07",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ee9c1ba539d1529c1b025041000001",
             "READABLE_FLAG": 1,
             "WRITABLE_FLAG": 1,
@@ -104,40 +104,22 @@
             "DATA_ADDRESS_PROPS": null,
             "DEFAULT_EDITOR_UXON": {
                 "widget_type": "Dialog",
+                "caption": "Details",
+                "columns_in_grid": 1,
+                "width": 1,
+                "height": "auto",
                 "widgets": [
                     {
-                        "widget_type": "WidgetGroup",
-                        "caption": "Details",
-                        "columns_in_grid": 2,
-                        "width": "100%",
-                        "widgets": [
-                            {
-                                "attribute_alias": "name"
-                            },
-                            {
-                                "attribute_alias": "app"
-                            },
-                            {
-                                "attribute_alias": "version"
-                            },
-                            {
-                                "widget_type": "InputText",
-                                "attribute_alias": "default_response_path"
-                            }
-                        ]
+                        "attribute_alias": "name"
                     },
                     {
-                        "widget_type": "WidgetGroup",
-                        "caption": "Schema json",
-                        "width": "100%",
-                        "widgets": [
-                            {
-                                "widget_type": "InputJson",
-                                "height": "50%",
-                                "hide_caption": true,
-                                "attribute_alias": "schema_json"
-                            }
-                        ]
+                        "attribute_alias": "app"
+                    },
+                    {
+                        "attribute_alias": "version"
+                    },
+                    {
+                        "attribute_alias": "schema_class"
                     }
                 ]
             },

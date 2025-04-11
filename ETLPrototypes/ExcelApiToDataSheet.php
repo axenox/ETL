@@ -210,8 +210,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
         $ds->getColumns()->addMultiple([
             'UID', 
-            'type__schema_json', 
             'swagger_json', 
+            'type__schema_class',
             'enabled'
         ]);
         if ((null !== $customWebservice = $this->getWebserviceAlias()) && (null !== $customWebserviceVersion = $this->getWebserviceVersion())) {
@@ -223,8 +223,9 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $ds->dataRead();        
 
         $webservice = $ds->getSingleRow();
-        $openApiJson = json_encode(OpenAPI3::enhanceSchema($webservice['swagger_json'], $this->getWorkbench()));
-        return new OpenAPI3($this->getWorkbench(), $openApiJson);
+        $schemaClass = $webservice['type__schema_class'];
+        $schema = new $schemaClass($this->getWorkbench(), $webservice['swagger_json']);
+        return $schema;
     }
 
     /**
