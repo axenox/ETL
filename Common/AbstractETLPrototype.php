@@ -267,6 +267,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
+     * Define a note that will be taken, if this step succeeds.
+     * 
      * @uxon-property note_on_success
      * @uxon-type \axenox\etl\Common\StepNote
      * @uxon-template {"message":"", "log_level":"info"}
@@ -292,6 +294,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
+     * Define a note that will be taken, if this step fails.
+     * 
      * @uxon-property note_on_failure
      * @uxon-type \axenox\etl\Common\StepNote
      * @uxon-template {"message":"", "log_level":"warning"}
