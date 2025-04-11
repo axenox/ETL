@@ -1,16 +1,16 @@
 <?php
 namespace axenox\ETL\Common\OpenAPI;
 
+use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Uxon\OpenAPISchema;
 use cebe\openapi\ReferenceContext;
 use cebe\openapi\spec\OpenApi;
-use cebe\openapi\SpecBaseObject;
-use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Workbench;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
@@ -29,13 +29,14 @@ class OpenAPI3 implements APISchemaInterface
 {
     use OpenAPI3UxonTrait;
 
-    protected ?Workbench $workbench;
-    protected ?array $openAPIJsonArray;
-    protected ?string $openAPIJson;
-    protected mixed $openAPIJsonObj;
-    protected ?OpenApi $openAPISchema;
+    private ?Workbench $workbench;
+    private ?array $openAPIJsonArray;
+    private ?string $openAPIJson;
+    private mixed $openAPIJsonObj;
+    private ?OpenApi $openAPISchema;
+    private ?string $apiVersion = null;
 
-    public function __construct(WorkbenchInterface $workbench, string $openAPIJson)
+    public function __construct(WorkbenchInterface $workbench, string $openAPIJson, string $apiVersion = null)
     {
         // Use local version of JSONPathLexer with edit to
         // Make sure to require BEFORE the JSONPath classes are loaded, so that the custom lexer replaces
@@ -50,11 +51,12 @@ class OpenAPI3 implements APISchemaInterface
 
         $this->workbench = $workbench;
         $this->openAPIJson = $openAPIJson;
+        $this->apiVersion = $apiVersion;
 
         $schema = new OpenApi(json_decode($openAPIJson, true));
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
 
-        $this->openAPIJsonObj = $schema->getSerializableData();
+        $this->openAPIJsonObj = $this->enhanceSchema($schema->getSerializableData());
         $this->openAPIJsonArray = json_decode(json_encode($this->openAPIJsonObj), true);
 
         $this->openAPISchema = $schema;
@@ -156,13 +158,28 @@ class OpenAPI3 implements APISchemaInterface
     
     /**
      * @uxon-property components
-     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema[]
+     * @uxon-type \cebe\openapi\spec\Components
      * 
      * @return mixed
+     */
+    protected function getComponents() : array
+    {
+        return $this->openAPIJsonArray['components'];
+    }
+    
+    /**
+     * 
+     * 
+     * @return array|null
      */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
+    }
+
+    public function __tostring()
+    {
+        return JsonDataType::encodeJson($this->openAPIJsonObj, true);
     }
 
     /**
@@ -175,12 +192,13 @@ class OpenAPI3 implements APISchemaInterface
      * TODO geb 2025-03-11: We could make this filter configurable, but only if needed.
      *
      * @param string             $json
-     * @param WorkbenchInterface $workbench
      * @return stdClass
      */
-    public static function enhanceSchema(string $json, WorkbenchInterface $workbench) : stdClass
+    protected function enhanceSchema(stdClass $json) : stdClass
     {
-        $json = json_decode($json);
+        if ($this->apiVersion !== null) {
+             $json->info->version = $this->apiVersion;
+        }
         $schemas = $json->components->schemas;
         
         foreach ($schemas as $schema) {
@@ -189,7 +207,7 @@ class OpenAPI3 implements APISchemaInterface
                 continue;
             }
             
-            $object = MetaObjectFactory::createFromString($workbench, $objectAlias);
+            $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
             $properties = $schema->properties;
             foreach ($properties as $propertyName => $property) {
                 $result = OpenAPI3ObjectSchema::toGroup($property, $object);
@@ -212,46 +230,88 @@ class OpenAPI3 implements APISchemaInterface
         return $json;
     }
 
-    /**
-     * Return the name for the OpenAPI function that gets all attributes for a `SpecBaseObject`.
-     * 
-     * @return string
-     * @see SpecBaseObject::attributes()
-     */
-    protected function getSpecBaseAttributesFunctionName() : string
+    public function publish(string $baseUrl) : string
     {
-        return 'attributes';
+        $jsonArray = $this->openAPIJsonArray;
+        $jsonArray = $this->removeInternalAttributes($jsonArray);
+        $jsonArray = $this->prependLocalServerPaths($baseUrl, $jsonArray);
+        return $this->validateSchema(JsonDataType::encodeJson($jsonArray, true));		
     }
 
     /**
-     * Get all attributes for a `SpecBaseObject` class. 
-     * 
-     * If the given class name is not a subclass of `SpecBaseObject`, an empty array will be returned.
-     * If the given class is `OpenApi3::class`, then all attributes of `OpenApi::class` will be used instead.
-     * 
-     * @param $specBaseObjectClass
-     * @return array
-     * @see SpecBaseObject::attributes()
+     * Appends all local server paths of the API.
+     * @param string $path the actual called path
+     * @param array $swaggerArray an array holding information of swagger configuration
+     * @return array the modified $swaggerArray
      */
-    public function getAttributes($specBaseObjectClass) : array
+    private function prependLocalServerPaths(string $path, array $swaggerArray): array
     {
-        $specBaseObjectClass = $specBaseObjectClass === OpenAPI3::class ? OpenApi::class : $specBaseObjectClass;
-        if(!is_a($specBaseObjectClass, SpecBaseObject::class, true)) {
-            return [];
+        $baseUrls = $this->getWorkbench()->getConfig()->getOption('SERVER.BASE_URLS')->toArray();
+        foreach (array_reverse($baseUrls) as $baseUrl) {
+            // prepend entry to array
+            array_unshift($swaggerArray['servers'], ['url' => $baseUrl . $path]);
         }
 
-        $object = new $specBaseObjectClass([]);
-        $functionName = $this->getSpecBaseAttributesFunctionName();
-
-        // Workaround to access protected method. The alternative is to manually create
-        // stubs with uxon-property annotation for each attribute. Both options are brittle,
-        // but this approach is easier to maintain.
-        return call_user_func(\Closure::bind(
-            function () use ($object, $functionName) {
-                return $object->{$functionName}();
-            },
-            null,
-            $object
-        ));
+        return $swaggerArray;
     }
+
+    /**
+     * Removes internal attributes from Swagger API definition.
+     * TODO jsc 240917 move to OpenAPI specific Implementation
+     * @param array $swaggerArray an array holding information of swagger configuration
+     * @return array the modified $swaggerArray
+     */
+    private function removeInternalAttributes(array $swaggerArray) : array
+    {
+        $newSwaggerDefinition = [];
+        foreach($swaggerArray as $name => $value){
+            if (is_array($value)) {
+                $newSwaggerDefinition[$name] = $this->removeInternalAttributes($value);
+                continue;
+            }
+            if ($name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_CALCULATION
+                || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS
+                || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
+            ) {
+                continue;
+            }
+            $newSwaggerDefinition[$name] = $value;
+        }
+
+        return $newSwaggerDefinition;
+    }
+
+    /**
+     * 
+     * @param string|stdClass|array $json
+     * @param \exface\Core\Interfaces\WorkbenchInterface $workbench
+     * @return string
+     */
+    protected function validateSchema($json) : string
+    {
+        $jsonSchema = file_get_contents(__DIR__ . DIRECTORY_SEPARATOR . 'JSONSchema' . DIRECTORY_SEPARATOR . 'OpenAPI_3.0.json');
+        JsonDataType::validateJsonSchema($json, $jsonSchema);
+        return $json;
+    }    
+
+    /**
+     * Selects data from a swaggerJson with the given json path.
+     * Route path and method type are used to replace placeholders within the path.
+     *
+     * @param string $routePath
+     * @param string $methodType
+     * @return array|null
+     * @throws \Flow\JSONPath\JSONPathException
+     */
+	public function getResponseDataTemplate(
+		string $routePath,
+		string $methodType
+    ) : ?array
+    {
+            $jsonPath = '$.paths.[#routePath#].[#methodType#].responses[200].content.application/json.examples.defaultResponse.value';
+			$jsonPath = str_replace('[#routePath#]', $routePath, $jsonPath);
+			$jsonPath = str_replace('[#methodType#]', $methodType, $jsonPath);
+			$data = (new JSONPath($this->openAPIJsonObj))->find($jsonPath)->getData()[0] ?? null;
+			return is_object($data) ? get_object_vars($data) : $data;
+	}
 }

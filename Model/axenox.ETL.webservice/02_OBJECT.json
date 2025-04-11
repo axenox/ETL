@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "Web service [axenox.ETL.webservice]",
             "CREATED_ON": "2023-10-18 16:06:50",
-            "MODIFIED_ON": "2025-04-09 09:00:05",
+            "MODIFIED_ON": "2025-04-11 11:01:54",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eebdc39597022cbdc3025041000001",
@@ -137,7 +137,21 @@
                                         "height": 3
                                     },
                                     {
-                                        "attribute_alias": "type"
+                                        "attribute_alias": "type",
+                                        "id": "webservice_type_selector",
+                                        "widget_type": "InputComboTable",
+                                        "table": {
+                                            "object_alias": "axenox.ETL.webservice_type",
+                                            "columns": [
+                                                {
+                                                    "attribute_group_alias": "~DEFAULT_DISPLAY"
+                                                },
+                                                {
+                                                    "attribute_alias": "schema_class",
+                                                    "hidden": true
+                                                }
+                                            ]
+                                        }
                                     },
                                     {
                                         "attribute_alias": "local_url",
@@ -270,7 +284,8 @@
                                         "height": "100%",
                                         "hide_caption": true,
                                         "attribute_alias": "swagger_json",
-                                        "schema": "\\axenox\\ETL\\Uxon\\OpenAPISchema"
+                                        "schema": "\\axenox\\ETL\\Uxon\\OpenAPISchema",
+                                        "root_prototype": "=webservice_type_selector!schema_class"
                                     }
                                 ]
                             }

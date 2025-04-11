@@ -18,7 +18,7 @@ trait OpenAPI3UxonTrait
      */
     public function importUxonObject(UxonObject $uxon, array $skip_property_names = array())
     {
-        
+        // TODO
     }
 
     /**
