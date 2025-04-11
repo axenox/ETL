@@ -3,6 +3,7 @@ namespace axenox\ETL\Facades;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
@@ -522,7 +523,9 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
                 continue;
             }
             if ($name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_CALCULATION
-                || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS) {
+                || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS
+                || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
+            ) {
                 continue;
             }
             $newSwaggerDefinition[$name] = $value;

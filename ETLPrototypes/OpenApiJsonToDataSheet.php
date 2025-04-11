@@ -254,7 +254,7 @@ class OpenApiJsonToDataSheet extends AbstractOpenApiPrototype
             switch(true) {
                 case array_key_exists($propertyName, $attributeAliasByPropertyName) === false && is_array($value):
                 case is_numeric($propertyName):
-                    $importData = $this->getImportDataFromRequestBody($value, $attributeAliasByPropertyName);
+                    $importData[$attributeAliasByPropertyName[$propertyName]] = $this->getImportDataFromRequestBody($value, $attributeAliasByPropertyName);
                     break;
                 case array_key_exists($propertyName, $attributeAliasByPropertyName):
                     // arrays and objects are represented via string in the database

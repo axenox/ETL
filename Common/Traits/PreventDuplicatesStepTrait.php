@@ -20,11 +20,14 @@ trait PreventDuplicatesStepTrait
     /**
      * 
      * @param MetaObjectInterface $object
+     * @param array $compareAttributes
+     * @return void
      */
-    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object)
+    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object, array $compareAttributes = null) : void
     {
+        $compareAttributes = $compareAttributes ?? $this->getUpdateIfMatchingAttributeAliases();
         $behavior = BehaviorFactory::createFromUxon($object, PreventDuplicatesBehavior::class, new UxonObject([
-            'compare_attributes' => $this->getUpdateIfMatchingAttributeAliases(),
+            'compare_attributes' => $compareAttributes,
             'on_duplicate_multi_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE,
             'on_duplicate_single_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE
         ]));

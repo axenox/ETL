@@ -41,9 +41,9 @@ use axenox\ETL\Common\UxonEtlStepResult;
  * ´´´
  *
  * Only use direct Attribute aliases in the definition and never relation paths or formulars!
- * e.g "x-attribute-alias": "Objekt_ID"
+ * e.g `"x-attribute-alias": "Objekt_ID"`
  * If you want to link objects, use the id/uid in the original attribute.
- * e.g. "x-attribute-alias": "Request" -> '0x11EFBD3FD893913ABD3F005056BEF75D'
+ * e.g. `"x-attribute-alias": "Request"` -> '0x11EFBD3FD893913ABD3F005056BEF75D'
  *
  * The from-object HAS to be defined within the request schema of the route to the step!
  * e.g. with multiple structural concepts
@@ -72,25 +72,31 @@ use axenox\ETL\Common\UxonEtlStepResult;
  * 
  * ```
  *
- * ## Additional columns and placeholders
+ * ## Customizing the data sheet with placeholders
  * 
- * Placeholder and STATIC Formulas can be defined wihtin the configuration.
+ * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
+ * filters, sorters, aggregators, etc. from placeholders available in the flow step.
+ * 
+ * ### Example: save additional information about the flow run in a staging table
  * 
  * ```
- * "additional_rows": [
- *      {
- *          "attribute_alias": "ETLFlowRunUID",
- *          "value": "[#flow_run_uid#]"
- *      },
- *      {
- *          "attribute_alias": "RequestId",
- *          "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
- *      },
- *      {
- *          "attribute_alias": "Betreiber",
- *          "value": "SuedLink"
- *      }
- * ]
+ * {
+ *  "base_data_sheet": {
+ *      "columns": [
+ *          {
+ *              "attribute_alias": "ETLFlowRunUID",
+ *              "value": "[#flow_run_uid#]"
+ *          },
+ *          {
+ *              "attribute_alias": "RequestId",
+ *              "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
+ *          },
+ *          {
+ *              "attribute_alias": "Betreiber",
+ *              "value": "SuedLink"
+ *          }
+ *      ]
+ * }
  * 
  * ```
  *
@@ -137,13 +143,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         if ($this->isUpdateIfMatchingAttributes()) {
             $this->addDuplicatePreventingBehavior($this->getToObject());
+        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
         
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
-        $mapper = $this->getMapper($fromSheet->getMetaObject(), $toObjectSchema);
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
@@ -186,14 +194,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param \axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface $toObjectSchema
      * @return DataSheetMapperInterface
      */
-    protected function getMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
+    protected function getPropertiesToDataSheetMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
     {
         $col2col = [];
         $lookups = [];
         foreach ($toObjectSchema->getProperties() as $propName => $propSchema) {
             switch (true) {
                 case null !== $lookup = $propSchema->getLookupUxon():
-                    if (null !== $attr = $propSchema->getAttribute()) {
+                    $attr = $propSchema->getAttribute();
+                    if ($attr !== null && $lookup->hasProperty('to') === false) {
                         $lookup->setProperty('to', $attr->getAliasWithRelationPath());
                     }
                     $lookups[] = $lookup;
@@ -211,7 +220,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
             'to_object_alias' => $toObjectSchema->getMetaObject()->getAliasWithNamespace()
         ]);
-        if (null !== $customMapperUxon = $this->getMapperUxon()) {
+        if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
             $uxon = $customMapperUxon->extend($uxon);
         }
         if (! empty($col2col)) {
@@ -225,26 +234,31 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * Custom mapper 
+     * Custom mapper to map properties of the API schema to the data sheet.
      * 
-     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper;
-     * @uxon-property mapper
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
+     * @uxon-property properties_to_data_sheet_mapper
      * @uxon-template {"column_to_column_mappings": [{"from": "", "to": ""}]}
      * 
      * @param \exface\Core\CommonLogic\UxonObject $uxon
      * @return JsonApiToDataSheet
      */
-    protected function setMapper(UxonObject $uxon) : JsonApiToDataSheet 
+    protected function setPropertiesToDataSheetMapper(UxonObject $uxon) : JsonApiToDataSheet 
     {
         $this->mapperUxon = $uxon;
         return $this;
+    }
+
+    protected function setMapper(UxonObject $uxon) : JsonApiToDataSheet 
+    {
+        return $this->setPropertiesToDataSheetMapper($uxon);
     }
 
     /**
      * 
      * @return UxonObject
      */
-    protected function getMapperUxon() : ?UxonObject
+    protected function getPropertiesToDataMapperUxon() : ?UxonObject
     {
         return $this->mapperUxon;
     }
