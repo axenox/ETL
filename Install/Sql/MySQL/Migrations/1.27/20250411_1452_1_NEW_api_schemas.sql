@@ -2,7 +2,7 @@
 
 ALTER TABLE etl_webservice_type
     ADD schema_class nvarchar(200);
-GO;
+
 UPDATE etl_webservice_type set schema_class = '\\axenox\\ETL\\Common\\OpenAPI\\OpenAPI3';
 
 ALTER TABLE etl_webservice_type
