@@ -7,6 +7,7 @@ use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
@@ -20,9 +21,9 @@ class StepNote implements NoteInterface
     private string $stepRunUid;
     private ?string $message = null;
     private ?string $logLevel = null;
-    private bool $failed = false;
-    private ?string $failedMessage = null;
-    private ?string $failedLogId = null;
+    private bool $exceptionFlag = false;
+    private ?string $exceptionMessage = null;
+    private ?string $exceptionLogId = null;
     private int $countReads = -1;
     private int $countWrites = -1;
     private int $countCreates = -1;
@@ -35,7 +36,7 @@ class StepNote implements NoteInterface
         WorkbenchInterface $workbench, 
         string $flowRunUid, 
         string $stepRunUid,
-        bool $failed,
+        ExceptionInterface $exception = null,
         UxonObject $uxon = null
     )
     {
@@ -43,13 +44,22 @@ class StepNote implements NoteInterface
         $this->storageObject = MetaObjectFactory::createFromString($workbench,'exface.Core.STEP_NOTES');
         $this->flowRunUid = $flowRunUid;
         $this->stepRunUid = $stepRunUid;
-        $this->failed = $failed;
+        
+        if($this->exceptionFlag = $exception !== null) {
+            $this->exceptionMessage = $exception->getMessage();
+            $this->exceptionLogId = $exception->getId();
+        }
         
         if($uxon !== null) {
             $this->importUxonObject($uxon);
         }
     }
 
+    public function takeNote() : void
+    {
+        NoteTaker::takeNote($this);
+    }
+    
     function getStorageObject(): MetaObjectInterface
     {
         return $this->storageObject;
@@ -62,9 +72,9 @@ class StepNote implements NoteInterface
             'STEP_RUN_UID' => $this->getStepRunUid(),
             'MESSAGE' => $this->getMessage(),
             'LOG_LEVEL' => $this->getLogLevel(),
-            'FAILED_FLAG' => $this->getFailedFlag(),
-            'FAILED_MESSAGE' => $this->getFailedMessage(),
-            'FAILED_LOG_ID' => $this->getFailedLogId(),
+            'EXCEPTION_FLAG' => $this->getExceptionFlag(),
+            'EXCEPTION_MESSAGE' => $this->getExceptionMessage(),
+            'EXCEPTION_LOG_ID' => $this->getExceptionLogId(),
             'COUNT_READS' => $this->getCountReads(),
             'COUNT_WRITES' => $this->getCountWrites(),
             'COUNT_CREATES' => $this->getCountCreates(),
@@ -129,15 +139,15 @@ class StepNote implements NoteInterface
         return $this->logLevel;
     }
     
-    public function setFailedFlag(bool $value): NoteInterface
+    public function setExceptionFlag(bool $value): NoteInterface
     {
-        $this->failed = $value;
+        $this->exceptionFlag = $value;
         return $this;
     }
 
-    public function getFailedFlag(): bool
+    public function getExceptionFlag(): bool
     {
-        return $this->failed;
+        return $this->exceptionFlag;
     }
 
     /**
@@ -147,26 +157,26 @@ class StepNote implements NoteInterface
      * @param string $message
      * @return NoteInterface
      */
-    public function setFailedMessage(string $message): NoteInterface
+    public function setExceptionMessage(string $message): NoteInterface
     {
-        $this->failedMessage = $message;
+        $this->exceptionMessage = $message;
         return $this;
     }
 
-    public function getFailedMessage(): ?string
+    public function getExceptionMessage(): ?string
     {
-        return $this->failedMessage;
+        return $this->exceptionMessage;
     }
 
-    public function setFailedLogId(string $logId): NoteInterface
+    public function setExceptionLogId(string $logId): NoteInterface
     {
-        $this->failedLogId = $logId;
+        $this->exceptionLogId = $logId;
         return $this;
     }
 
-    public function getFailedLogId(): ?string
+    public function getExceptionLogId(): ?string
     {
-        return $this->failedLogId;
+        return $this->exceptionLogId;
     }
 
     public function setCountReads(int $count) : StepNote
