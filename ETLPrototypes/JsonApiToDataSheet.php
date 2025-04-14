@@ -7,6 +7,7 @@ use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\Factories\DataSheetMapperFactory;
@@ -202,11 +203,26 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             switch (true) {
                 case null !== $lookup = $propSchema->getLookupUxon():
                     $attr = $propSchema->getAttribute();
-                    if ($attr !== null && $lookup->hasProperty('to') === false) {
-                        $lookup->setProperty('to', $attr->getAliasWithRelationPath());
+                    switch (true) {
+                        // If the lookup has a `to` property, we already know, in which column we
+                        // need to place the value. If we have an x-attribute-alias too, we will
+                        // have two columns in the end.
+                        case $lookup->hasProperty('to') === true:
+                            $lookups[] = $lookup;
+                            $lookupToSeparateColumn = $attr !== null;
+                            break;
+                        // If there is no `to` property, we will use the attribute alias as the to-column.
+                        case $attr !== null && $lookup->hasProperty('to') === false:
+                            $lookup->setProperty('to', $attr->getAliasWithRelationPath());
+                            $lookups[] = $lookup;
+                            $lookupToSeparateColumn = false;
+                            break;
+                        default:
+                            throw new RuntimeException('Cannot use x-lookup in OpenAPI if neither `x-attribute-alias` for the property, nor `to` for the x-lookup are  defined');
                     }
-                    $lookups[] = $lookup;
-                    break;
+                    if ($lookupToSeparateColumn === false) {
+                        break;
+                    }
                 case null !== $attr = $propSchema->getAttribute():
                     $col2col[] = [
                         'from' => $propName,
