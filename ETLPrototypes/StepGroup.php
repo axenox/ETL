@@ -1,6 +1,8 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
+use axenox\ETL\Common\AbstractETLPrototype;
+use axenox\ETL\Common\NoteTaker;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -127,7 +129,7 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
-                    $this->logRunSuccess($step, $logRow, $log, $stepResult);
+                    $this->logRunSuccess($step, $logRow, $flowRunUid, $stepRunUid, $log, $stepResult);
                 } catch (\Throwable $e) {
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
@@ -137,7 +139,7 @@ class StepGroup implements DataFlowStepInterface
                         $e = new InternalError($e->getMessage(), null, $e);
                     }
                     try {
-                        $this->logRunError($logRow, $e, $log);
+                        $this->logRunError($step, $logRow, $flowRunUid, $stepRunUid, $e, $log);
                     } catch (\Throwable $el) {
                         $this->getWorkbench()->getLogger()->logException($el);
                         yield PHP_EOL . $indent
@@ -158,6 +160,7 @@ class StepGroup implements DataFlowStepInterface
             $prevStepResult = $stepResult;
         }
         
+        //NoteTaker::commitPendingNotesAll();
         return $result;
     }
     
@@ -282,15 +285,25 @@ class StepGroup implements DataFlowStepInterface
         }
         return $ds;
     }
-    
+
     /**
      *
-     * @param array $row
+     * @param DataFlowStepInterface       $step
+     * @param array                       $row
+     * @param string                      $flowRunUid
+     * @param string                      $stepRunUid
      * @param string $output
-     * @param ETLStepResultInterface $result
+     * @param ETLStepResultInterface|null $result
      * @return DataSheetInterface
+     * @throws \Exception
      */
-    protected function logRunSuccess(DataFlowStepInterface $step, array $row, string $output, ETLStepResultInterface $result = null) : DataSheetInterface
+    protected function logRunSuccess(
+        DataFlowStepInterface $step, 
+        array $row, 
+        string $flowRunUid,
+        string $stepRunUid,
+        string $output,
+        ETLStepResultInterface $result = null) : DataSheetInterface
     {
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
@@ -311,19 +324,33 @@ class StepGroup implements DataFlowStepInterface
         $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
         $row['debug_widget'] = $widgetJson;
         
+        if($step instanceof AbstractETLPrototype) {
+            $step->getNoteOnSuccess($flowRunUid, $stepRunUid)->takeNote();
+        }
+        
         $ds->addRow($row);
         $ds->dataUpdate();
         return $ds;
     }
-    
+
     /**
      *
-     * @param array $row
-     * @param ExceptionInterface $exception
-     * @param string $output
+     * @param DataFlowStepInterface $step
+     * @param array                 $row
+     * @param string                $flowRunUid
+     * @param string                $stepRunUid
+     * @param ExceptionInterface    $exception
+     * @param string                $output
      * @return DataSheetInterface
+     * @throws \Exception
      */
-    protected function logRunError(array $row, ExceptionInterface $exception, string $output = '') : DataSheetInterface
+    protected function logRunError(
+        DataFlowStepInterface $step, 
+        array $row, 
+        string $flowRunUid,
+        string $stepRunUid,
+        ExceptionInterface $exception, 
+        string $output = '') : DataSheetInterface
     {
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
@@ -339,6 +366,11 @@ class StepGroup implements DataFlowStepInterface
             // Forget the widget if rendering does not work
             $this->getWorkbench()->getLogger()->logException($e);
         }
+        
+        if($step instanceof AbstractETLPrototype) {
+            $step->getNoteOnFailure($flowRunUid, $stepRunUid, $exception)->takeNote();
+        }
+        
         $ds->addRow($row);
         $ds->dataUpdate();
         return $ds;
