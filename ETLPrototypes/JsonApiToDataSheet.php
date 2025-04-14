@@ -319,9 +319,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $importData = [];
         foreach ($bodyLine as $propertyName => $value) {
             switch(true) {
-                case in_array($propertyName, $neededProperties) === false && is_array($value):
-                case is_numeric($propertyName):
-                    $importData = $this->readJsonRow($value, $neededProperties);
+                case is_numeric($propertyName) && in_array($propertyName, $neededProperties) === false:
+                    $importData = array_merge($importData, $this->readJsonRow($value, $neededProperties));
                     break;
                 case in_array($propertyName, $neededProperties):
                     // arrays and objects are represented via string in the database
