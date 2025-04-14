@@ -1,7 +1,7 @@
 -- UP
 
 IF OBJECT_ID ('dbo.etl_step_note', N'U') IS NULL
-CREATE TABLE IF NOT EXISTS etl_step_note (
+CREATE TABLE etl_step_note (
   oid binary(16) NOT NULL,
   created_on datetime NOT NULL,
   modified_on datetime NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS etl_step_note (
   count_errors int,
   count_warnings int,
   CONSTRAINT PK_etl_step_note PRIMARY KEY CLUSTERED (oid)
-);
+)
 
 -- DOWN
 
