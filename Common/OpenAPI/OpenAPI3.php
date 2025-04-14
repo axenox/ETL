@@ -53,12 +53,18 @@ class OpenAPI3 implements APISchemaInterface
         $this->openAPIJson = $openAPIJson;
         $this->apiVersion = $apiVersion;
 
-        $schema = new OpenApi(json_decode($openAPIJson, true));
+        // TODO get rid of these obj-json transformations and do enhancement on the array and
+        // convert to object once only
+        $jsonObj = json_decode($openAPIJson, false);
+        // Process attribute groups and other magic stuff
+        $jsonObj = $this->enhanceSchema($jsonObj);
+        $jsonArray = json_decode(json_encode($jsonObj), true);
+        // Instatiate a cebe/openapi schema and use it to resolve references
+        $schema = new OpenApi($jsonArray);
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
 
-        $this->openAPIJsonObj = $this->enhanceSchema($schema->getSerializableData());
+        $this->openAPIJsonObj = $schema->getSerializableData();
         $this->openAPIJsonArray = json_decode(json_encode($this->openAPIJsonObj), true);
-
         $this->openAPISchema = $schema;
     }
 
@@ -265,14 +271,15 @@ class OpenAPI3 implements APISchemaInterface
     {
         $newSwaggerDefinition = [];
         foreach($swaggerArray as $name => $value){
-            if (is_array($value)) {
-                $newSwaggerDefinition[$name] = $this->removeInternalAttributes($value);
-                continue;
-            }
             if ($name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_CALCULATION
                 || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS
                 || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
+                || $name === OpenAPI3Property::X_LOOKUP
             ) {
+                continue;
+            }
+            if (is_array($value)) {
+                $newSwaggerDefinition[$name] = $this->removeInternalAttributes($value);
                 continue;
             }
             $newSwaggerDefinition[$name] = $value;
