@@ -208,7 +208,7 @@ class OpenAPI3 implements APISchemaInterface
             }
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            $properties = $schema->properties;
+            $properties = &$schema->properties;
             foreach ($properties as $propertyName => $property) {
                 $result = OpenAPI3ObjectSchema::toGroup($property, $object);
                 if($result === false) {
