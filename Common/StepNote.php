@@ -99,7 +99,7 @@ class StepNote implements NoteInterface
             'STEP_RUN_UID' => $this->getStepRunUid(),
             'MESSAGE' => $this->getMessage(),
             'LOG_LEVEL' => $this->getLogLevel(),
-            'EXCEPTION_FLAG' => $this->getExceptionFlag(),
+            'EXCEPTION_FLAG' => $this->hasException(),
             'EXCEPTION_MESSAGE' => $this->getExceptionMessage(),
             'EXCEPTION_LOG_ID' => $this->getExceptionLogId(),
             'COUNT_READS' => $this->getCountReads(),
@@ -187,61 +187,43 @@ class StepNote implements NoteInterface
     }
 
     /**
-     * @inheritdoc
-     * @see NoteInterface::setExceptionFlag()
+     * @inheritdoc 
+     * @see NoteInterface::setException()
      */
-    public function setExceptionFlag(bool $value): NoteInterface
+    function setException(?ExceptionInterface $exception): void
     {
-        $this->exceptionFlag = $value;
-        return $this;
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteInterface::getExceptionFlag()
-     */
-    public function getExceptionFlag(): bool
-    {
-        return $this->exceptionFlag;
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteInterface::setExceptionMessage()
-     */
-    public function setExceptionMessage(string $message): NoteInterface
-    {
-        $this->exceptionMessage = $message;
-        return $this;
+        $this->exceptionFlag = (bool)$exception;
+        $this->exceptionMessage = $exception?->getMessage();
+        $this->exceptionLogId = $exception?->getId();
     }
 
     /**
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    public function getExceptionMessage(): ?string
+    function getExceptionMessage(): ?string
     {
         return $this->exceptionMessage;
     }
 
     /**
      * @inheritdoc
-     * @see NoteInterface::setExceptionLogId()
+     * @see NoteInterface::getExceptionMessage()
      */
-    public function setExceptionLogId(string $logId): NoteInterface
+    function getExceptionLogId(): ?string
     {
-        $this->exceptionLogId = $logId;
-        return $this;
+        return $this->exceptionLogId;
     }
 
     /**
      * @inheritdoc
-     * @see NoteInterface::getExceptionLogId()
+     * @see NoteInterface::hasException()
      */
-    public function getExceptionLogId(): ?string
+    function hasException(): bool
     {
-        return $this->exceptionLogId;
+        return $this->exceptionFlag;
     }
+
 
     /**
      * @param int $count
