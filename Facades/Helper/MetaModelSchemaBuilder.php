@@ -5,6 +5,7 @@ use axenox\ETL\Common\SqlColumnMapping;
 use exface\Core\CommonLogic\DataSheets\DataColumn;
 use exface\Core\CommonLogic\Model\Attribute;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\DataTypes\HexadecimalNumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Factories\AttributeListFactory;
@@ -209,6 +210,8 @@ class MetaModelSchemaBuilder
                     return ['type' => 'string', 'format' => 'binary'];
                 }
             case $dataType instanceof StringDataType:
+                return ['type' => 'string'];
+            case $dataType instanceof HexadecimalNumberDataType:
                 return ['type' => 'string'];
             default:
                 throw new InvalidArgumentException('Datatype: ' . $dataType->getAlias() . ' not recognized.');

@@ -52,11 +52,10 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
             throw new InvalidArgumentException('Cannot use OpenAPI flow steps with non-OpenAPI facades!');
         }
         
-        $json = $facade->getOpenApiDef($task->getHttpRequest());
-        if ($json === null) {
+        $model = $facade->getApiSchemaForRequest($task->getHttpRequest());
+        if ($model === null) {
             throw new InvalidArgumentException('Cannot load OpenAPI definition from HTTP task!');
         }
-        $model = new OpenAPI3($this->getWorkbench(), $json);
         $this->taskSchemas[] = [
             'task' => $task,
             'model' => $model

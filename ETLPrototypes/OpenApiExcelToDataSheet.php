@@ -83,8 +83,7 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
 
     private $additionalColumns = null;
     private $schemaName = null;
-    private array $webservice;
-    private $filepath;
+    private array $webservice = [];
 
     /**
      *

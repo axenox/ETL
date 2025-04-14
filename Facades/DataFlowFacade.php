@@ -3,8 +3,9 @@ namespace axenox\ETL\Facades;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
-use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
+use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\UnavailableError;
@@ -16,7 +17,6 @@ use Psr\Http\Message\ServerRequestInterface;
 use axenox\ETL\Actions\RunETLFlow;
 use exface\Core\CommonLogic\Selectors\ActionSelector;
 use exface\Core\CommonLogic\Tasks\HttpTask;
-use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\Facades\FacadeRoutingError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
@@ -41,13 +41,12 @@ use stdClass;
  * @author Andrej Kabachnik
  * 
  */
-class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterface
+class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterface, ApiSchemaFacadeInterface
 {
-    // TODO: move all OpenApiFacadeInterface methods into a separate OpenApiWebserviceType class
+    // TODO: move all OpenApiFacadeInterface methods to OpenAPI3 schema class
 
 	const REQUEST_ATTRIBUTE_NAME_ROUTE = 'route';
 	private $openApiCache = [];
-	private $openApiStrings = [];
     private RequestLoggingMiddleware $loggingMiddleware;
     private $verbose = null;
     private $routePath = null;
@@ -121,9 +120,6 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 		$action->setFlowAlias($flowAlias);
 		$action->setInputFlowRunUid('flow_run');
 
-        $routeData = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
-        $action->setOpenApiJson($routeData['swagger_json']);
-
 		$result = $action->handle($task);
 		return $result;
 	}
@@ -162,16 +158,15 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 		
 		// load response model from swagger
 		$methodType = strtolower($request->getMethod());
-		$jsonPath = $routeModel['type__default_response_path'];
-		if ($jsonPath !== null) {
-			$responseModel = $this->readDataFromSwaggerJson(
-				$routePath,
-				$methodType,
-				$jsonPath,
-				$routeModel['swagger_json']
-		    );
-		}
-
+		$schemaClass = $routeModel['type__schema_class'];
+        $schema = new $schemaClass($this->getWorkbench(), $routeModel['swagger_json']);
+        $responseModel = $schema->getResponseDataTemplate(
+            $routePath,
+            $methodType,
+            $routeModel['swagger_json']
+        );
+        // TODO move all this response creation logic to the API schemas! For now it only
+        // Works with OpenAPI3 classes anyhow.
 		if ($responseModel === null && empty($responseModel)) {
             return null;
 		}
@@ -229,7 +224,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	    
 		$ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
 		$ds->getColumns()->addMultiple(
-			['UID', 'local_url', 'full_url', 'version', 'type__schema_json', 'type__default_response_path', 'swagger_json', 'config_uxon', 'enabled']);
+			['UID', 'local_url', 'full_url', 'version', 'type__schema_class', 'swagger_json', 'config_uxon', 'enabled']);
 		$ds->dataRead();
 
         $excludePattern = ['/.*swaggerui$/', '/.*openapi\\.json$/'];
@@ -311,8 +306,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	}
 	
 	/**
-	 * 
-	 * {@inheritDoc}
+	 * @deprecated move to OpenAPI3 schema class
 	 * @see \axenox\ETL\Interfaces\OpenApiFacadeInterface::getOpenApiJson()
 	 */
 	public function getOpenApiJson(ServerRequestInterface $request): ?array
@@ -322,45 +316,54 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 			return $this->openApiCache[$path];
 		}
 		
-		$json = $this->getOpenApiDef($request);
-		if ($json === null) {
-			return null;
-		}
-		// TODO jsc 240917 move to OpenAPI specific Implementation
+        $schema = $this->getApiSchemaForRequest($request);
+        if (! $schema instanceof OpenAPI3) {
+            throw new FacadeRoutingError('Cannot get OpenAPI.json from non-OpenAPI route!');
+        }
+        $version = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE)['version'];
+        if ($version === null) {
+
+        }
+
+        $basePath = $this->getUrlRouteDefault();
+        $routePath = StringDataType::substringAfter($path, $basePath, $path);
+        $webserviceBase = StringDataType::substringBefore($routePath, '/', '', true, true) . '/';
+        $basePath .= '/' . ltrim($webserviceBase, "/");
+
+        $json = $schema->publish($basePath);
 		$openApiJson = json_decode($json, true);
-        $openApiJson = $this->removeInternalAttributes($openApiJson);
-        $openApiJson = $this->prependLocalServerPaths($path, $openApiJson);
-        $openApiJson = $this->setApiVersion($request, $openApiJson);
 		$this->openApiCache[$path] = $openApiJson;
 		return $openApiJson;
 	}
 
     /**
-	 * 
-	 * {@inheritDoc}
+	 * @deprecated move to OpenAPI3 schema class
 	 * @see \axenox\ETL\Interfaces\OpenApiFacadeInterface::getOpenApiDef()
 	 */
 	public function getOpenApiDef(ServerRequestInterface $request): ?string
 	{
-	    $path = $request->getUri()->getPath();
-	    if (array_key_exists($path, $this->openApiStrings)) {
-	        return $this->openApiStrings[$path];
-	    }
-	    
-	    $routeData = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
-	    if (empty($routeData)) {
-	        throw new FacadeRoutingError('No route data found in request!');
-	    }
-	    $json = $routeData['swagger_json'];
-	    if ($json === null || $json === '') {
-	        return null;
-	    }
-        
-        $json = OpenAPI3::enhanceSchema($json, $this->getWorkbench());
-	    JsonDataType::validateJsonSchema($json, $routeData['type__schema_json']);
-        
-	    return json_encode($json);
+	    return $this->getApiSchemaForRequest($request)->__toString();
 	}
+
+    /**
+     * {@inheritDoc}
+     * @see ApiSchemaFacadeInterface::getApiSchemaForRequest()
+     */
+    public function getApiSchemaForRequest(ServerRequestInterface $request) : ?APISchemaInterface
+    {
+        $routeData = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
+        if (empty($routeData)) {
+            throw new FacadeRoutingError('No route data found in request!');
+        }
+        $json = $routeData['swagger_json'];
+        if ($json === null || $json === '') {
+            return null;
+        }
+
+        $schemaClass = $routeData['type__schema_class'];
+        $version = $routeData['version'];
+        return new $schemaClass($this->getWorkbench(), $json, $version);
+    }
 
     /**
      *
@@ -387,9 +390,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
     }
 
     /**
-     *
-     * {@inheritDoc}
-     * @see \axenox\ETL\Interfaces\OpenApiFacadeInterface::getJsonSchemaFromOpenApiByRef()
+     * @deprecated move to OpenAPI3 schema class
+	 * @see \axenox\ETL\Interfaces\OpenApiFacadeInterface::getJsonSchemaFromOpenApiByRef()
      */
     public function getJsonSchemaFromOpenApiByRef(ServerRequestInterface $request, string $jsonPath, string $contentType): object
     {
@@ -434,8 +436,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
 
     /**
-     *
-     * {@inheritDoc}
+     * @deprecated move to OpenAPI3 schema class
      * @see \axenox\ETL\Interfaces\OpenApiFacadeInterface::findSchemaPathInOpenApiJson()
      */
     public function findSchemaPathInOpenApiJson(ServerRequestInterface $request, string $jsonPath, string $contentType): string
@@ -469,93 +470,6 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         return null;
     }
-
-    /**
-     * Appends all local server paths of the API.
-     * TODO jsc 240917 move to OpenAPI specific Implementation
-     * @param string $path the actual called path
-     * @param array $swaggerArray an array holding information of swagger configuration
-     * @return array the modified $swaggerArray
-     */
-    private function prependLocalServerPaths(string $path, array $swaggerArray): array
-    {
-        $basePath = $this->getUrlRouteDefault();
-        $routePath = StringDataType::substringAfter($path, $basePath, $path);
-        $webserviceBase = StringDataType::substringBefore($routePath, '/', '', true, true) . '/';
-        $basePath .= '/' . ltrim($webserviceBase, "/");
-        $baseUrls = $this->getWorkbench()->getConfig()->getOption('SERVER.BASE_URLS')->toArray();
-        foreach (array_reverse($baseUrls) as $baseUrl) {
-            // prepend entry to array
-            array_unshift($swaggerArray['servers'], ['url' => $baseUrl . $basePath]);
-        }
-
-        return $swaggerArray;
-    }
-
-    /**
-     * Sets the API version number of the API.
-     * TODO jsc 240917 move to OpenAPI specific Implementation
-     * @param ServerRequestInterface $request the actual request
-     * @param array $swaggerArray an array holding information of swagger configuration
-     * @return array the modified $swaggerArray
-     */
-    private function setApiVersion(ServerRequestInterface $request, array $swaggerArray): array
-    {
-        $version = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE)['version'];
-        if ($version !== null) {
-            $swaggerArray['info']['version'] = $version;
-        }
-        return $swaggerArray;
-    }
-
-    /**
-     * Removes internal attributes from Swagger API definition.
-     * TODO jsc 240917 move to OpenAPI specific Implementation
-     * @param array $swaggerArray an array holding information of swagger configuration
-     * @return array the modified $swaggerArray
-     */
-    private function removeInternalAttributes(array $swaggerArray) : array
-    {
-        $newSwaggerDefinition = [];
-        foreach($swaggerArray as $name => $value){
-            if (is_array($value)) {
-                $newSwaggerDefinition[$name] = $this->removeInternalAttributes($value);
-                continue;
-            }
-            if ($name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_CALCULATION
-                || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS
-                || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
-            ) {
-                continue;
-            }
-            $newSwaggerDefinition[$name] = $value;
-        }
-
-        return $newSwaggerDefinition;
-    }
-
-    /**
-     * Selects data from a swaggerJson with the given json path.
-     * Route path and method type are used to replace placeholders within the path.
-     *
-     * @param string $routePath
-     * @param string $methodType
-     * @param string $jsonPath
-     * @param string $swaggerJson
-     * @return array|null
-     * @throws JSONPathException
-     */
-	public function readDataFromSwaggerJson(
-		string $routePath,
-		string $methodType,
-		string $jsonPath,
-		string $swaggerJson): ?array
-    {
-			$jsonPath = str_replace('[#routePath#]', $routePath, $jsonPath);
-			$jsonPath = str_replace('[#methodType#]', $methodType, $jsonPath);
-			$data = (new JSONPath(json_decode($swaggerJson, false)))->find($jsonPath)->getData()[0] ?? null;
-			return is_object($data) ? get_object_vars($data) : $data;
-	}
 
     /**
      * @param ServerRequestInterface $request

@@ -19,6 +19,8 @@ class WebRequestStatusDataType extends IntegerDataType implements EnumDataTypeIn
     CONST ERROR = 70;
     CONST CANCELED = 90;
     CONST DONE = 99;
+
+    private $labels = [];
     
     /**
      *
