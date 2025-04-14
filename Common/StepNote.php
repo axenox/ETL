@@ -16,7 +16,7 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * about transformations that have taken place during this flow step, such as the number of rows read, created or
  * deleted. 
  * 
- * `StepNotes` will be stored in `exface.Core.STEP_NOTES` and can be used to generate user-friendly insights into
+ * `StepNotes` will be stored in `axenox.ETL.step_note` and can be used to generate user-friendly insights into
  * the data flows they originated from.
  */
 class StepNote implements NoteInterface
@@ -56,7 +56,7 @@ class StepNote implements NoteInterface
     )
     {
         $this->workbench = $workbench;
-        $this->storageObject = MetaObjectFactory::createFromString($workbench,'exface.Core.STEP_NOTES');
+        $this->storageObject = MetaObjectFactory::createFromString($workbench,'axenox.ETL.step_note');
         $this->flowRunUid = $flowRunUid;
         $this->stepRunUid = $stepRunUid;
         
