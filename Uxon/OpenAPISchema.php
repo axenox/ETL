@@ -4,11 +4,14 @@ namespace axenox\ETL\Uxon;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
 use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
+use axenox\ETL\Common\OpenAPI\OpenAPI3Route;
+use cebe\openapi\spec\OpenApi;
 use cebe\openapi\spec\PathItem;
 use cebe\openapi\spec\Paths;
+use cebe\openapi\spec\Schema;
 use cebe\openapi\spec\Type;
+use cebe\openapi\SpecBaseObject;
 use cebe\openapi\SpecObjectInterface;
-use exface\Core\CommonLogic\Uxon\UxonSnippetCall;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
@@ -29,6 +32,23 @@ use exface\Core\Interfaces\Log\LoggerInterface;
  */
 class OpenAPISchema extends UxonSchema
 {
+    /**
+     * This array maps APISchema classes to the corresponding OpenAPI classes form cebe/openapi.
+     * 
+     * This mapping is used for the autosuggest: if an autosuggest for a APISchema prototype is
+     * requested, the corresponding OpenAPI attributes will be added automatically. If the prototype
+     * is an OpenAPI class, properties of the first matching APISchema class will be added too.
+     * 
+     * @var string[]
+     */
+    const CLASS_MAP = [
+        '\\' . OpenAPI3::class => '\\' . OpenApi::class,
+        // Caution: Object schema and property schema are both JSON schemas
+        '\\' . OpenAPI3ObjectSchema::class => '\\' . Schema::class,
+        '\\' . OpenAPI3Property::class => '\\' . Schema::class,
+        '\\' . OpenAPI3Route::class => '\\' . PathItem::class,
+    ];
+
     private array $representationMappings = [];
     
     /**
@@ -102,10 +122,12 @@ class OpenAPISchema extends UxonSchema
 
                     $editableAttrs = $obj->getAttributes()->getEditable();
                     if (! $editableAttrs->isEmpty()) {
-                        foreach ($editableAttrs as $attr) {
-                            unset($json['properties'][$attr->getAlias()]);
-                            if (is_array($json['required']) && in_array($attr->getAlias(), $json['required'])) {
-                                unset($json['required'][array_search($attr->getAlias(), $json['required'])]);
+                        foreach ($json['properties'] as $attrAlias => $property) {
+                            if (! $editableAttrs->has($attrAlias)) {
+                                unset($json['properties'][$attrAlias]);
+                                if (is_array($json['required']) && in_array($attrAlias, $json['required'])) {
+                                    unset($json['required'][array_search($attrAlias, $json['required'])]);
+                                }
                             }
                         }
                         $editbaleAttrRows[] = [
@@ -157,73 +179,30 @@ class OpenAPISchema extends UxonSchema
      * @inheritdoc 
      * @see UxonSchema::loadPropertiesSheet()
      */
-    protected function loadPropertiesSheet(string $prototypeClass, string $notationObjectAlias): DataSheetInterface
+    protected function loadPropertiesSheet(string $prototypeClass, string $aliasOfAnnotationObject = 'exface.Core.UXON_PROPERTY_ANNOTATION'): DataSheetInterface
     {
-        $schema = new OpenAPI3($this->getWorkbench(), '{}');
-
         // Load properties from class annotations.
-        $ds = parent::loadPropertiesSheet($prototypeClass, $notationObjectAlias);
-        $existingProperties = $ds->getColumnValues('PROPERTY');
-
-        // Load properties from OpenAPI and use mapping, if available.
-        $prototypeClass = $this->representationMappings[$prototypeClass] ?? $prototypeClass;
-        foreach ($schema->getAttributes($prototypeClass) as $name => $value) {
-            if(in_array($name, $existingProperties)) {
-                continue;
-            }
-
-            $ds->addRow($this->openApiAttributeToUxonProperty($name, $value));
+        switch (true) {
+            // If prototype is a \cebe\openapi\... class, load the corresponding schema class first
+            case false !== $schmaClass = array_search($prototypeClass, self::CLASS_MAP, true):
+                $ds = parent::loadPropertiesSheet($schmaClass, $aliasOfAnnotationObject);
+                break;
+            // If it is schema class, that has a cebe-class mapping, remember to load the cebe-class
+            case null !== $openApiClass = self::CLASS_MAP[$prototypeClass] ?? null:
+                $ds = parent::loadPropertiesSheet($prototypeClass, $aliasOfAnnotationObject);
+                break;
+            default:
+                $ds = parent::loadPropertiesSheet($prototypeClass, $aliasOfAnnotationObject);
         }
 
+        $openApiAttrs = $this->getOpenApiAttributes($openApiClass ?? $prototypeClass);
+        $schemaAttrs = $ds->getColumns()->getByExpression('PROPERTY')->getValues();
+        foreach ($openApiAttrs as $name => $value) {
+            if (! in_array($name, $schemaAttrs)) {
+                $ds->addRow($this->openApiAttributeToUxonProperty($name, $value));
+            }
+        }
         return $ds;
-    }
-
-    /**
-     * @inheritdoc 
-     * @see UxonSchemaInterface::getPrototypeClass()
-     */
-    public function getPrototypeClass(UxonObject $uxon, array $path, string $rootPrototypeClass = null): string
-    {
-        $rootPrototypeClass = $rootPrototypeClass ?? $this->getDefaultPrototypeClass();
-
-        foreach ($uxon as $key => $value) {
-            if (strcasecmp($key, UxonObject::PROPERTY_SNIPPET) === 0) {
-                $rootPrototypeClass = '\\' . UxonSnippetCall::class;
-            }
-        }
-
-        if ($rootPrototypeClass === '') {
-            return $rootPrototypeClass;
-        }
-
-        if (count($path) > 0 && ($uxon->getProperty($path[0]) instanceof UxonObject)) {
-            $prop = array_shift($path);
-
-            if (is_numeric($prop) === false) {
-                $propType = $this->getPropertyTypes($rootPrototypeClass, $prop)[0];
-                if (mb_substr($propType, 0, 1) === '\\') {
-                    $class = $propType;
-                    $class = str_replace('[]', '', $class);
-                    $class = $this->mapToRepresentationClass($prop, $class);
-                } else {
-                    $class = $rootPrototypeClass;
-                }
-            } else {
-                $class = $rootPrototypeClass;
-            }
-
-            $schema = $class === $rootPrototypeClass ? $this : $this->getSchemaForClass($class);
-            $propVal = $uxon->getProperty($prop);
-            if ($propVal instanceof UxonObject) {
-                if (null !== $value = $propVal->getProperty(UxonObject::PROPERTY_SNIPPET)) {
-                    $class = '\\' . UxonSnippetCall::class;
-                }
-            }
-            
-            return $schema->getPrototypeClass($propVal, $path, $class);
-        }
-
-        return $rootPrototypeClass;
     }
 
     /**
@@ -256,7 +235,6 @@ class OpenAPISchema extends UxonSchema
      * The resulting array has the following structure:
      * 
      * ```
-     *  
      *  [
      *      'PROPERTY' => $name,
      *      'TYPE' => $type,        // Converted to matching DataTypeInterface
@@ -321,5 +299,32 @@ class OpenAPISchema extends UxonSchema
         }
         
         return parent::getSchemaForClass($prototypeClass);
+    }
+
+    /**
+     * 
+     * @param mixed $specBaseObjectClass
+     * @return array
+     */
+    public function getOpenApiAttributes($specBaseObjectClass) : array
+    {
+        $specBaseObjectClass = $specBaseObjectClass === OpenAPI3::class ? OpenApi::class : $specBaseObjectClass;
+        if(!is_a($specBaseObjectClass, SpecBaseObject::class, true)) {
+            return [];
+        }
+
+        $object = new $specBaseObjectClass([]);
+        $functionName = 'attributes';
+
+        // Workaround to access protected method. The alternative is to manually create
+        // stubs with uxon-property annotation for each attribute. Both options are brittle,
+        // but this approach is easier to maintain.
+        return call_user_func(\Closure::bind(
+            function () use ($object, $functionName) {
+                return $object->{$functionName}();
+            },
+            null,
+            $object
+        ));
     }
 }

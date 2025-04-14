@@ -392,7 +392,7 @@
         {
             "_EXPORT_SUMMARY": "Web service: Edit OpenAPI definition",
             "CREATED_ON": "2024-01-26 12:42:18",
-            "MODIFIED_ON": "2025-04-02 15:02:02",
+            "MODIFIED_ON": "2025-04-11 16:52:23",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eea9d6f67e1322a9d6025041000001",
@@ -409,15 +409,20 @@
                 "dialog": {
                     "widgets": [
                         {
+                            "attribute_alias": "type__schema_class",
+                            "widget_type": "InputHidden",
+                            "display_only": true,
+                            "id": "schema_class_field"
+                        },
+                        {
                             "widget_type": "InputUxon",
                             "height": "100%",
                             "hide_caption": true,
                             "attribute_alias": "swagger_json",
                             "schema": "\\axenox\\ETL\\Uxon\\OpenAPISchema",
-                            "root_prototype": "\\axenox\\ETL\\Common\\OpenAPI\\OpenAPI3"
+                            "root_prototype": "=schema_class_field"
                         }
                     ],
-                    "widget_type": "Dialog",
                     "buttons": [
                         {
                             "action_alias": "exface.Core.UpdateData",
