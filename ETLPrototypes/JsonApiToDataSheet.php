@@ -171,6 +171,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $transaction->rollback();
             throw $e;
         }
+        
+        $this->performDataChecks($toSheet, $stepRunUid, $stepData->getStepRunUid());
 
         $transaction->commit();
         return $result->setProcessedRowsCounter($toSheet->countRows());

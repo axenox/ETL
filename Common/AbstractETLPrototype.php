@@ -1,7 +1,10 @@
 <?php
 namespace axenox\ETL\Common;
 
-use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
+use exface\Core\Exceptions\DataSheets\DataCheckFailedError;
+use exface\Core\Interfaces\DataSheets\DataCheckListInterface;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -13,6 +16,7 @@ use axenox\ETL\Interfaces\ETLStepDataInterface;
 abstract class AbstractETLPrototype implements ETLStepInterface
 {
     use ImportUxonObjectTrait;
+    use ITakeStepNotesTrait;
     
     const PH_PARAMETER_PREFIX = '~parameter:';
     
@@ -41,8 +45,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private $disabled = null;
     
     private $timeout = 30;
-    private ?UxonObject $noteOnSuccessUxon = null;
-    private ?UxonObject $noteOnFailureUxon = null;
+    private ?UxonObject $dataChecksUxon = null;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -266,73 +269,38 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return $phs;
     }
 
+    protected function performDataChecks(DataSheetInterface $dataSheet, string $stepRunUid, string $flowRunUid) : void
+    {
+        foreach ($this->getDataChecksUxon() as $dataCheckUxon) {
+            $check = new DataCheckWithStepNote($this->getWorkbench(), $dataCheckUxon);
+            if(!$check->isApplicable($dataSheet)) {
+                continue;
+            }
+
+            try {
+                $check->check($dataSheet, null, $flowRunUid, $stepRunUid);
+            } catch (DataCheckFailedError $error) {
+                
+            }
+        }
+    }
+    
     /**
-     * Define a note that will be taken, if this step succeeds.
-     * 
-     * @uxon-property note_on_success
-     * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"info"}
+     * @uxon-property data_invalid_if
+     * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
+     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "conditions":[{"expression":"", "comparator":"==","value":""}]}]
      * 
      * @param UxonObject $uxon
      * @return $this
      */
-    public function setNoteOnSuccess(UxonObject $uxon) : AbstractETLPrototype
+    public function setDataInvalidIf(UxonObject $uxon) : AbstractETLPrototype
     {
-        $this->noteOnSuccessUxon = $uxon;
+        $this->dataChecksUxon = $uxon;
         return $this;
     }
     
-    public function getNoteOnSuccess(
-        string $flowRunUid, 
-        string $stepRunUid) : ?StepNote
+    public function getDataChecksUxon() : ?UxonObject
     {
-        if($this->noteOnSuccessUxon === null) {
-            return null;
-        }
-        
-        return $this->generateNote($this->noteOnSuccessUxon, $flowRunUid, $stepRunUid);
-    }
-
-    /**
-     * Define a note that will be taken, if this step fails.
-     * 
-     * @uxon-property note_on_failure
-     * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"warning"}
-     *
-     * @param UxonObject $uxon
-     * @return $this
-     */
-    public function setNoteOnFailure(UxonObject $uxon) : AbstractETLPrototype
-    {
-        $this->noteOnFailureUxon = $uxon;
-        return $this;
-    }
-
-    public function getNoteOnFailure(
-        string $flowRunUid,
-        string $stepRunUid,
-        ExceptionInterface $exception) : ?StepNote
-    {
-        if($this->noteOnFailureUxon === null) {
-            return null;
-        }
-
-        return $this->generateNote($this->noteOnFailureUxon, $flowRunUid, $stepRunUid, $exception);
-    }
-    
-    protected function generateNote(
-        UxonObject $uxon, 
-        string $flowRunUid, 
-        string $stepRunUid, 
-        ExceptionInterface $exception = null) : StepNote
-    {
-        return new StepNote(
-            $this->getWorkbench(),
-            $flowRunUid,
-            $stepRunUid,
-            $exception,
-            $uxon
-        );
+        return $this->dataChecksUxon;
     }
 }
