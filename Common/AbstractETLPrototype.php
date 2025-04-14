@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\Common;
 
+use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -40,7 +41,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private $disabled = null;
     
     private $timeout = 30;
-    
+    private ?UxonObject $noteOnSuccessUxon = null;
+    private ?UxonObject $noteOnFailureUxon = null;
+
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
         $this->workbench = $toObject->getWorkbench();
@@ -137,7 +140,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
     
     /**
-     * Alias of the attribute of the to-object where the UID of the flow run is to be saved (same value for all steps in a flow)
+     * Alias of the attribute of the to-object where the UID of the flow run is to be saved (same value for all steps
+     * in a flow)
      * 
      * @uxon-property flow_run_uid_attribute
      * @uxon-type metamodel:attribute
@@ -260,5 +264,75 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         	$phs[self::PH_PARAMETER_PREFIX . $name] = $value;
         }
         return $phs;
+    }
+
+    /**
+     * Define a note that will be taken, if this step succeeds.
+     * 
+     * @uxon-property note_on_success
+     * @uxon-type \axenox\etl\Common\StepNote
+     * @uxon-template {"message":"", "log_level":"info"}
+     * 
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    public function setNoteOnSuccess(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->noteOnSuccessUxon = $uxon;
+        return $this;
+    }
+    
+    public function getNoteOnSuccess(
+        string $flowRunUid, 
+        string $stepRunUid) : ?StepNote
+    {
+        if($this->noteOnSuccessUxon === null) {
+            return null;
+        }
+        
+        return $this->generateNote($this->noteOnSuccessUxon, $flowRunUid, $stepRunUid);
+    }
+
+    /**
+     * Define a note that will be taken, if this step fails.
+     * 
+     * @uxon-property note_on_failure
+     * @uxon-type \axenox\etl\Common\StepNote
+     * @uxon-template {"message":"", "log_level":"warning"}
+     *
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    public function setNoteOnFailure(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->noteOnFailureUxon = $uxon;
+        return $this;
+    }
+
+    public function getNoteOnFailure(
+        string $flowRunUid,
+        string $stepRunUid,
+        ExceptionInterface $exception) : ?StepNote
+    {
+        if($this->noteOnFailureUxon === null) {
+            return null;
+        }
+
+        return $this->generateNote($this->noteOnFailureUxon, $flowRunUid, $stepRunUid, $exception);
+    }
+    
+    protected function generateNote(
+        UxonObject $uxon, 
+        string $flowRunUid, 
+        string $stepRunUid, 
+        ExceptionInterface $exception = null) : StepNote
+    {
+        return new StepNote(
+            $this->getWorkbench(),
+            $flowRunUid,
+            $stepRunUid,
+            $exception,
+            $uxon
+        );
     }
 }
