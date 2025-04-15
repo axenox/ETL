@@ -26,11 +26,14 @@ class OpenAPI3Route implements APIRouteInterface
     public function parseData(string $body, MetaObjectInterface $object) : ?array
     {
         $schema = $this->routeSchema;
-        $key = $this->getArrayKeyToImportDataFromSchema($schema, $object->getAliasWithNamespace());
+        $key = $this->getPathToData($schema, $object->getAliasWithNamespace());
         $bodyArray = json_decode($body, true);
         switch (true) {
             case $bodyArray === null:
                 $data = null;
+                break;
+            case $key === null:
+                $data = $bodyArray;
                 break;
             case is_array($bodyArray):
                 // Determine if the request body contains a named array/object or an unnamed array/object
@@ -44,31 +47,36 @@ class OpenAPI3Route implements APIRouteInterface
     }
 
     /**
-     * Searches through the request schema looking for the object reference and returning its name.
-     * This key can than be used to find the object within the request body.
+     * Returns the JSON path to the data in a request body.
+     * 
+     * TODO currently this is only working for the first level of the request schema.
      *
      * @param array $requestSchema
      * @param string $objectAlias
      * @return string|null
      */
-    protected function getArrayKeyToImportDataFromSchema(array $requestSchema, string $objectAlias) : ?string
+    protected function getPathToData(array $requestSchema, string $objectAlias) : ?string
     {
         $key = null;
-        switch ($requestSchema['type']) {
-            case 'array':
-                $key = $this->getArrayKeyToImportDataFromSchema($requestSchema['items'], $objectAlias);
+        switch (true) {
+            case $requestSchema['type'] === 'array':
+                $key = $this->getPathToData($requestSchema['items'], $objectAlias);
                 break;
-            case 'object':
-            foreach ($requestSchema['properties'] as $propertyName => $propertyValue) {
-                switch (true) {
-                    case array_key_exists('x-object-alias', $propertyValue) && $propertyValue['x-object-alias'] === $objectAlias:
-                        return $propertyName;
-                    case $propertyValue['type'] === 'array':
-                    case $propertyValue['type'] === 'object':
-                        $key = $this->getArrayKeyToImportDataFromSchema($propertyValue, $objectAlias);
-                        break;
+            case $requestSchema['type'] === 'object' && $objectAlias === $requestSchema['x-object-alias'] ?? null:
+                $key = null;
+                break;
+            case $requestSchema['type'] === 'object':
+                foreach ($requestSchema['properties'] as $propertyName => $propertyValue) {
+                    switch (true) {
+                        case $objectAlias === $propertyValue['x-object-alias'] ?? null:
+                            return $propertyName;
+                        case $propertyValue['type'] === 'array':
+                        case $propertyValue['type'] === 'object':
+                            $key = $this->getPathToData($propertyValue, $objectAlias);
+                            break;
+                    }
                 }
-            }
+                break;
         }
 
         return $key;

@@ -290,19 +290,18 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function readJson(array $data, APIObjectSchemaInterface $toObjectSchema, string $objectAlias = 'exface.Core.DUMMY') : DataSheetInterface
     {
         $dataSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), $objectAlias);
-        $neededProperties = $toObjectSchema->getPropertyNames();
 
         if (ArrayDataType::isSequential($data)) {
             // Named array: { "object-key" [ {"id": "123", "name": "abc" }, {"id": "234", "name": "cde"} ] }
             // Unnamed array: [ {"id": "123", "name": "abc" }, {"id": "234", "name": "cde"} ]
             foreach ($data as $entry) {
-                $row = $this->readJsonRow($entry, $neededProperties);
+                $row = $this->readJsonRow($entry, $toObjectSchema);
                 $dataSheet->addRow($row);
             }
         } else {
             // Named object: { "object-key" {"id": "123", "name": "abc" } }
             // Unnamed object: {"id": "123", "name": "abc" }
-            $row = $this->readJsonRow($data, $neededProperties);
+            $row = $this->readJsonRow($data, $toObjectSchema);
             $dataSheet->addRow($row);
         }
         return $dataSheet;
@@ -314,24 +313,43 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param string[] $neededProperties
      * @return string[]
      */
-    protected function readJsonRow(array $bodyLine, array $neededProperties) : array
+    protected function readJsonRow(array $bodyLine, APIObjectSchemaInterface $toObjectSchema) : array
     {
         $importData = [];
         foreach ($bodyLine as $propertyName => $value) {
+            $property = $toObjectSchema->getProperty($propertyName);
             switch(true) {
-                case is_numeric($propertyName) && in_array($propertyName, $neededProperties) === false:
-                    $importData = array_merge($importData, $this->readJsonRow($value, $neededProperties));
+                // If we are not looking for this property, but it is a real array, see if it contains
+                // objects with properties we are looking for.
+                // IDEA 15.04.2025: not sure, why we do this - perhaps, it is not needed anymore
+                case $property === null && is_numeric($propertyName):
+                    $importData = array_merge($importData, $this->readJsonRow($value, $toObjectSchema));
                     break;
-                case in_array($propertyName, $neededProperties):
-                    // arrays and objects are represented via string in the database
+                // Otherwise skip properties, that we are not looking for explicitly
+                case $property === null:
+                    break;
+                // Array values, that are to be placed in a DataSheet need to be converted to a
+                // delimited list
+                case $property->getPropertyType() === 'array' && $property->isBoundToMetamodel():
                     if (is_array($value)) {
-                        $value =  trim(json_encode($value), '[]');
+                        if ($property->isBoundToAttribute()) {
+                            $value = implode($property->getAttribute()->getValueListDelimiter(), $value);
+                        } else {
+                            $value = implode(EXF_LIST_SEPARATOR, $value);
+                        }
                     }
-
-                    if (is_object($value)) {
+                    $importData[$propertyName] = $value;
+                    break;
+                // Object values, that are to be put in a DataSheet also need to be converted to string,
+                // but they are converted to JSON - e.g. geometries for geo data
+                case $property->getPropertyType() === 'object' && $property->isBoundToMetamodel():
+                    if (is_array($value)) {
                         $value =  json_encode($value);
                     }
-
+                    $importData[$propertyName] = $value;
+                    break;
+                // Take regular properties as-is
+                default:
                     $importData[$propertyName] = $value;
                     break;
             }

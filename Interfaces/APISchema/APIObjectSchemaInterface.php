@@ -23,6 +23,13 @@ interface APIObjectSchemaInterface
 
     /**
      * 
+     * @param string $name
+     * @return APIPropertyInterface|null
+     */
+    public function getProperty(string $name) : ?APIPropertyInterface;
+
+    /**
+     * 
      * @param string $format
      * @param string $option
      * @return null|string|number|bool|array

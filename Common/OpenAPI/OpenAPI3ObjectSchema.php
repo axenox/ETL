@@ -4,6 +4,7 @@ namespace axenox\ETL\Common\OpenAPI;
 use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
+use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
@@ -54,7 +55,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      * @uxon-property properties
      * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3Property[]
      * 
-     * @return OpenAPI3Property[]
+     * @return array<string, OpenAPI3Property>
      */
     public function getProperties() : array
     {
@@ -64,6 +65,11 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
             }
         }
         return $this->properties;
+    }
+
+    public function getProperty(string $name) : ?APIPropertyInterface
+    {
+        return $this->getProperties()[$name] ?? null;
     }
 
     /**
