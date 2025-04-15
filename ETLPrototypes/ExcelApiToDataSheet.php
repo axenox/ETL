@@ -7,6 +7,8 @@ use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
+use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\Factories\MetaObjectFactory;
@@ -68,6 +70,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     private $schemaName = null;
     private ?array $webservice = null;
 
+    private $validateApiSchema = false;
+
     /**
      *
      * {@inheritDoc}
@@ -108,6 +112,23 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+
+        // Validate data in the from-sheet against the JSON schema
+        if ($this->isValidatingApiSchema()) {
+        foreach ($fromSheet->getRows() as $i => $row) {
+                $rowErrors = [];
+                try {
+                    $toObjectSchema->validateRow($row);
+                } catch (JsonSchemaValidationError $e) {
+                    $rowErrors[$i+1] = $e->getMessage();
+                }
+            }
+            if (count($rowErrors) > 0) {
+                throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
+            }
+        }
+
+        // Apply the mapper
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -295,5 +316,30 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
         $fakeSheet->dataRead();
         return $fakeSheet;
+    }
+
+    /**
+     * Set to FALSE to skip validaton of the Excel data against the API schema.
+     * 
+     * @uxon-property validate_api_schema
+     * @uxon-type boolean
+     * @uxon-default true
+     *
+     * @param bool $trueOrFalse
+     * @return ExcelApiToDataSheet
+     */
+    protected function setValidateApiSchema(bool $trueOrFalse) : ExcelApiToDataSheet
+    {
+        $this->validateApiSchema = $trueOrFalse;
+        return $this;
+    }
+    
+    /**
+     * 
+     * @return bool
+     */
+    protected function isValidatingApiSchema() : bool
+    {
+        return $this->validateApiSchema;
     }
 }
