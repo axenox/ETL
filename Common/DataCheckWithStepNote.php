@@ -19,6 +19,8 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * when the check is passed or failed, respectively.
  * - If you set a value for `is_valid_alias` and a check is failed, the offending row will be marked as invalid
  * in the input sheet. This enables you to separate the bad data in future processing steps.
+ * 
+ * IMPORTANT: If an item MATCHES the condition of a check, it is considered to have FAILED the check. 
  */
 class DataCheckWithStepNote extends DataCheck
 {
