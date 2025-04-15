@@ -339,8 +339,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * 
      * @uxon-property data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "conditions":[{"expression":"",
-     *     "comparator":"==","value":""}]}]
+     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
      * 
      * @param UxonObject $uxon
      * @return $this
