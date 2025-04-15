@@ -325,7 +325,10 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         if($step instanceof AbstractETLPrototype) {
-            $step->getNoteOnSuccess($flowRunUid, $stepRunUid)->takeNote();
+            $note = $step->getNoteOnSuccess($flowRunUid, $stepRunUid);
+            if ($note !== null) {
+                $note->takeNote();
+            }
         }
         
         $ds->addRow($row);
