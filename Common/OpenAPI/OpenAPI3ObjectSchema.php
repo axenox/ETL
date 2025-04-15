@@ -5,6 +5,7 @@ use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -192,5 +193,30 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function isUpdateIfMatchingAttributes() : bool
     {
         return empty($this->jsonSchema['x-update-if-matching-attributes'] ?? []) === false;
+    }
+
+    /**
+     * 
+     * @param array $arrayOfRows
+     * @return array
+     */
+    public function validateRows(array $arrayOfRows) : array
+    {
+        foreach ($arrayOfRows as $row) {
+            $this->validateRow($row);
+        }
+        return $arrayOfRows;
+    }
+
+    /**
+     * 
+     * @param array $properties
+     * @return array
+     */
+    public function validateRow(array $properties) : array
+    {
+        $rowObj = json_decode(json_encode($properties));
+        $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonSchema);
+        return $properties;
     }
 }

@@ -44,4 +44,14 @@ interface APIObjectSchemaInterface
      * @return bool
      */
     public function isUpdateIfMatchingAttributes() : bool;
+
+    /**
+     * 
+     * @param array $arrayOfRows
+     * @return array
+     */
+    public function validateRows(array $arrayOfRows) : array;
+
+    
+    public function validateRow(array $properties) : array;
 }
