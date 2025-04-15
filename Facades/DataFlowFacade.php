@@ -32,6 +32,7 @@ use axenox\ETL\Facades\Middleware\OpenApiMiddleware;
 use axenox\ETL\Facades\Middleware\SwaggerUiMiddleware;
 use Flow\JSONPath\JSONPath;
 use axenox\ETL\Facades\Middleware\RouteAuthenticationMiddleware;
+use exface\Core\Exceptions\DataSheets\DataNotFoundError;
 use stdClass;
 
 
@@ -192,7 +193,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $alias = null;
         $rows = $ds->getRows();
         foreach ($rows as $row){
-            if (strcasecmp($row['route'], ltrim($routePath,'/')) === 0) {
+            if (strcasecmp(ltrim($row['route'], '/'), ltrim($routePath,'/')) === 0) {
                 $alias = $row['flow__alias'];
                 return $alias;
             }
@@ -201,7 +202,13 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         if ($alias === null && count($rows) === 1){
             return $rows[0]['flow__alias'];
         } else {
-            throw new NotFoundException('Cannot find flow to webservice `' . $routeUid . '`');
+            $msg = 'webservice route `' . $routePath . '` (route UID `' . $routeUid . '`)';
+            if (count($rows) === 0) {
+                $msg = 'No data flow found for ' . $msg;
+            } else {
+                $msg = 'Multiple data flows found for ' . $msg;
+            }
+            throw new DataNotFoundError($ds, $msg);
         }
     }
 
