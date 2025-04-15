@@ -193,6 +193,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $alias = null;
         $rows = $ds->getRows();
         foreach ($rows as $row){
+            // Compare routes without leading slashes because people will copy these slashes from
+            // the swagger UI and paste them into the route field in the webservice config.
             if (strcasecmp(ltrim($row['route'], '/'), ltrim($routePath,'/')) === 0) {
                 $alias = $row['flow__alias'];
                 return $alias;
