@@ -2,11 +2,14 @@
 
 namespace axenox\ETL\Common\Traits;
 
-use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\StepNote;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 
+/**
+ * This trait contains all functions and accessors necessary to enable a class to take step notes.
+ * @see StepNote
+ */
 trait ITakeStepNotesTrait
 {
     private ?UxonObject $noteOnSuccessUxon = null;
@@ -14,7 +17,7 @@ trait ITakeStepNotesTrait
     private ?StepNote $tempNote = null;
 
     /**
-     * Define a note that will be taken, if this step succeeds.
+     * Define a note that will be taken, on success.
      *
      * @uxon-property note_on_success
      * @uxon-type \axenox\etl\Common\StepNote
@@ -29,6 +32,13 @@ trait ITakeStepNotesTrait
         return $this;
     }
 
+    /**
+     * Generates a new step note, using the `note_on_success` UXON.
+     * 
+     * @param string $flowRunUid
+     * @param string $stepRunUid
+     * @return StepNote|null
+     */
     public function getNoteOnSuccess(
         string $flowRunUid,
         string $stepRunUid) : ?StepNote
@@ -47,7 +57,7 @@ trait ITakeStepNotesTrait
     }
 
     /**
-     * Define a note that will be taken, if this step fails.
+     * Define a note that will be taken, on failure.
      *
      * @uxon-property note_on_failure
      * @uxon-type \axenox\etl\Common\StepNote
@@ -62,6 +72,14 @@ trait ITakeStepNotesTrait
         return $this;
     }
 
+    /**
+     * Generates a new step note, using the `note_on_failure` UXON.
+     *
+     * @param string             $flowRunUid
+     * @param string             $stepRunUid
+     * @param ExceptionInterface $exception
+     * @return StepNote|null
+     */
     public function getNoteOnFailure(
         string $flowRunUid,
         string $stepRunUid,
@@ -80,6 +98,12 @@ trait ITakeStepNotesTrait
         ));
     }
 
+    /**
+     * Merges a given note with the local temp note that is used to track aggregations.
+     *
+     * @param StepNote $note
+     * @return StepNote
+     */
     protected function mergeWithTempNote(StepNote $note) : StepNote
     {
         $tempNote = $this->getTempNote();
@@ -95,6 +119,11 @@ trait ITakeStepNotesTrait
         return $note;
     }
 
+    /**
+     * Returns the current temp note of this instance, which is used to track aggregations.
+     * 
+     * @return StepNote
+     */
     protected function getTempNote() : StepNote
     {
         if($this->tempNote) {

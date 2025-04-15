@@ -95,20 +95,20 @@ class StepNote implements NoteInterface
     function getNoteData(): array
     {
         return [
-            'FLOW_RUN_UID' => $this->getFlowRunUid(),
-            'STEP_RUN_UID' => $this->getStepRunUid(),
-            'MESSAGE' => $this->getMessage(),
-            'LOG_LEVEL' => $this->getLogLevel(),
-            'EXCEPTION_FLAG' => $this->hasException(),
-            'EXCEPTION_MESSAGE' => $this->getExceptionMessage(),
-            'EXCEPTION_LOG_ID' => $this->getExceptionLogId(),
-            'COUNT_READS' => $this->getCountReads(),
-            'COUNT_WRITES' => $this->getCountWrites(),
-            'COUNT_CREATES' => $this->getCountCreates(),
-            'COUNT_UPDATES' => $this->getCountUpdates(),
-            'COUNT_DELETES' => $this->getCountDeletes(),
-            'COUNT_ERRORS' => $this->getCountErrors(),
-            'COUNT_WARNINGS' => $this->getCountWarnings()
+            'flow_run' => $this->getFlowRunUid(),
+            'step_run' => $this->getStepRunUid(),
+            'message' => $this->getMessage(),
+            'log_level' => $this->getLogLevel(),
+            'exception_flag' => $this->hasException(),
+            'exception_message' => $this->getExceptionMessage(),
+            'exception_log_id' => $this->getExceptionLogId(),
+            'count_reads' => $this->getCountReads(),
+            'count_writes' => $this->getCountWrites(),
+            'count_creates' => $this->getCountCreates(),
+            'count_updates' => $this->getCountUpdates(),
+            'count_deletes' => $this->getCountDeletes(),
+            'count_errors' => $this->getCountErrors(),
+            'count_warnings' => $this->getCountWarnings()
         ];
     }
 
