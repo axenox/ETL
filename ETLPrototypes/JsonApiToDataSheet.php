@@ -224,7 +224,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     if ($lookupToSeparateColumn === false) {
                         break;
                     }
-                case null !== $attr = $propSchema->getAttribute():
+                case $propSchema->isBoundToAttribute() && null !== $attr = $propSchema->getAttribute():
                     $col2col[] = [
                         'from' => $propName,
                         'to' => $attr->getAlias(),
