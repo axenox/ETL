@@ -95,20 +95,20 @@ class StepNote implements NoteInterface
     function getNoteData(): array
     {
         return [
-            'FLOW_RUN_UID' => $this->getFlowRunUid(),
-            'STEP_RUN_UID' => $this->getStepRunUid(),
-            'MESSAGE' => $this->getMessage(),
-            'LOG_LEVEL' => $this->getLogLevel(),
-            'EXCEPTION_FLAG' => $this->getExceptionFlag(),
-            'EXCEPTION_MESSAGE' => $this->getExceptionMessage(),
-            'EXCEPTION_LOG_ID' => $this->getExceptionLogId(),
-            'COUNT_READS' => $this->getCountReads(),
-            'COUNT_WRITES' => $this->getCountWrites(),
-            'COUNT_CREATES' => $this->getCountCreates(),
-            'COUNT_UPDATES' => $this->getCountUpdates(),
-            'COUNT_DELETES' => $this->getCountDeletes(),
-            'COUNT_ERRORS' => $this->getCountErrors(),
-            'COUNT_WARNINGS' => $this->getCountWarnings()
+            'flow_run' => $this->getFlowRunUid(),
+            'step_run' => $this->getStepRunUid(),
+            'message' => $this->getMessage(),
+            'log_level' => $this->getLogLevel(),
+            'exception_flag' => $this->hasException(),
+            'exception_message' => $this->getExceptionMessage(),
+            'exception_log_id' => $this->getExceptionLogId(),
+            'count_reads' => $this->getCountReads(),
+            'count_writes' => $this->getCountWrites(),
+            'count_creates' => $this->getCountCreates(),
+            'count_updates' => $this->getCountUpdates(),
+            'count_deletes' => $this->getCountDeletes(),
+            'count_errors' => $this->getCountErrors(),
+            'count_warnings' => $this->getCountWarnings()
         ];
     }
 
@@ -187,61 +187,43 @@ class StepNote implements NoteInterface
     }
 
     /**
-     * @inheritdoc
-     * @see NoteInterface::setExceptionFlag()
+     * @inheritdoc 
+     * @see NoteInterface::setException()
      */
-    public function setExceptionFlag(bool $value): NoteInterface
+    function setException(?ExceptionInterface $exception): void
     {
-        $this->exceptionFlag = $value;
-        return $this;
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteInterface::getExceptionFlag()
-     */
-    public function getExceptionFlag(): bool
-    {
-        return $this->exceptionFlag;
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteInterface::setExceptionMessage()
-     */
-    public function setExceptionMessage(string $message): NoteInterface
-    {
-        $this->exceptionMessage = $message;
-        return $this;
+        $this->exceptionFlag = (bool)$exception;
+        $this->exceptionMessage = $exception?->getMessage();
+        $this->exceptionLogId = $exception?->getId();
     }
 
     /**
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    public function getExceptionMessage(): ?string
+    function getExceptionMessage(): ?string
     {
         return $this->exceptionMessage;
     }
 
     /**
      * @inheritdoc
-     * @see NoteInterface::setExceptionLogId()
+     * @see NoteInterface::getExceptionMessage()
      */
-    public function setExceptionLogId(string $logId): NoteInterface
+    function getExceptionLogId(): ?string
     {
-        $this->exceptionLogId = $logId;
-        return $this;
+        return $this->exceptionLogId;
     }
 
     /**
      * @inheritdoc
-     * @see NoteInterface::getExceptionLogId()
+     * @see NoteInterface::hasException()
      */
-    public function getExceptionLogId(): ?string
+    function hasException(): bool
     {
-        return $this->exceptionLogId;
+        return $this->exceptionFlag;
     }
+
 
     /**
      * @param int $count

@@ -165,6 +165,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $transaction = $this->getWorkbench()->data()->startTransaction();
 
         try {
+            $this->performDataChecks($toSheet, $stepRunUid, $stepData->getStepRunUid());
             // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
             // that can be used to update known entire
             $toSheet->dataCreate(false, $transaction);
