@@ -404,7 +404,11 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
      */
     public function getJsonSchemaFromOpenApiByRef(ServerRequestInterface $request, string $jsonPath, string $contentType): object
     {
+        /** @var \axenox\ETL\Interfaces\APISchema\APISchemaInterface $openApiSchema */
         $openApiSchema = $this->openApiCache[$request->getUri()->getPath()];
+        // FIXME this always throws an error. It gets called by the OpenApiValidationMiddleware
+        // when that finds an error and wants details.
+        $openApiSchema->getRouteRouteForRequest($request);
         $jsonPath = $this->findSchemaPathInOpenApiJson($request, $jsonPath, $contentType);
         $schema = $this->findJsonDataByRef($openApiSchema, $jsonPath);
         if ($schema === null) {
