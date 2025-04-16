@@ -207,6 +207,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $lookups = [];
         foreach ($toObjectSchema->getProperties() as $propName => $propSchema) {
             switch (true) {
+                // If a x-lookup is used, transform into a lookup mapping.
                 case null !== $lookup = $propSchema->getLookupUxon():
                     $attr = $propSchema->getAttribute();
                     switch (true) {
@@ -229,9 +230,17 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     if ($lookupToSeparateColumn === false) {
                         break;
                     }
+                // If the property is to be put into an attribute, create a column-to-column mapping. The
+                // from-expression is either the property itself or calculate it using a formula if x-calculation 
+                // is defined.
                 case $propSchema->isBoundToAttribute() && null !== $attr = $propSchema->getAttribute():
+                    if ($propSchema->isBoundToCalculation()) {
+                        $from = '=' . ltrim($propSchema->getCalculationExpression()->__toString(), '=');
+                    } else {
+                        $from = $propName;
+                    }
                     $col2col[] = [
-                        'from' => $propName,
+                        'from' => $from,
                         'to' => $attr->getAlias(),
                         'ignore_if_missing_from_column' => ! $propSchema->isRequired()
                     ];
