@@ -2,7 +2,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
-use exface\Core\Exceptions\DataSheets\DataCheckFailedError;
+use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -47,6 +47,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private $timeout = 30;
     private ?UxonObject $toDataChecksUxon = null;
     private ?UxonObject $fromDataChecksUxon = null;
+    private CrudCounter $crudCounter;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -55,6 +56,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $this->fromObject = $fromObject;
         $this->toObject = $toObject;
         $this->name = $name;
+        $this->crudCounter = new CrudCounter($this->workbench);
+        
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
         }
@@ -273,9 +276,10 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * Performs all data checks defined in a given UXON.
      *
-     * NOTE: All rows that fail at least one data check will be marked as invalid in the `is_valid_attribute` column on `dataSheet`.
-     * You can use this information to ignore them in future processing. If `stop_on_failed_check` is TRUE, the step will be terminated,
-     * if at least one row failed at least one data check. In either case, all checks will be performed first.
+     * NOTE: All rows that fail at least one data check will be marked as invalid in the `is_valid_attribute` column on
+     * `dataSheet`. You can use this information to ignore them in future processing. If `stop_on_failed_check` is
+     * TRUE, the step will be terminated, if at least one row failed at least one data check. In either case, all
+     * checks will be performed first.
      *
      * @param DataSheetInterface $dataSheet
      * @param UxonObject         $uxon
@@ -372,5 +376,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     public function getToDataChecksUxon() : ?UxonObject
     {
         return $this->toDataChecksUxon;
+    }
+
+    /**
+     * @return CrudCounter
+     */
+    public function getCrudCounter() : CrudCounter
+    {
+        return $this->crudCounter;
     }
 }

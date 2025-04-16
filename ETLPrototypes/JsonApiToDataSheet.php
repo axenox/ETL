@@ -4,6 +4,7 @@ namespace axenox\ETL\ETLPrototypes;
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
+use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
@@ -140,9 +141,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $toObject = $this->getToObject();
+        $this->getCrudCounter()->start([$toObject]);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toObject, $this->getSchemaName());
-        
+
         if ($this->isUpdateIfMatchingAttributes()) {
             $this->addDuplicatePreventingBehavior($this->getToObject());
         } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
@@ -153,6 +155,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $requestData = $routeSchema->parseData($requestBody, $toObject);
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+        $this->getCrudCounter()->addObject($fromSheet->getMetaObject());
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), $flowRunUid, $stepRunUid);
 
@@ -180,6 +183,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $transaction->commit();
+        $this->getCrudCounter()->stop();
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 

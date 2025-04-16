@@ -14,7 +14,6 @@ trait ITakeStepNotesTrait
 {
     private ?UxonObject $noteOnSuccessUxon = null;
     private ?UxonObject $noteOnFailureUxon = null;
-    private ?StepNote $tempNote = null;
 
     /**
      * Define a note that will be taken, on success.
@@ -47,13 +46,13 @@ trait ITakeStepNotesTrait
             return null;
         }
 
-        return $this->mergeWithTempNote(new StepNote(
+        return new StepNote(
             $this->getWorkbench(),
             $flowRunUid,
             $stepRunUid,
             null,
             $this->noteOnSuccessUxon
-        ));
+        );
     }
 
     /**
@@ -89,52 +88,12 @@ trait ITakeStepNotesTrait
             return null;
         }
 
-        return $this->mergeWithTempNote(new StepNote(
+        return new StepNote(
             $this->getWorkbench(),
             $flowRunUid,
             $stepRunUid,
             $exception,
             $this->noteOnFailureUxon
-        ));
-    }
-
-    /**
-     * Merges a given note with the local temp note that is used to track aggregations.
-     *
-     * @param StepNote $note
-     * @return StepNote
-     */
-    public function mergeWithTempNote(StepNote $note) : StepNote
-    {
-        $tempNote = $this->getTempNote();
-
-        $note->setCountReads($tempNote->getCountReads());
-        $note->setCountWrites($tempNote->getCountWrites());
-        $note->setCountCreates($tempNote->getCountCreates());
-        $note->setCountUpdates($tempNote->getCountUpdates());
-        $note->setCountDeletes($tempNote->getCountDeletes());
-        $note->setCountWarnings($tempNote->getCountWarnings());
-        $note->setCountErrors($tempNote->getCountErrors());
-
-        return $note;
-    }
-
-    /**
-     * Returns the current temp note of this instance, which is used to track aggregations.
-     * 
-     * @return StepNote
-     */
-    protected function getTempNote() : StepNote
-    {
-        if($this->tempNote) {
-            return $this->tempNote;
-        }
-
-        $this->tempNote = new StepNote(
-            $this->getWorkbench(),
-            '',
-            '');
-
-        return $this->tempNote;
+        );
     }
 }
