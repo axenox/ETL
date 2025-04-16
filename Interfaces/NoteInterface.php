@@ -4,6 +4,7 @@ namespace axenox\ETL\Interfaces;
 
 use axenox\ETL\Common\NoteTaker;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
 
@@ -72,37 +73,23 @@ interface NoteInterface extends WorkbenchDependantInterface
     function getLogLevel() : ?string;
 
     /**
-     * @param bool $value
-     * @return NoteInterface
+     * @param ExceptionInterface|null $exception
+     * @return void
      */
-    function setExceptionFlag(bool $value) : NoteInterface;
+    function setException(?ExceptionInterface $exception) : void;
 
     /**
-     * TRUE, if this note contains exception data.
-     * 
-     * @return bool
-     */
-    function getExceptionFlag() : bool;
-
-    /**
-     * @param string $message
-     * @return NoteInterface
-     */
-    function setExceptionMessage(string $message) : NoteInterface;
-
-    /**
-     * @return string|null
+     * @return ExceptionInterface|null
      */
     function getExceptionMessage() : ?string;
-
-    /**
-     * @param string $logId
-     * @return NoteInterface
-     */
-    function setExceptionLogId(string $logId) : NoteInterface;
 
     /**
      * @return string|null
      */
     function getExceptionLogId() : ?string;
+    
+    /**
+     * @return bool
+     */
+    function hasException() : bool;
 }
