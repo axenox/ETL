@@ -45,8 +45,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private $disabled = null;
     
     private $timeout = 30;
-    private ?UxonObject $dataChecksUxon = null;
-    private bool $stopOnCheckFailed = false;
+    private ?UxonObject $toDataChecksUxon = null;
+    private ?UxonObject $fromDataChecksUxon = null;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -271,90 +271,106 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
-     * Performs all data checks defined in the `data_checks` UXON property on a given data sheet.
-     * 
+     * Performs all data checks defined in a given UXON.
+     *
      * NOTE: All rows that fail at least one data check will be marked as invalid in the `is_valid_attribute` column on `dataSheet`.
      * You can use this information to ignore them in future processing. If `stop_on_failed_check` is TRUE, the step will be terminated,
      * if at least one row failed at least one data check. In either case, all checks will be performed first.
-     * 
+     *
      * @param DataSheetInterface $dataSheet
+     * @param UxonObject         $uxon
      * @param string             $stepRunUid
      * @param string             $flowRunUid
      * @return void
      */
-    protected function performDataChecks(DataSheetInterface $dataSheet, string $stepRunUid, string $flowRunUid) : void
+    protected function performDataChecks(
+        DataSheetInterface $dataSheet, 
+        UxonObject $uxon,
+        string $flowRunUid,
+        string $stepRunUid) : void
     {
         $errors = null;
+        $stopOnError = false;
         
-        foreach ($this->getDataChecksUxon() as $dataCheckUxon) {
-            $check = new DataCheckWithStepNote($this->getWorkbench(), $dataCheckUxon);
+        foreach ($uxon as $dataCheckUxon) {
+            $check = new DataCheckWithStepNote(
+                $this->getWorkbench(), 
+                $dataCheckUxon,
+                null,
+                $this
+            );
+            
             if(!$check->isApplicable($dataSheet)) {
                 continue;
             }
 
             try {
                 $check->check($dataSheet, null, $flowRunUid, $stepRunUid);
-            } catch (DataCheckFailedError $e) {
+            } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
-                $errors->appendError($e);
+                $errors->merge($e);
+                
+                $stopOnError |= $check->getStopOnCheckFailed();
             }
         }
         
-        if($errors !== null && $this->getStopOnCheckFailed()) {
+        if($errors !== null && $stopOnError) {
             throw $errors;
         }
     }
 
     /**
-     * If TRUE, this step will be terminated, if at least one row failed at least one data check. 
-     * In either case, all checks will be performed first.
-     * 
-     * @uxon-property stop_on_check_failed
-     * @uxon-type boolean
-     * @uxon-template false
-     * 
-     * @param bool $value
-     * @return $this
-     */
-    public function setStopOnCheckFailed(bool $value) : AbstractETLPrototype
-    {
-        $this->stopOnCheckFailed = $value;
-        return $this;
-    }
-
-    /**
-     * @return bool
-     */
-    public function getStopOnCheckFailed() : bool
-    {
-        return $this->stopOnCheckFailed;
-    }
-    
-    /**
-     * Define a set of data checks to performed on the data produced by this step.
-     * The checks will be applied just before the result data is committed. Use the property
-     * `stop_on_failed_check` to control, whether a failed check should halt the procedure. 
-     * 
+     * Define a set of data checks to performed on the data RECEIVED by this step. Use the property
+     * `stop_on_failed_check` to control, whether a failed check should halt the procedure.
+     *
      * NOTE: You can configure per step, whether it should generate a step note on success and/or failure.
-     * 
-     * @uxon-property data_checks
+     *
+     * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
-     * 
+     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     *
      * @param UxonObject $uxon
      * @return $this
      */
-    public function setDataChecks(UxonObject $uxon) : AbstractETLPrototype
+    public function setFromDataChecks(UxonObject $uxon) : AbstractETLPrototype
     {
-        $this->dataChecksUxon = $uxon;
+        $this->fromDataChecksUxon = $uxon;
         return $this;
     }
 
     /**
      * @return UxonObject|null
      */
-    public function getDataChecksUxon() : ?UxonObject
+    public function getFromDataChecksUxon() : ?UxonObject
     {
-        return $this->dataChecksUxon;
+        return $this->fromDataChecksUxon;
+    }
+
+    /**
+     * Define a set of data checks to performed on the data PRODUCED by this step.
+     * The checks will be applied just before the result data is committed. Use the property
+     * `stop_on_failed_check` to control, whether a failed check should halt the procedure.
+     *
+     * NOTE: You can configure per step, whether it should generate a step note on success and/or failure.
+     *
+     * @uxon-property to_data_checks
+     * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
+     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     *
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    public function setToDataChecks(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->toDataChecksUxon = $uxon;
+        return $this;
+    }
+
+    /**
+     * @return UxonObject|null
+     */
+    public function getToDataChecksUxon() : ?UxonObject
+    {
+        return $this->toDataChecksUxon;
     }
 }
