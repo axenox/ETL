@@ -225,4 +225,16 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
         $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonSchema);
         return $properties;
     }
+
+    /**
+     * @uxon-property additionalProperties
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenAPI3Property
+     * @uxon-template true
+     * 
+     * @return OpenAPI3Property|null
+     */
+    public function getAdditionalProperties() : ?OpenAPI3Property
+    {
+        return $this->jsonSchema['additionalProperties'];
+    }
 }

@@ -7,7 +7,6 @@ use exface\Core\CommonLogic\DataSheets\DataCheck;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedError;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
-use exface\Core\Exceptions\DataSheets\DataCheckRuntimeError;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -29,6 +28,7 @@ class DataCheckWithStepNote extends DataCheck
     private ?string $isValidAlias = null;
     private ?AbstractETLPrototype $step = null;
     private string $isInvalidValue = "false";
+    private bool $stopOnCheckFailed;
 
     /**
      * @param WorkbenchInterface        $workbench
@@ -51,24 +51,16 @@ class DataCheckWithStepNote extends DataCheck
      * @param DataSheetInterface    $sheet
      * @param LogBookInterface|null $logBook
      * @param string                $flowRunUid
-     * @param                       $stepRunUid
+     * @param string                $stepRunUid
      * @return DataSheetInterface
      */
-    public function check(DataSheetInterface $sheet, LogBookInterface $logBook = null, string $flowRunUid = '', $stepRunUid = ''): DataSheetInterface
+    public function check(
+        DataSheetInterface $sheet, 
+        LogBookInterface $logBook = null, 
+        string $flowRunUid = '', 
+        string $stepRunUid = ''): DataSheetInterface
     {
-        $toObject = $this->step ? $this->step->getToObject() : $sheet->getMetaObject();
         $isValidAlias = $this->getIsValidAlias();
-        
-        if(!$toObject->getAttribute($isValidAlias)) {
-            throw new DataCheckRuntimeError(
-                $sheet, 
-                'Attribute ' . $isValidAlias . '("is_valid_alias") not found in object ' . $toObject->getAlias() . '!',
-                null,
-                null,
-                $this
-            );
-        }
-        
         $checkSheet = $sheet->copy();
         $errors = null;
         
@@ -127,9 +119,9 @@ class DataCheckWithStepNote extends DataCheck
     }
 
     /**
-     * @return AbstractETLPrototype
+     * @return AbstractETLPrototype|null
      */
-    public function GetStep() : AbstractETLPrototype
+    public function GetStep() : ?AbstractETLPrototype
     {
         return $this->step;
     }
@@ -163,7 +155,7 @@ class DataCheckWithStepNote extends DataCheck
      */
     protected function mergeWithTempNote(StepNote $note): StepNote
     {
-        return $this->step ? $this->mergeWithTempNote($note) : $note; // TODO Strong dependency with AbstractETLPrototype
+        return $this->getStep() ? $this->getStep()->mergeWithTempNote($note) : $note; // TODO Strong dependency with AbstractETLPrototype
     }
 
     /**
@@ -178,5 +170,30 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         return $text;
+    }
+
+    /**
+     * If TRUE, the parent step will be terminated, if at least one row failed this check.
+     * In either case, all checks will be performed first.
+     *
+     * @uxon-property stop_on_check_failed
+     * @uxon-type boolean
+     * @uxon-template false
+     *
+     * @param bool $value
+     * @return $this
+     */
+    public function setStopOnCheckFailed(bool $value) : DataCheckWithStepNote
+    {
+        $this->stopOnCheckFailed = $value;
+        return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getStopOnCheckFailed() : bool
+    {
+        return $this->stopOnCheckFailed;
     }
 }

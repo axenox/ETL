@@ -119,6 +119,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
+        $flowRunUid = $stepData->getFlowRunUid();
     	$stepRunUid = $stepData->getStepRunUid();
     	$placeholders = $this->getPlaceholders($stepData);
     	$result = new UxonEtlStepResult($stepRunUid);
@@ -152,6 +153,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $requestData = $routeSchema->parseData($requestBody, $toObject);
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+        // Perform 'from_data_checks'.
+        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), $flowRunUid, $stepRunUid);
+
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -165,7 +169,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $transaction = $this->getWorkbench()->data()->startTransaction();
 
         try {
-            $this->performDataChecks($toSheet, $stepRunUid, $stepData->getStepRunUid());
+            // Perform 'to_data_checks'.
+            $this->performDataChecks($toSheet, $this->getToDataChecksUxon(), $flowRunUid, $stepRunUid);
             // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
             // that can be used to update known entire
             $toSheet->dataCreate(false, $transaction);
