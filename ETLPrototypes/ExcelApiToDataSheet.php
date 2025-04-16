@@ -295,6 +295,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             ExcelBuilder::class,
             'exface.Core.objects_with_filebehavior'
         );
+        // Improve excel reading performance by skipping empty cells. This will also help avoid
+        // getting completely empty rows, that cannot be used for imports anyway.
+        $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
+
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
             if ($excelColName === null) {
