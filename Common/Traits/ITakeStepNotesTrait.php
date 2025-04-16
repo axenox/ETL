@@ -104,7 +104,7 @@ trait ITakeStepNotesTrait
      * @param StepNote $note
      * @return StepNote
      */
-    protected function mergeWithTempNote(StepNote $note) : StepNote
+    public function mergeWithTempNote(StepNote $note) : StepNote
     {
         $tempNote = $this->getTempNote();
 

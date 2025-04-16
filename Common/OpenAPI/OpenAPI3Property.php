@@ -295,7 +295,7 @@ class OpenAPI3Property implements APIPropertyInterface
     /**
      * Read this property from a formula (only for reading, no writing possible!)
      * 
-     * @uxon-property calculation
+     * @uxon-property x-calculation
      * @uxon-type metamodel:formula
      * @uxon-template =
      * 
