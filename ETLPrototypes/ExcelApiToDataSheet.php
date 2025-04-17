@@ -138,17 +138,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
 
-        $transaction = $this->getWorkbench()->data()->startTransaction();
-        try {
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $toSheet->dataCreate(false, $transaction);
-        } catch (\Throwable $e) {
-            $transaction->rollback();
-            throw $e;
-        }
-        $transaction->commit();
-
+        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        yield from $writer;
+        $toSheet = $writer->getReturn();
+        
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 
