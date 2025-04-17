@@ -75,13 +75,14 @@ class DataCheckWithStepNote extends DataCheck
                 $errors->appendError($e, $rowNr);
                 
                 if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr, $this->getIsInvalidValue());
+                    $sheet->setCellValue($isValidAlias, $rowNr + 1, $this->getIsInvalidValue());
                 }
             }
         }
         
         if($errors) {
             if($noteOnFailure = $this->getNoteOnFailure($flowRunUid, $stepRunUid, $errors)) {
+                $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
                 $noteOnFailure->takeNote();
             }
             
@@ -89,6 +90,7 @@ class DataCheckWithStepNote extends DataCheck
         } 
         
         if($noteOnSuccess = $this->getNoteOnSuccess($flowRunUid, $stepRunUid)) {
+            $noteOnSuccess->importCrudCounter($this->getStep()?->getCrudCounter());
             $noteOnSuccess->takeNote();
         }
         
@@ -121,7 +123,7 @@ class DataCheckWithStepNote extends DataCheck
     /**
      * @return AbstractETLPrototype|null
      */
-    public function GetStep() : ?AbstractETLPrototype
+    public function getStep() : ?AbstractETLPrototype
     {
         return $this->step;
     }
@@ -150,15 +152,6 @@ class DataCheckWithStepNote extends DataCheck
     }
 
     /**
-     * @inheritdoc 
-     * @see ITakeStepNotesTrait::mergeWithTempNote()
-     */
-    protected function mergeWithTempNote(StepNote $note): StepNote
-    {
-        return $this->getStep() ? $this->getStep()->mergeWithTempNote($note) : $note; // TODO Strong dependency with AbstractETLPrototype
-    }
-
-    /**
      * @param DataSheetInterface|null $badData
      * @return string|null
      */
@@ -173,7 +166,7 @@ class DataCheckWithStepNote extends DataCheck
     }
 
     /**
-     * If TRUE, the parent step will be terminated, if at least one row failed this check.
+     * If TRUE, the step will be terminated, if at least one row failed this check.
      * In either case, all checks will be performed first.
      *
      * @uxon-property stop_on_check_failed

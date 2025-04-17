@@ -327,6 +327,7 @@ class StepGroup implements DataFlowStepInterface
         if($step instanceof AbstractETLPrototype) {
             $note = $step->getNoteOnSuccess($flowRunUid, $stepRunUid);
             if ($note !== null) {
+                $note->importCrudCounter($step->getCrudCounter());
                 $note->takeNote();
             }
         }
@@ -371,7 +372,11 @@ class StepGroup implements DataFlowStepInterface
         }
         
         if($step instanceof AbstractETLPrototype) {
-            $step->getNoteOnFailure($flowRunUid, $stepRunUid, $exception)->takeNote();
+            $note = $step->getNoteOnFailure($flowRunUid, $stepRunUid, $exception);
+            if($note !== null) {
+                $note->importCrudCounter($step->getCrudCounter());
+                $note->takeNote();
+            }
         }
         
         $ds->addRow($row);
