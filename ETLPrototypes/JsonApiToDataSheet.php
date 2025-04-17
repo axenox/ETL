@@ -161,7 +161,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
-        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), $flowRunUid, $stepRunUid);
+        if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
+            $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid);
+        }
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
