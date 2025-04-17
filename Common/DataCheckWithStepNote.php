@@ -75,7 +75,7 @@ class DataCheckWithStepNote extends DataCheck
                 $errors->appendError($e, $rowNr);
                 
                 if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr, $this->getIsInvalidValue());
+                    $sheet->setCellValue($isValidAlias, $rowNr + 1, $this->getIsInvalidValue());
                 }
             }
         }
