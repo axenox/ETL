@@ -2,6 +2,7 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
+use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
@@ -21,6 +22,7 @@ use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
  * Read data received through an annotated API (like OpenAPI) using object and attribute annotations
@@ -112,6 +114,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     private $additionalColumns = null;
     private $schemaName = null;
     private $mapperUxon = null;
+    private $skipInvalidRows = false;
 
     /**
      *
@@ -142,7 +145,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $toObject = $this->getToObject();
-        $this->getCrudCounter()->start([$toObject]);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toObject, $this->getSchemaName());
 
@@ -156,7 +158,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $requestData = $routeSchema->parseData($requestBody, $toObject);
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
-        $this->getCrudCounter()->addObject($fromSheet->getMetaObject());
+        $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), $flowRunUid, $stepRunUid);
@@ -170,22 +172,61 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
 
+        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        yield from $writer;
+        $toSheet = $writer->getReturn();
+        
+        return $result->setProcessedRowsCounter($toSheet->countRows());
+    }
+
+    protected function saveData(DataSheetInterface $toSheet, CrudCounter $curdCounter, ETLStepDataInterface $stepData, bool $rowByRow = false) : \Generator
+    {
+        $curdCounter->addObject($toSheet->getMetaObject());
+        if ($rowByRow === true) {
+            foreach ($toSheet->getRows() as $i => $row) {
+                $saveSheet = $toSheet->copy();
+                $saveSheet->removeRows();
+                $saveSheet->addRow($row, false, false);
+                try {
+                    $writer = $this->saveData($saveSheet, $curdCounter, $stepData, false);
+                    foreach ($writer as $line) {
+                        // Do nothing, just call the writer
+                    }
+                } catch (\Throwable $e) {
+                    yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
+                    $note = new StepNote(
+                        $this->getWorkbench(),
+                        $stepData->getFlowRunUid(),
+                        $stepData->getStepRunUid(),
+                        $e
+                    );
+                    $note->setMessage('Error on row ' . $i+1 . '. ' . $e->getMessage());
+                    $note->takeNote();
+                    $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+                }
+                //$saveSheet->removeRows();
+            }
+            return $toSheet;
+        }
+
         $transaction = $this->getWorkbench()->data()->startTransaction();
 
         try {
             // Perform 'to_data_checks'.
-            $this->performDataChecks($toSheet, $this->getToDataChecksUxon(), $flowRunUid, $stepRunUid);
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid);
+            }
             // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
             // that can be used to update known entire
             $toSheet->dataCreate(false, $transaction);
         } catch (\Throwable $e) {
-            $transaction->rollback();
             throw $e;
         }
 
         $transaction->commit();
-        $this->getCrudCounter()->stop();
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        $curdCounter->stop();
+
+        return $toSheet;
     }
 
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
@@ -449,5 +490,29 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     public function isIncremental(): bool
     {
         return false;
+    }
+
+    /**
+     * Set to TRUE to import rows one-by-one and skip rows causing errors.
+     * 
+     * By default, the step will process all rows at once and will not write anything if
+     * at least one error happens.
+     * 
+     * @uxon-property skip_invalid_rows
+     * @uxon-type boolean
+     * @uxon-default false
+     * 
+     * @param bool $trueOrFalse
+     * @return JsonApiToDataSheet
+     */
+    protected function setSkipInvalidRows(bool $trueOrFalse) : JsonApiToDataSheet
+    {
+        $this->skipInvalidRows = $trueOrFalse;
+        return $this;
+    }
+
+    protected function isSkipInvalidRows() : bool
+    {
+        return $this->skipInvalidRows;
     }
 }
