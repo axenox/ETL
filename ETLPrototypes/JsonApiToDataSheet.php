@@ -12,6 +12,7 @@ use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\Factories\DataSheetMapperFactory;
+use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -156,9 +157,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
         $this->getCrudCounter()->addObject($fromSheet->getMetaObject());
+
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), $flowRunUid, $stepRunUid);
-
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -297,9 +298,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param string $objectAlias
      * @return DataSheetInterface
      */
-    protected function readJson(array $data, APIObjectSchemaInterface $toObjectSchema, string $objectAlias = 'exface.Core.DUMMY') : DataSheetInterface
+    protected function readJson(array $data, APIObjectSchemaInterface $toObjectSchema) : DataSheetInterface
     {
-        $dataSheet = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), $objectAlias);
+        $dataSheet = DataSheetFactory::createFromObject($this->createFakeObject($toObjectSchema));
 
         if (ArrayDataType::isSequential($data)) {
             // Named array: { "object-key" [ {"id": "123", "name": "abc" }, {"id": "234", "name": "cde"} ] }
@@ -314,7 +315,39 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $row = $this->readJsonRow($data, $toObjectSchema);
             $dataSheet->addRow($row);
         }
+        
         return $dataSheet;
+    }
+
+    /**
+     * Generate a temporary dummy object that serves as basis for the from-sheet. 
+     * Its attributes are derived from the API schema.
+     * 
+     * @param APIObjectSchemaInterface $schema
+     * @return MetaObjectInterface
+     */
+    protected function createFakeObject(APIObjectSchemaInterface $schema) : MetaObjectInterface
+    {
+        $result = MetaObjectFactory::createTemporary(
+            $this->getWorkbench(),
+            'JsonApiToDataSheet.Dummy',
+            '',
+            '',
+            'exface.Core.METAMODEL_DB'
+        );
+
+        foreach ($schema->getProperties() as $propSchema) {
+            $attrAlias = $propSchema->getPropertyName();
+            MetaObjectFactory::addAttributeTemporary(
+                $result,
+                $attrAlias,
+                $attrAlias,
+                '',
+                $propSchema->guessDataType()
+            );
+        }
+        
+        return $result;
     }
 
     /**
