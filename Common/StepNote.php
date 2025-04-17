@@ -3,6 +3,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
@@ -32,13 +33,13 @@ class StepNote implements NoteInterface
     private bool $exceptionFlag = false;
     private ?string $exceptionMessage = null;
     private ?string $exceptionLogId = null;
-    private int $countReads = -1;
-    private int $countWrites = -1;
-    private int $countCreates = -1;
-    private int $countUpdates = -1;
-    private int $countDeletes = -1;
-    private int $countErrors = -1;
-    private int $countWarnings = -1;
+    private ?int $countReads = null;
+    private ?int $countWrites = null;
+    private ?int $countCreates = null;
+    private ?int $countUpdates = null;
+    private ?int $countDeletes = null;
+    private ?int $countErrors = null;
+    private ?int $countWarnings = null;
 
     /**
      * @param WorkbenchInterface      $workbench
@@ -226,128 +227,145 @@ class StepNote implements NoteInterface
 
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountReads(int $count) : StepNote
+    public function setCountReads(?int $count) : StepNote
     {
         $this->countReads = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountReads() : int
+    public function getCountReads() : ?int
     {
         return $this->countReads;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountWrites(int $count) : StepNote
+    public function setCountWrites(?int $count) : StepNote
     {
         $this->countWrites = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountWrites() : int
+    public function getCountWrites() : ?int
     {
         return $this->countWrites;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountCreates(int $count) : StepNote
+    public function setCountCreates(?int $count) : StepNote
     {
         $this->countCreates = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountCreates() : int
+    public function getCountCreates() : ?int
     {
         return $this->countCreates;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountUpdates(int $count) : StepNote
+    public function setCountUpdates(?int $count) : StepNote
     {
         $this->countUpdates = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountUpdates() : int
+    public function getCountUpdates() : ?int
     {
         return $this->countUpdates;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountDeletes(int $count) : StepNote
+    public function setCountDeletes(?int $count) : StepNote
     {
         $this->countDeletes = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountDeletes() : int
+    public function getCountDeletes() : ?int
     {
         return $this->countDeletes;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountErrors(int $count) : StepNote
+    public function setCountErrors(?int $count) : StepNote
     {
         $this->countErrors = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountErrors() : int
+    public function getCountErrors() : ?int
     {
         return $this->countErrors;
     }
 
     /**
-     * @param int $count
+     * @param int|null $count
      * @return $this
      */
-    public function setCountWarnings(int $count) : StepNote
+    public function setCountWarnings(?int $count) : StepNote
     {
         $this->countWarnings = $count;
         return $this;
     }
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getCountWarnings() : int
+    public function getCountWarnings() : ?int
     {
         return $this->countWarnings;
+    }
+
+    /**
+     * Import tracking data from a `CrudCounter`.
+     * 
+     * @param CrudCounter $counter
+     * @return $this
+     */
+    public function importCrudCounter(CrudCounter $counter) : StepNote
+    {
+        $this->setCountWrites($counter->getWrites());
+        $this->setCountCreates($counter->getCreates());
+        $this->setCountReads($counter->getReads());
+        $this->setCountUpdates($counter->getUpdates());
+        $this->setCountDeletes($counter->getDeletes());
+        
+        return $this;
     }
 }
