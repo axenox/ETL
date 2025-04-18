@@ -10,7 +10,7 @@ CREATE NONCLUSTERED INDEX [IX_etl_step_run_step_success_invalidated] ON [dbo].[e
   [modified_on], 
   [result_uxon], 
   [start_time]
-) WITH (ONLINE = ON);
+);
 
 -- DOWN
 
