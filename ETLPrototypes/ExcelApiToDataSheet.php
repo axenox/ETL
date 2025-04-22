@@ -138,17 +138,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
 
-        $transaction = $this->getWorkbench()->data()->startTransaction();
-        try {
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $toSheet->dataCreate(false, $transaction);
-        } catch (\Throwable $e) {
-            $transaction->rollback();
-            throw $e;
-        }
-        $transaction->commit();
-
+        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        yield from $writer;
+        $toSheet = $writer->getReturn();
+        
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 
@@ -295,6 +288,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             ExcelBuilder::class,
             'exface.Core.objects_with_filebehavior'
         );
+        // Improve excel reading performance by skipping empty cells. This will also help avoid
+        // getting completely empty rows, that cannot be used for imports anyway.
+        $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
+
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
             if ($excelColName === null) {
