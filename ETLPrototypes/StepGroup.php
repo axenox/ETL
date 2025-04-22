@@ -160,7 +160,6 @@ class StepGroup implements DataFlowStepInterface
             $prevStepResult = $stepResult;
         }
         
-        //NoteTaker::commitPendingNotesAll();
         return $result;
     }
     
