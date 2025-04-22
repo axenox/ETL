@@ -282,17 +282,21 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * checks will be performed first.
      *
      * @param DataSheetInterface $dataSheet
-     * @param UxonObject         $uxon
-     * @param string             $stepRunUid
+     * @param UxonObject|null    $uxon
      * @param string             $flowRunUid
+     * @param string             $stepRunUid
      * @return void
      */
     protected function performDataChecks(
         DataSheetInterface $dataSheet, 
-        UxonObject $uxon,
+        ?UxonObject $uxon,
         string $flowRunUid,
         string $stepRunUid) : void
     {
+        if($uxon === null) {
+            return;
+        }
+        
         $errors = null;
         $stopOnError = false;
         
