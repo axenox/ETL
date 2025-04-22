@@ -163,7 +163,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
             $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid);
+            
+            if($fromSheet->countRows() === 0) {
+                $this->getCrudCounter()->stop();
+                yield 'All input rows removed by failed data checks.' . PHP_EOL;
+                return $result->setProcessedRowsCounter(0);
+            }
         }
+        
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -243,9 +250,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid);
             }
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $toSheet->dataCreate(false, $transaction);
+            
+            if($toSheet->countRows() > 0) {
+                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+                // that can be used to update known entire
+                $toSheet->dataCreate(false, $transaction);
+            }
         } catch (\Throwable $e) {
             throw $e;
         }

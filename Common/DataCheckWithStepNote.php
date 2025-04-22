@@ -28,6 +28,7 @@ class DataCheckWithStepNote extends DataCheck
     private ?string $isValidAlias = null;
     private ?AbstractETLPrototype $step = null;
     private string $isInvalidValue = "false";
+    private bool $removeInvalidRows = false;
     private bool $stopOnCheckFailed;
 
     /**
@@ -61,8 +62,10 @@ class DataCheckWithStepNote extends DataCheck
         string $stepRunUid = ''): DataSheetInterface
     {
         $isValidAlias = $this->getIsValidAlias();
+        $removeInvalidRows = $this->getRemoveInvalidRows();
         $checkSheet = $sheet->copy();
         $errors = null;
+        $rowsToRemove = [];
         
         foreach ($sheet->getRows() as $rowNr => $row) {
             $checkSheet->removeRows();
@@ -71,13 +74,22 @@ class DataCheckWithStepNote extends DataCheck
             try {
                 parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
+
+                if($removeInvalidRows) {
+                    $rowsToRemove[] = $rowNr;
+                    $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
+                } else if(!empty($isValidAlias)) {
+                    $sheet->setCellValue($isValidAlias, $rowNr + 1, $this->getIsInvalidValue());
+                    $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
+                }
+                
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->appendError($e, $rowNr);
-                
-                if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr + 1, $this->getIsInvalidValue());
-                }
             }
+        }
+        
+        if(!empty($rowsToRemove)) {
+            $sheet->removeRows($rowsToRemove);
         }
         
         if($errors) {
@@ -163,6 +175,32 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         return $text;
+    }
+
+    /**
+     * If TRUE, rows that fail this data check will be removed from processing.
+     * 
+     * NOTE: This effectively overwrites flagging invalid data with `is_valid_alias`.
+     * 
+     * @uxon-property remove_invalid_rows
+     * @uxon-type boolean
+     * @uxon-template false
+     * 
+     * @param bool $value
+     * @return $this
+     */
+    public function setRemoveInvalidRows(bool $value) : DataCheckWithStepNote
+    {
+        $this->removeInvalidRows = $value;
+        return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getRemoveInvalidRows() : bool
+    {
+        return $this->removeInvalidRows;
     }
 
     /**
