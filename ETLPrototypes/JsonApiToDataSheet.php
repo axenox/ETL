@@ -156,8 +156,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
-
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
@@ -174,23 +174,48 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
 
-        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        $writer = $this->saveData(
+            $toSheet, 
+            $this->getCrudCounter(), 
+            $stepData,
+            $flowRunUid,
+            $stepRunUid, 
+            $this->isSkipInvalidRows());
+
+        $this->getCrudCounter()->stop();
+        
         yield from $writer;
         $toSheet = $writer->getReturn();
         
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 
-    protected function saveData(DataSheetInterface $toSheet, CrudCounter $curdCounter, ETLStepDataInterface $stepData, bool $rowByRow = false) : \Generator
+    /**
+     * @param DataSheetInterface   $toSheet
+     * @param CrudCounter          $crudCounter
+     * @param ETLStepDataInterface $stepData
+     * @param string               $flowRunUid
+     * @param string               $stepRunUid
+     * @param bool                 $rowByRow
+     * @return \Generator
+     * @throws \Throwable
+     */
+    protected function saveData(
+        DataSheetInterface $toSheet,
+        CrudCounter        $crudCounter, 
+        ETLStepDataInterface $stepData, 
+        string $flowRunUid,
+        string $stepRunUid,
+        bool $rowByRow = false) : \Generator
     {
-        $curdCounter->addObject($toSheet->getMetaObject());
+        $crudCounter->addObject($toSheet->getMetaObject());
         if ($rowByRow === true) {
             foreach ($toSheet->getRows() as $i => $row) {
                 $saveSheet = $toSheet->copy();
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
                 try {
-                    $writer = $this->saveData($saveSheet, $curdCounter, $stepData, false);
+                    $writer = $this->saveData($saveSheet, $crudCounter, $stepData, $flowRunUid, $stepRunUid, false);
                     foreach ($writer as $line) {
                         // Do nothing, just call the writer
                     }
@@ -226,7 +251,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $transaction->commit();
-        $curdCounter->stop();
 
         return $toSheet;
     }

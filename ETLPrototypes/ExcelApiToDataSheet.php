@@ -80,6 +80,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
+        $flowRunUid = $stepData->getFlowRunUid();
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
@@ -138,7 +139,14 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
 
-        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        $writer = $this->saveData(
+            $toSheet, 
+            $this->getCrudCounter(), 
+            $stepData,
+            $flowRunUid,
+            $stepRunUid,
+            $this->isSkipInvalidRows());
+        
         yield from $writer;
         $toSheet = $writer->getReturn();
         
