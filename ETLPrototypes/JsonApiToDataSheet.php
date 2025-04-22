@@ -156,14 +156,21 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
-
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
             $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid);
+            
+            if($fromSheet->countRows() === 0) {
+                $this->getCrudCounter()->stop();
+                yield 'All input rows removed by failed data checks.' . PHP_EOL;
+                return $result->setProcessedRowsCounter(0);
+            }
         }
+        
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -174,23 +181,48 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
 
-        $writer = $this->saveData($toSheet, $this->getCrudCounter(), $stepData, $this->isSkipInvalidRows());
+        $writer = $this->saveData(
+            $toSheet, 
+            $this->getCrudCounter(), 
+            $stepData,
+            $flowRunUid,
+            $stepRunUid, 
+            $this->isSkipInvalidRows());
+
+        $this->getCrudCounter()->stop();
+        
         yield from $writer;
         $toSheet = $writer->getReturn();
         
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
 
-    protected function saveData(DataSheetInterface $toSheet, CrudCounter $curdCounter, ETLStepDataInterface $stepData, bool $rowByRow = false) : \Generator
+    /**
+     * @param DataSheetInterface   $toSheet
+     * @param CrudCounter          $crudCounter
+     * @param ETLStepDataInterface $stepData
+     * @param string               $flowRunUid
+     * @param string               $stepRunUid
+     * @param bool                 $rowByRow
+     * @return \Generator
+     * @throws \Throwable
+     */
+    protected function saveData(
+        DataSheetInterface $toSheet,
+        CrudCounter        $crudCounter, 
+        ETLStepDataInterface $stepData, 
+        string $flowRunUid,
+        string $stepRunUid,
+        bool $rowByRow = false) : \Generator
     {
-        $curdCounter->addObject($toSheet->getMetaObject());
+        $crudCounter->addObject($toSheet->getMetaObject());
         if ($rowByRow === true) {
             foreach ($toSheet->getRows() as $i => $row) {
                 $saveSheet = $toSheet->copy();
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
                 try {
-                    $writer = $this->saveData($saveSheet, $curdCounter, $stepData, false);
+                    $writer = $this->saveData($saveSheet, $crudCounter, $stepData, $flowRunUid, $stepRunUid, false);
                     foreach ($writer as $line) {
                         // Do nothing, just call the writer
                     }
@@ -218,15 +250,17 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid);
             }
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $toSheet->dataCreate(false, $transaction);
+            
+            if($toSheet->countRows() > 0) {
+                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+                // that can be used to update known entire
+                $toSheet->dataCreate(false, $transaction);
+            }
         } catch (\Throwable $e) {
             throw $e;
         }
 
         $transaction->commit();
-        $curdCounter->stop();
 
         return $toSheet;
     }
