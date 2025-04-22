@@ -20,6 +20,7 @@ use cebe\openapi\ReferenceContext;
 use exface\Core\Exceptions\Facades\HttpBadRequestError;
 use League\OpenAPIValidation\Schema\Exception\SchemaMismatch;
 use GuzzleHttp\Exception\BadResponseException;
+use Throwable;
 
 /**
  * This middleware adds request and response validation to facades implementing OpenApiFacadeInterface
@@ -98,6 +99,8 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
                                 ];
                                 $eDetails = new JsonSchemaValidationError($errors, 'Invalid request body', null, null, $json);
                                 throw new HttpBadRequestError($request, $e2->getMessage(), null, $eDetails);
+                            } catch (Throwable $e) {
+                                throw $prev;
                             }
                         }
 
