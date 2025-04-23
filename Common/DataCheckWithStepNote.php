@@ -74,17 +74,22 @@ class DataCheckWithStepNote extends DataCheck
             try {
                 parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
-
+                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check "' . $this->__toString() . '".';
+                
                 if($removeInvalidRows) {
                     $rowsToRemove[] = $rowNr;
+                    $logBook->addLine($logLine . ' REMOVED matching lines from processing.');
                     $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
                 } else if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr + 1, $this->getIsInvalidValue());
+                    $sheet->setCellValue($isValidAlias, $rowNr, $this->getIsInvalidValue());
+                    $logBook->addLine($logLine . ' Marked matching lines as INVALID.');
                     $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
+                } else {
+                    $logBook->addLine($logLine);
                 }
                 
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
-                $errors->appendError($e, $rowNr);
+                $errors->appendError($e, $rowNr + 1);
             }
         }
         
