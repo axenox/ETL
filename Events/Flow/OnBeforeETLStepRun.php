@@ -2,12 +2,11 @@
 namespace axenox\ETL\Events\Flow;
 
 use exface\Core\Events\AbstractEvent;
-use exface\Core\Interfaces\Contexts\ContextInterface;
 use axenox\ETL\Interfaces\ETLStepInterface;
-use exface\Core\Interfaces\WidgetInterface;
+use exface\Core\Interfaces\Debug\LogBookInterface;
 
 /**
- * Event triggered when a context was initialized within a context scope.
+ * Event triggered whenever a step run is about to be started.
  *
  * @event axenox.ETL.Flow.OnBeforeETLStepRun
  *
@@ -16,13 +15,18 @@ use exface\Core\Interfaces\WidgetInterface;
  */
 class OnBeforeETLStepRun extends AbstractEvent
 {
-    private $step = null;
+    private ?ETLStepInterface $step = null;
     
-    private $debugWidget = null;
-    
-    public function __construct(ETLStepInterface $step)
+    private ?LogBookInterface $logBook = null;
+
+    /**
+     * @param ETLStepInterface      $step
+     * @param LogBookInterface|null $logBook
+     */
+    public function __construct(ETLStepInterface $step, LogBookInterface $logBook = null)
     {
         $this->step = $step;
+        $this->logBook = $logBook;
     }
     
     /**
@@ -51,5 +55,13 @@ class OnBeforeETLStepRun extends AbstractEvent
     public function getStep(): ETLStepInterface
     {
         return $this->step;
+    }
+
+    /**
+     * @return LogBookInterface|null
+     */
+    public function getLogBook() : ?LogBookInterface
+    {
+        return $this->logBook;
     }
 }

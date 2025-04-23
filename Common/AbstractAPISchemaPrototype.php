@@ -105,19 +105,6 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
         }
         return $dataSheet;
     }
-    
-    /**
-     * 
-     * {@inheritDoc}
-     * @see \exface\Core\Interfaces\iCanGenerateDebugWidgets::createDebugWidget()
-     */
-    public function createDebugWidget(DebugMessage $debug_widget)
-    {
-        if ($this->toSheet !== null) {
-            $debug_widget = $this->toSheet->createDebugWidget($debug_widget);
-        }
-        return $debug_widget;
-    }
 
     /**
      * Customize the data sheet used in this step by adding custom columns, specifying filters, etc.

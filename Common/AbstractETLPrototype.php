@@ -3,8 +3,10 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\iCanGenerateDebugWidgets;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -12,6 +14,7 @@ use axenox\ETL\Interfaces\ETLStepInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
+use exface\Core\Widgets\DebugMessage;
 
 abstract class AbstractETLPrototype implements ETLStepInterface
 {
@@ -48,6 +51,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?UxonObject $toDataChecksUxon = null;
     private ?UxonObject $fromDataChecksUxon = null;
     private CrudCounter $crudCounter;
+    private array $logBooks = [];
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -285,17 +289,23 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param UxonObject|null    $uxon
      * @param string             $flowRunUid
      * @param string             $stepRunUid
+     * @param FlowStepLogBook    $logBook
      * @return void
      */
     protected function performDataChecks(
         DataSheetInterface $dataSheet, 
         ?UxonObject $uxon,
         string $flowRunUid,
-        string $stepRunUid) : void
+        string $stepRunUid,
+        FlowStepLogBook $logBook) : void
     {
         if($uxon === null) {
+            $logBook->addLine('No checks to perform.');
             return;
         }
+        
+        $logBook->addLine('Performing data checks.');
+        $logBook->addIndent(1);
         
         $errors = null;
         $stopOnError = false;
@@ -313,7 +323,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, null, $flowRunUid, $stepRunUid);
+                $check->check($dataSheet, $logBook, $flowRunUid, $stepRunUid);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
@@ -321,8 +331,11 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $stopOnError |= $check->getStopOnCheckFailed();
             }
         }
-        
-        if($errors !== null && $stopOnError) {
+
+        $logBook->addIndent(-1);
+        if($errors === null) {
+            $logBook->addLine('Checked data PASSED all data checks.');
+        } else if ($stopOnError) {
             throw $errors;
         }
     }
@@ -388,5 +401,36 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     public function getCrudCounter() : CrudCounter
     {
         return $this->crudCounter;
+    }
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @return FlowStepLogBook
+     */
+    protected function getLogBook(ETLStepDataInterface $stepData) : FlowStepLogBook
+    {
+        foreach ($this->logBooks as $logBook) {
+            if($logBook->getStepData() === $stepData) {
+                return $logBook;
+            }
+        }
+        
+        $logBook = new FlowStepLogBook('Step: "' . $this->getName() . '"', $this, $stepData);
+        $this->logBooks[] = $logBook;
+        
+        return $logBook;
+    }
+
+    /**
+     * @inheritdoc 
+     * @see iCanGenerateDebugWidgets::createDebugWidget()
+     */
+    public function createDebugWidget(DebugMessage $debug_widget) : DebugMessage
+    {
+        if(empty($this->logBooks)) {
+            return $debug_widget;
+        }
+        
+        return $this->logBooks[0]->createDebugWidget($debug_widget);
     }
 }
