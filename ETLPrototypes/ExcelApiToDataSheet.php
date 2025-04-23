@@ -84,6 +84,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
+        $logBook = $this->getLogBook($stepData);
 
         // Read the upload info (in particular the UID) into a data sheet
         $fileData = $this->getUploadData($stepData);
@@ -145,6 +146,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $stepData,
             $flowRunUid,
             $stepRunUid,
+            $logBook,
             $this->isSkipInvalidRows());
         
         yield from $writer;
