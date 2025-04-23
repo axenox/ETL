@@ -148,6 +148,7 @@ class StepGroup implements DataFlowStepInterface
                         . ' on line ' . $el->getLine();
                     }
                     if ($this->getStopFlowOnError($step)) {
+                        NoteTaker::commitPendingNotesAll();
                         throw $e;
                     } else {
                         yield PHP_EOL . '✗ ERROR: ' . $e->getMessage();
@@ -160,6 +161,7 @@ class StepGroup implements DataFlowStepInterface
             $prevStepResult = $stepResult;
         }
         
+        NoteTaker::commitPendingNotesAll();
         return $result;
     }
     
