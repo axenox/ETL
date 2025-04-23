@@ -425,7 +425,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @inheritdoc 
      * @see iCanGenerateDebugWidgets::createDebugWidget()
      */
-    public function createDebugWidget(DebugMessage $debug_widget) : DebugMessage
+    public function createDebugWidget(DebugMessage $debug_widget)
     {
         if(empty($this->logBooks)) {
             return $debug_widget;
