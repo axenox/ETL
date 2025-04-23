@@ -76,9 +76,10 @@ interface NoteTakerInterface
     /**
      * Commits all pending notes, across all `NoteTaker` instances, to their respective data sources.
      * 
-     * NOTE: Pending notes are automatically committed on `__destruct()`. You only need to use this function,
-     * if you have timing restrictions. Each commit, be it manual or automatic, clears the pending notes cache, which 
-     * means repeated commits do not cause unnecessary work.
+     * NOTE: It is recommended you manually commit pending notes, by calling this function to ensure
+     * timing. While pending notes are automatically committed on `__destruct()`, mechanisms like `TimeStampingBehavior`
+     * might not function as expected. Each commit, be it manual or automatic, clears the pending notes cache, which 
+     * means repeated commits are allowed and don't cause any issues.
      * 
      * @return void
      */
