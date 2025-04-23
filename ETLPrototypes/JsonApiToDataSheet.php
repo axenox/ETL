@@ -4,8 +4,10 @@ namespace axenox\ETL\ETLPrototypes;
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
@@ -129,18 +131,23 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     	$placeholders = $this->getPlaceholders($stepData);
     	$result = new UxonEtlStepResult($stepRunUid);
         $task = $stepData->getTask();
+        $logBook = $this->getLogBook($stepData);
 
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
         }
         
-        $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this));
+        $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
 
         $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
         $requestBody = $requestLogData['http_body'];
 
         if ($requestLogData['http_content_type'] !== 'application/json' || $requestBody === null) {
-            yield 'No HTTP content found to process' . PHP_EOL;
+            $logBook->addLine($msg = 'No HTTP content found to process');
+            
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            
+            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
 
@@ -157,42 +164,57 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
-
+        
+        $logBook->addLine('Extracted JSON data to "From-Sheet".');
+        $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
+        
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
-            $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid);
+            $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
             
             if($fromSheet->countRows() === 0) {
                 $this->getCrudCounter()->stop();
-                yield 'All input rows removed by failed data checks.' . PHP_EOL;
+                $logBook->addLine($msg = 'All input rows removed by failed data checks.');
+
+                $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+                
+                yield $msg . PHP_EOL;
                 return $result->setProcessedRowsCounter(0);
             }
         }
         
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet, false);
+        $toSheet = $mapper->map($fromSheet, false, $logBook);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
+        $logBook->addLine('Mapped "From-Sheet" according to schema "' . get_class($toObjectSchema) . '" resulting in "To-Sheet".');
+        $logBook->addDataSheet('To-Sheet', $toSheet);
+        
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
         // $toSheet = $this->removeRelationColumns($toSheet);
 
-        yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
-
+        $msg = 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
+        $logBook->addLine($msg);
+        yield $msg;
+        
         $writer = $this->saveData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $flowRunUid,
             $stepRunUid, 
+            $logBook,
             $this->isSkipInvalidRows());
 
         $this->getCrudCounter()->stop();
         
         yield from $writer;
         $toSheet = $writer->getReturn();
+
+        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($toSheet->countRows());
     }
@@ -203,6 +225,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param ETLStepDataInterface $stepData
      * @param string               $flowRunUid
      * @param string               $stepRunUid
+     * @param FlowStepLogBook      $logBook
      * @param bool                 $rowByRow
      * @return \Generator
      * @throws \Throwable
@@ -213,6 +236,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         ETLStepDataInterface $stepData, 
         string $flowRunUid,
         string $stepRunUid,
+        FlowStepLogBook $logBook,
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
@@ -248,7 +272,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         try {
             // Perform 'to_data_checks'.
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid);
+                $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
             }
             
             if($toSheet->countRows() > 0) {
