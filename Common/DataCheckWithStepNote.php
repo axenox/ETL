@@ -5,6 +5,7 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use exface\Core\CommonLogic\DataSheets\DataCheck;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedError;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
@@ -19,6 +20,11 @@ use exface\Core\Interfaces\WorkbenchInterface;
  * - If you set a value for `is_valid_alias` and a check is failed, the offending row will be marked as invalid
  * in the input sheet. This enables you to separate the bad data in future processing steps.
  * 
+ * ## Placeholders
+ * 
+ * - You can use common placeholders (i.e. `[#ATTRIBUTE_ALIAS#]`) that will be rendered with the appropriate cell value.
+ * - Placeholders are available within the following properties: `error_text`, `conditions`.
+ * 
  * IMPORTANT: If an item MATCHES the condition of a check, it is considered to have FAILED the check. 
  */
 class DataCheckWithStepNote extends DataCheck
@@ -27,9 +33,10 @@ class DataCheckWithStepNote extends DataCheck
     
     private ?string $isValidAlias = null;
     private ?AbstractETLPrototype $step = null;
-    private string $isInvalidValue = "false";
+    private mixed $isInvalidValue = false;
     private bool $removeInvalidRows = false;
     private bool $stopOnCheckFailed;
+    private array $placeHolders;
 
     /**
      * @param WorkbenchInterface        $workbench
@@ -46,6 +53,7 @@ class DataCheckWithStepNote extends DataCheck
     {
         parent::__construct($workbench, $uxon, $onlyForObject);
         $this->step = $step;
+        $this->placeHolders = StringDataType::findPlaceholders($uxon->toJson());
     }
 
     /**
@@ -61,8 +69,17 @@ class DataCheckWithStepNote extends DataCheck
         string $flowRunUid = '', 
         string $stepRunUid = ''): DataSheetInterface
     {
-        $isValidAlias = $this->getIsValidAlias();
         $removeInvalidRows = $this->getRemoveInvalidRows();
+        
+        $isInValidValue = $this->getIsInvalidValue();
+        $isValidAlias = $this->getIsValidAlias();
+        
+        if($sheet->getMetaObject()->hasAttribute($isValidAlias)) {
+            $isInValidValue = $sheet->getMetaObject()->getAttribute($isValidAlias)->getDataType()->format($isInValidValue);
+        } else if (is_bool($isInValidValue)) {
+            $isInValidValue = $isInValidValue ? 1 : 0;
+        }
+        
         $checkSheet = $sheet->copy();
         $errors = null;
         $rowsToRemove = [];
@@ -71,19 +88,33 @@ class DataCheckWithStepNote extends DataCheck
             $checkSheet->removeRows();
             $checkSheet->addRow($row);
 
+            // Rendering placeholders.
+            if(!empty($this->placeHolders)) {
+                $placeHoldersToValues = [];
+                foreach ($this->placeHolders as $placeHolder) {
+                    $placeHoldersToValues[$placeHolder] = $row[$placeHolder];
+                }
+
+                $conditionJson = $this->getConditionGroupUxon()->toJson();
+                $conditionJson = StringDataType::replacePlaceholders($conditionJson, $placeHoldersToValues);
+                $conditionUxon = UxonObject::fromJson($conditionJson)->getProperty('conditions');
+                $this->setConditions($conditionUxon);
+            }
+            
             try {
                 parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
                 $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check "' . $this->__toString() . '".';
+                $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
                 if($removeInvalidRows) {
                     $rowsToRemove[] = $rowNr;
                     $logBook->addLine($logLine . ' REMOVED matching lines from processing.');
-                    $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
+                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
                 } else if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr, $this->getIsInvalidValue());
+                    $sheet->setCellValue($isValidAlias, $rowNr, $isInValidValue);
                     $logBook->addLine($logLine . ' Marked matching lines as INVALID.');
-                    $e = new DataCheckFailedError($e->getDataSheet(), $e->getMessage() . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
+                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
                 } else {
                     $logBook->addLine($logLine);
                 }
@@ -154,16 +185,16 @@ class DataCheckWithStepNote extends DataCheck
      * @param string $value
      * @return $this
      */
-    public function setIsInvalidValue(string $value) : DataCheckWithStepNote
+    public function setIsInvalidValue(mixed $value) : DataCheckWithStepNote
     {
         $this->isInvalidValue = $value;
         return $this;
     }
 
     /**
-     * @return string
+     * @return mixed
      */
-    public function getIsInvalidValue() : string
+    public function getIsInvalidValue() : mixed
     {
         return $this->isInvalidValue;
     }
