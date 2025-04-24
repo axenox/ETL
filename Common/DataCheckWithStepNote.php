@@ -74,10 +74,12 @@ class DataCheckWithStepNote extends DataCheck
         $isInValidValue = $this->getIsInvalidValue();
         $isValidAlias = $this->getIsValidAlias();
         
-        if($sheet->getMetaObject()->hasAttribute($isValidAlias)) {
-            $isInValidValue = $sheet->getMetaObject()->getAttribute($isValidAlias)->getDataType()->format($isInValidValue);
-        } else if (is_bool($isInValidValue)) {
-            $isInValidValue = $isInValidValue ? 1 : 0;
+        if(!empty($isValidAlias)) {
+            if($sheet->getMetaObject()->hasAttribute($isValidAlias)) {
+                $isInValidValue = $sheet->getMetaObject()->getAttribute($isValidAlias)->getDataType()->format($isInValidValue);
+            } else if (is_bool($isInValidValue)) {
+                $isInValidValue = $isInValidValue ? 1 : 0;
+            }
         }
         
         $checkSheet = $sheet->copy();

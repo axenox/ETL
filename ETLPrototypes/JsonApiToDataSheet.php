@@ -246,7 +246,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
                 try {
-                    $writer = $this->saveData($saveSheet, $crudCounter, $stepData, $flowRunUid, $stepRunUid, false);
+                    $writer = $this->saveData(
+                        $saveSheet, 
+                        $crudCounter, 
+                        $stepData, 
+                        $flowRunUid, 
+                        $stepRunUid,
+                        $logBook,
+                        false);
+                    
                     foreach ($writer as $line) {
                         // Do nothing, just call the writer
                     }
