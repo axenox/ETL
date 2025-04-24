@@ -11,6 +11,7 @@ use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
+use Throwable;
 
 /**
  * Each note consists of a user-friendly message and a logging level. Beyond that it collects aggregation data 
@@ -42,17 +43,17 @@ class StepNote implements NoteInterface
     private ?int $countWarnings = null;
 
     /**
-     * @param WorkbenchInterface      $workbench
-     * @param string                  $flowRunUid
-     * @param string                  $stepRunUid
-     * @param ExceptionInterface|null $exception
-     * @param UxonObject|null         $uxon
+     * @param WorkbenchInterface $workbench
+     * @param string             $flowRunUid
+     * @param string             $stepRunUid
+     * @param Throwable|null    $exception
+     * @param UxonObject|null    $uxon
      */
     public function __construct(
         WorkbenchInterface $workbench, 
         string $flowRunUid, 
         string $stepRunUid,
-        ExceptionInterface $exception = null,
+        Throwable $exception = null,
         UxonObject $uxon = null
     )
     {
@@ -63,7 +64,10 @@ class StepNote implements NoteInterface
         
         if($this->exceptionFlag = $exception !== null) {
             $this->exceptionMessage = $exception->getMessage();
-            $this->exceptionLogId = $exception->getId();
+            
+            if($exception instanceof ExceptionInterface) {
+                $this->exceptionLogId = $exception->getId();
+            }
         }
         
         if($uxon !== null) {
