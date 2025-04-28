@@ -5,7 +5,9 @@ use exface\Core\Interfaces\Facades\FacadeInterface;
 use Flow\JSONPath\JSONPathException;
 use Psr\Http\Message\ServerRequestInterface;
 
-// TODO: turn into subclass of a new AbstractWebserviceType
+/**
+ * @deprecated use ApiSchemFacadeInterface instead
+ */
 interface OpenApiFacadeInterface extends FacadeInterface
 {
     /**

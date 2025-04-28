@@ -1,24 +1,18 @@
-IF OBJECT_ID('dbo.etl_sankey_webservices', 'V') IS NOT NULL
-    DROP VIEW dbo.etl_sankey_webservices;
-GO
+DROP VIEW IF EXISTS etl_sankey_webservices;
 
-IF OBJECT_ID('dbo.etl_flow_sankey', 'V') IS NOT NULL
-    DROP VIEW dbo.etl_flow_sankey;
-GO
-
-CREATE VIEW dbo.etl_flow_sankey AS
+CREATE OR REPLACE VIEW etl_flow_sankey AS
 SELECT
 	source_level,
 	target_level,
-	source_object_oid,
-	source_oid,
 	source_type,
 	source_name,
-	target_object_oid,
-	target_oid,
+	name,
 	target_type,
 	target_name,
-	name,
+	source_object_oid,
+	source_oid,
+	target_object_oid,
+	target_oid,
 	step_oid,
 	flow_oid
 FROM
@@ -46,6 +40,9 @@ FROM
 	    	LEFT JOIN exf_object fofo ON fofo.oid = fof.object_oid
 	    	LEFT JOIN exf_object foto ON foto.oid = fot.object_oid
     )
+    /* 
+	 Add connection for sending HTTP requests 
+	 */
     UNION ALL 
     (		    	
     	SELECT 
@@ -58,7 +55,9 @@ FROM
 		    0x11eeae4695964d78ae46025041000001 AS target_object_oid, -- UID of the object axenox.ETL.webservice_request
 		    wf.oid AS target_oid,
 		    'webservice_flow' AS target_type,
-		    CONCAT('Web route [', wf.route, ']') AS target_name,
+		    /* Names must be unique for every source_oid, so we need all information about the web service */
+		    /* The spaces make sure the chart can split long URLs in multiple lines*/
+		    CONCAT('Web service: /', ws.local_url, ' /', (CASE WHEN COALESCE(ws.version, '') != '' THEN CONCAT(ws.version, ' /') ELSE '' END), wf.route) AS target_name,
 		    'Send HTTP Response' AS name,
 		    NULL AS step_oid,
 		    fot.flow_oid AS flow_oid
@@ -74,6 +73,9 @@ FROM
 		    fot.level = (SELECT MAX(fo1.level) FROM etl_flow_objects fo1 WHERE fot.flow_oid = fo1.flow_oid) 		    
 			    
     )
+    /* 
+	 Add connections for "receiving an HTTP request" placing it into the request log 
+    */
     UNION ALL 
     (		    	
     	SELECT 
@@ -82,24 +84,61 @@ FROM
 		    0x11eeae4695964d78ae46025041000001 AS source_object_oid, -- UID of the object axenox.ETL.webservice_request
 		    wf.oid AS source_oid,
 		    'webservice_flow' AS source_type,
-		    CONCAT('Web route [', wf.route, ']') AS source_name,
+		    /* Names must be unique for every source_oid, so we need all information about the web service */
+		    /* The spaces make sure the chart can split long URLs in multiple lines*/
+		    CONCAT('Web service: /', ws.local_url, ' /', (CASE WHEN COALESCE(ws.version, '') != '' THEN CONCAT(ws.version, ' /') ELSE '' END), wf.route) AS source_name,
 		    s.from_object_oid AS target_object_oid,
 		    s.from_object_oid AS target_oid,
 		    'object' AS target_type,
-		    CONCAT(fofo.object_name, ' [', fofo.object_alias, ']') AS target_name,
+		    /* Need the name of the object axenox.ETL.webservice_request here for the sankey chart to work (it uses these names to connect piers) */
+			 CONCAT(fofo.object_name, ' [', fofo.object_alias, ']') AS target_name,
 		    'Recieve HTTP Request' AS name,
 		    NULL AS step_oid,
 		    fof.flow_oid AS flow_oid
 		FROM
-		    etl_step s
+		    (etl_step s
             INNER JOIN etl_webservice_flow wf ON wf.flow_oid = s.flow_oid
             INNER JOIN etl_webservice ws ON ws.oid = wf.webservice_oid
-		    	AND ws.flow_direction = 'IN'
+		    		AND ws.flow_direction = 'IN')
+		    INNER JOIN etl_flow_objects fof ON s.flow_oid = fof.flow_oid 
+		    	AND fof.object_oid = s.from_object_oid
+			 LEFT JOIN exf_object fofo ON fofo.oid = fof.object_oid
+		WHERE 
+		    fof.level = (SELECT MIN(fo1.level) FROM etl_flow_objects fo1 WHERE fof.flow_oid = fo1.flow_oid) 
+		    AND s.from_object_oid != 0x11ef97055df83b389705025041000001
+	    
+    )
+    /* 
+	 Add connections for "uploading a file" to the upload file log.
+    This is very similar to receiving web service requests.
+	 */
+    UNION ALL 
+    (		    	
+    	SELECT 
+		    fof.level - 1 AS source_level,
+		    fof.level AS target_level,
+		    0x11ef97055df83b389705025041000001 AS source_object_oid, -- UID of the object axenox.ETL.file_upload
+		    ff.oid AS source_oid,
+		    'upload_flow' AS source_type,
+		    CONCAT('File upload [', ff.name, ']') AS source_name,
+		    s.from_object_oid AS target_object_oid,
+		    s.from_object_oid AS target_oid,
+		    'object' AS target_type,
+		    /* Need the name of the object axenox.ETL.file_upload here for the sankey chart to work (it uses these names to connect piers) */
+		    CONCAT(fofo.object_name, ' [', fofo.object_alias, ']') AS target_name,
+		    'Upload file' AS name,
+		    NULL AS step_oid,
+		    fof.flow_oid AS flow_oid
+		FROM
+		    etl_step s
+            INNER JOIN etl_file_flow ff ON ff.flow_oid = s.flow_oid
 		    INNER JOIN etl_flow_objects fof ON s.flow_oid = fof.flow_oid 
 		    	AND fof.object_oid = s.from_object_oid
 			LEFT JOIN exf_object fofo ON fofo.oid = fof.object_oid
 		WHERE 
 		    fof.level = (SELECT MIN(fo1.level) FROM etl_flow_objects fo1 WHERE fof.flow_oid = fo1.flow_oid) 
+		    AND s.from_object_oid = 0x11ef97055df83b389705025041000001
 	    
     )
 ) sankeydata
+-- WHERE flow_oid IN (0x11ef97c581880b0497c5005056bef75d, 0x11efb6ece1e50d36b6ec005056bef75d)

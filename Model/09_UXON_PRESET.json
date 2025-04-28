@@ -349,7 +349,7 @@
         {
             "_EXPORT_SUMMARY": "OpenAPI 3.0.3 document",
             "CREATED_ON": "2023-12-18 08:54:15",
-            "MODIFIED_ON": "2023-12-18 08:58:05",
+            "MODIFIED_ON": "2025-04-10 12:45:20",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ee9c6fa41963409c6f025041000001",
@@ -495,53 +495,56 @@
             "THUMBNAIL": ""
         },
         {
-            "_EXPORT_SUMMARY": "OpenAPI 3.0.3 Import",
+            "_EXPORT_SUMMARY": "OpenAPI 3.0 Import",
             "CREATED_ON": "2024-05-22 15:16:33",
-            "MODIFIED_ON": "2024-05-22 15:16:33",
+            "MODIFIED_ON": "2025-04-10 13:02:33",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef927082f249d29270025041000001",
             "APP": "0x11ebbc50679eacdabc50025041000001",
-            "NAME": "OpenAPI 3.0.3 Import",
+            "NAME": "OpenAPI 3.0 Import",
             "DESCRIPTION": "Base template for an OpenAPI Import with a single route",
             "PROTOTYPE": "",
             "UXON": {
                 "openapi": "3.0.3",
                 "info": {
-                    "title": "Import",
-                    "description": "",
-                    "version": "1.0.0"
+                    "title": "// This will be the title in the OpenAPI UI",
+                    "description": [
+                        "// Multiline text delimited by `\n`",
+                        "// Describe your API here. Markdown is supported.",
+                        "",
+                        "Typical topics:",
+                        "",
+                        "- What is the API doing?",
+                        "- Who is it for?",
+                        "- What happens to duplicate data?"
+                    ]
                 },
                 "servers": [],
                 "tags": [
                     {
-                        "name": "Objekte",
-                        "description": "Übermittlung von allen Objekten zu OneLink."
+                        "name": "// Make a tag for every imported object - e.g \"Tasks\", \"Projects\", etc.",
+                        "description": ""
                     }
                 ],
                 "paths": {
                     "/import": {
                         "post": {
                             "tags": [
-                                "Objekte"
+                                "// Give each route one or more tags for better visualization"
                             ],
-                            "description": "Route zum Upload von Objekt-Daten GIS zu OneLink.",
+                            "description": "// What data is the route going to import",
                             "parameters": [],
                             "requestBody": {
-                                "description": "Die zu importierenden Daten im Json format.",
+                                "description": "// Describe the the expected data: e.g. \"Array of task objects\" ",
                                 "required": true,
                                 "content": {
                                     "application/json": {
                                         "schema": {
-                                            "type": "object",
-                                            "properties": {
-                                                "Objekte": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "$ref": "#/components/schemas/Object"
-                                                    },
-                                                    "x-object-alias": "full.namespace.object"
-                                                }
+                                            "type": "array",
+                                            "x-object-alias": "my.App.MY_OBJECT",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Object"
                                             }
                                         }
                                     }
@@ -549,7 +552,10 @@
                             },
                             "responses": {
                                 "200": {
-                                    "description": "Die Daten wurden erfolgreich hochgeladen."
+                                    "description": "Data was received successfully"
+                                },
+                                "400": {
+                                    "description": "Error in sent data"
                                 }
                             }
                         }
@@ -559,15 +565,15 @@
                     "schemas": {
                         "Object": {
                             "type": "object",
-                            "x-object-alias": "full.namespace.object",
+                            "x-object-alias": "my.App.MY_OBJECT",
                             "properties": {
                                 "prop1": {
                                     "type": "integer",
-                                    "x-attribute-alias": "prop1alias"
+                                    "x-attribute-alias": "// the value of prop1 will go to this attribute"
                                 },
                                 "prop2": {
                                     "type": "string",
-                                    "x-attribute-alias": "prop2alias"
+                                    "x-attribute-alias": "// the value of prop2 will go to this attribute"
                                 }
                             }
                         }
@@ -579,37 +585,45 @@
             "THUMBNAIL": ""
         },
         {
-            "_EXPORT_SUMMARY": "OpenAPI 3.0.3 Export",
+            "_EXPORT_SUMMARY": "OpenAPI 3.0 Export",
             "CREATED_ON": "2024-05-22 15:21:54",
-            "MODIFIED_ON": "2024-09-09 16:59:13",
+            "MODIFIED_ON": "2025-04-10 13:33:10",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef85f541f8fa8885f5025041000001",
             "APP": "0x11ebbc50679eacdabc50025041000001",
-            "NAME": "OpenAPI 3.0.3 Export",
+            "NAME": "OpenAPI 3.0 Export",
             "DESCRIPTION": "Base template for an OpenAPI Export with a single route",
             "PROTOTYPE": "",
             "UXON": {
                 "openapi": "3.0.3",
                 "info": {
-                    "title": "",
-                    "description": "",
-                    "version": "1.0.0"
+                    "title": "// This will be the title in the OpenAPI UI",
+                    "description": [
+                        "// Multiline text delimited by `\n`",
+                        "// Describe your API here. Markdown is supported.",
+                        "",
+                        "Typical topics:",
+                        "",
+                        "- What is the API doing?",
+                        "- Who is it for?",
+                        "- What happens to duplicate data?"
+                    ]
                 },
                 "servers": [],
                 "tags": [
                     {
-                        "name": "Data",
-                        "description": "Export data"
+                        "name": "// Make a tag for every imported object - e.g \"Tasks\", \"Projects\", etc.",
+                        "description": ""
                     }
                 ],
                 "paths": {
                     "/object": {
                         "get": {
                             "tags": [
-                                "Daten"
+                                "// Give each route one or more tags for better visualization"
                             ],
-                            "description": "Liefert Daten aus Onelink.",
+                            "description": "// What data is the route going to import",
                             "parameters": [
                                 {
                                     "name": "limit",
@@ -624,7 +638,7 @@
                                 {
                                     "name": "offset",
                                     "in": "query",
-                                    "description": "Skip ",
+                                    "description": "Skip this number of rows when reading",
                                     "required": false,
                                     "schema": {
                                         "type": "integer",
@@ -634,7 +648,7 @@
                             ],
                             "responses": {
                                 "200": {
-                                    "description": "Successfull response",
+                                    "description": "Success",
                                     "content": {
                                         "application/json": {
                                             "schema": {
@@ -652,24 +666,25 @@
                                                         "page_limit": {
                                                             "type": "integer",
                                                             "nullable": true,
-                                                            "x-placeholder": "[#~parameter:limit#]"
+                                                            "x-placeholder": "[#~parameter:limit#]",
+                                                            "description": "The requested max. number of rows"
                                                         },
                                                         "page_offset": {
                                                             "type": "integer",
                                                             "nullable": true,
-                                                            "x-placeholder": "[#~parameter:offset#]"
+                                                            "x-placeholder": "[#~parameter:offset#]",
+                                                            "description": "Number of rows skipped when reading"
                                                         }
                                                     }
                                                 }
                                             },
                                             "examples": {
                                                 "standard": {
-                                                    "summary": "Antwort mit Daten"
+                                                    "summary": "Response with data"
                                                 },
                                                 "defaultResponse": {
-                                                    "summary": "Antwort ohne Daten",
+                                                    "summary": "Response if no data was found",
                                                     "value": {
-                                                        "tranchen": [],
                                                         "page_limit": null,
                                                         "page_offset": null
                                                     }
@@ -690,11 +705,18 @@
                             "properties": {
                                 "prop1": {
                                     "type": "integer",
-                                    "x-attribute-alias": ""
+                                    "x-attribute-alias": "// Export the value of this attribute as prop1"
                                 },
                                 "prop2": {
                                     "type": "string",
-                                    "x-attribute-alias": ""
+                                    "x-calculation": "// Export the result of a formula as prop2: e.g. =Lookup()"
+                                },
+                                "prop3": {
+                                    "type": "integer",
+                                    "x-custom-attribute": {
+                                        "alias": "// This property will create a temporary custom attribute when reading",
+                                        "data_address": "// Place SQL query here"
+                                    }
                                 }
                             }
                         }
