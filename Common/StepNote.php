@@ -46,21 +46,25 @@ class StepNote implements NoteInterface
      * @param WorkbenchInterface $workbench
      * @param string             $flowRunUid
      * @param string             $stepRunUid
-     * @param Throwable|null    $exception
-     * @param UxonObject|null    $uxon
+     * @param string             $message
+     * @param Throwable|null     $exception
+     * @param string|null        $logLevel
      */
     public function __construct(
-        WorkbenchInterface $workbench, 
+        WorkbenchInterface $workbench,
         string $flowRunUid, 
         string $stepRunUid,
+        string $message = "",
         Throwable $exception = null,
-        UxonObject $uxon = null
+        string $logLevel = null,
     )
     {
         $this->workbench = $workbench;
         $this->storageObject = MetaObjectFactory::createFromString($workbench,'axenox.ETL.step_note');
         $this->flowRunUid = $flowRunUid;
         $this->stepRunUid = $stepRunUid;
+        $this->message = $message;
+        $this->logLevel = $logLevel ?? ($exception ? 'error' : 'info');
         
         if($this->exceptionFlag = $exception !== null) {
             $this->exceptionMessage = $exception->getMessage();
@@ -69,10 +73,20 @@ class StepNote implements NoteInterface
                 $this->exceptionLogId = $exception->getId();
             }
         }
-        
-        if($uxon !== null) {
-            $this->importUxonObject($uxon);
-        }
+    }
+    
+    public static function FromUxon(
+        WorkbenchInterface $workbench,
+        string $flowRunUid,
+        string $stepRunUid,
+        UxonObject $uxon,
+        Throwable $exception = null,
+    ) : StepNote 
+    {
+        $note = new StepNote($workbench, $flowRunUid, $stepRunUid);
+        $note->setException($exception);
+        $note->importUxonObject($uxon);
+        return $note;
     }
 
     /**
@@ -195,7 +209,7 @@ class StepNote implements NoteInterface
      * @inheritdoc 
      * @see NoteInterface::setException()
      */
-    function setException(?ExceptionInterface $exception): void
+    function setException(?Throwable $exception): void
     {
         $this->exceptionFlag = (bool)$exception;
         $this->exceptionMessage = $exception?->getMessage();

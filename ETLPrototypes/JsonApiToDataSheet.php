@@ -2,6 +2,7 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
+use axenox\ETL\Common\NoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
@@ -260,14 +261,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     }
                 } catch (\Throwable $e) {
                     yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
-                    $note = new StepNote(
+                    NoteTaker::takeNote(new StepNote(
                         $this->getWorkbench(),
-                        $stepData->getFlowRunUid(),
-                        $stepData->getStepRunUid(),
+                        $flowRunUid,
+                        $stepRunUid,
+                        'Error on row ' . $i+1 . '.',
                         $e
-                    );
-                    $note->setMessage('Error on row ' . $i+1 . '. ' . $e->getMessage());
-                    $note->takeNote();
+                    ));
+                    
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                 }
                 //$saveSheet->removeRows();
