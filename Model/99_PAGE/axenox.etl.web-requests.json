@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2023-10-18 17:03:02",
     "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-    "modified_on": "2024-10-23 14:20:13",
+    "modified_on": "2025-04-22 14:31:44",
     "contents": {
         "widget_type": "SplitHorizontal",
         "object_alias": "axenox.ETL.webservice_request",
@@ -209,11 +209,12 @@
             },
             {
                 "width": "50%",
-                "caption": "Data flow log for selected request",
                 "widgets": [
                     {
                         "widget_type": "DataTable",
                         "object_alias": "axenox.ETL.step_run",
+                        "height": "50%",
+                        "caption": "Data flow log for selected request",
                         "filters": [
                             {
                                 "attribute_alias": "flow_run",
@@ -323,6 +324,13 @@
                             }
                         ],
                         "paginate": false
+                    },
+                    {
+                        "~snippet": "axenox.ETL.NotesForFlowRun",
+                        "parameters": {
+                            "FilterLink": "=request_table!flow_run",
+                            "Height": "50%"
+                        }
                     }
                 ]
             }
