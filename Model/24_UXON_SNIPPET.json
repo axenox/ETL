@@ -1,0 +1,240 @@
+{
+    "object_alias": "exface.Core.UXON_SNIPPET",
+    "columns": [
+        {
+            "name": "_EXPORT_SUMMARY",
+            "hidden": true,
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "CREATED_ON",
+            "attribute_alias": "CREATED_ON"
+        },
+        {
+            "name": "MODIFIED_ON",
+            "attribute_alias": "MODIFIED_ON"
+        },
+        {
+            "name": "CREATED_BY_USER",
+            "attribute_alias": "CREATED_BY_USER"
+        },
+        {
+            "name": "MODIFIED_BY_USER",
+            "attribute_alias": "MODIFIED_BY_USER"
+        },
+        {
+            "name": "UID",
+            "attribute_alias": "UID"
+        },
+        {
+            "name": "DESCRIPTION",
+            "attribute_alias": "DESCRIPTION"
+        },
+        {
+            "name": "APP",
+            "attribute_alias": "APP"
+        },
+        {
+            "name": "UXON_SCHEMA",
+            "attribute_alias": "UXON_SCHEMA"
+        },
+        {
+            "name": "NAME",
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "PROTOTYPE",
+            "attribute_alias": "PROTOTYPE"
+        },
+        {
+            "name": "UXON",
+            "attribute_alias": "UXON"
+        },
+        {
+            "name": "ALIAS",
+            "attribute_alias": "ALIAS"
+        },
+        {
+            "name": "OBJECT",
+            "attribute_alias": "OBJECT"
+        }
+    ],
+    "rows": [
+        {
+            "_EXPORT_SUMMARY": "Display Notes for Flow Run",
+            "CREATED_ON": "2025-04-22 13:42:38",
+            "MODIFIED_ON": "2025-04-28 17:52:23",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f0820ce42f5436820c45a72a6154cc",
+            "DESCRIPTION": "",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "UXON_SCHEMA": null,
+            "NAME": "Display Notes for Flow Run",
+            "PROTOTYPE": "exface/core/Uxon/Snippets/MultiWidgetSnippet.php",
+            "UXON": {
+                "parameters": [
+                    {
+                        "name": "FilterLink",
+                        "description": "Provide a widget link to filter for, like \"=request_table!flow_run\"",
+                        "required": true
+                    },
+                    {
+                        "name": "Height",
+                        "description": "Set the widget height.",
+                        "required": false
+                    }
+                ],
+                "widgets": [
+                    {
+                        "widget_type": "DataTable",
+                        "object_alias": "axenox.ETL.step_note",
+                        "height": "[#Height#]",
+                        "caption": "Notes",
+                        "filters": [
+                            {
+                                "attribute_alias": "flow_run",
+                                "hidden": true,
+                                "comparator": "==",
+                                "value": "[#FilterLink#]",
+                                "apply_on_change": true,
+                                "required": true
+                            },
+                            {
+                                "attribute_alias": "step_run__step__name"
+                            },
+                            {
+                                "attribute_alias": "step_run__status"
+                            },
+                            {
+                                "attribute_alias": "log_level"
+                            }
+                        ],
+                        "columns": [
+                            {
+                                "attribute_alias": "message"
+                            },
+                            {
+                                "attribute_alias": "log_level"
+                            },
+                            {
+                                "attribute_alias": "step_run__step__name"
+                            },
+                            {
+                                "attribute_alias": "step_run__status"
+                            },
+                            {
+                                "attribute_alias": "count_errors",
+                                "footer": "SUM"
+                            },
+                            {
+                                "calculation": "=Left(exception_message, 80)"
+                            },
+                            {
+                                "attribute_alias": "monitor_error__STATUS",
+                                "caption": "Err.Status",
+                                "hint": "Error status in monitor"
+                            },
+                            {
+                                "attribute_alias": "exception_log_id",
+                                "caption": "Log-ID"
+                            },
+                            {
+                                "attribute_alias": "count_warnings"
+                            },
+                            {
+                                "attribute_alias": "count_writes",
+                                "caption": "W",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_creates",
+                                "caption": "C",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_reads",
+                                "caption": "R",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_updates",
+                                "caption": "U",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_deletes",
+                                "caption": "D",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "exception_flag",
+                                "hidden": true
+                            },
+                            {
+                                "attribute_alias": "monitor_error__UID",
+                                "hidden": true
+                            },
+                            {
+                                "attribute_alias": "step_run__step",
+                                "hidden": true
+                            }
+                        ],
+                        "sorters": [
+                            {
+                                "attribute_alias": "step_run__flow_run_pos",
+                                "direction": "asc"
+                            }
+                        ],
+                        "buttons": [
+                            {
+                                "bind_to_double_click": true,
+                                "action": {
+                                    "alias": "axenox.ETL.ShowEtlStepRunDebugDialog",
+                                    "input_mapper": {
+                                        "from_object_alias": "axenox.ETL.step_note",
+                                        "to_object_alias": "axenox.ETL.step_run",
+                                        "column_to_column_mappings": [
+                                            {
+                                                "from": "step_run",
+                                                "to": "UID"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ],
+                        "paginate": false
+                    }
+                ]
+            },
+            "ALIAS": "NotesForFlowRun",
+            "OBJECT": "0x11f08c55d9b1d6d48c55025041000001"
+        }
+    ],
+    "totals_rows": [],
+    "filters": {
+        "operator": "AND",
+        "base_object_alias": "exface.Core.UXON_SNIPPET",
+        "conditions": [
+            {
+                "expression": "APP",
+                "comparator": "=",
+                "value": "0x11ebbc50679eacdabc50025041000001",
+                "object_alias": "exface.Core.UXON_SNIPPET"
+            }
+        ]
+    },
+    "rows_limit": null,
+    "rows_offset": 0,
+    "sorters": [
+        {
+            "attribute_alias": "CREATED_ON",
+            "direction": "ASC"
+        },
+        {
+            "attribute_alias": "UID",
+            "direction": "ASC"
+        }
+    ]
+}
