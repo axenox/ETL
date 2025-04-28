@@ -74,7 +74,17 @@ class StepNote implements NoteInterface
             }
         }
     }
-    
+
+    /**
+     * Create a new step note instance, using a UXON config.
+     * 
+     * @param WorkbenchInterface $workbench
+     * @param string             $flowRunUid
+     * @param string             $stepRunUid
+     * @param UxonObject         $uxon
+     * @param Throwable|null     $exception
+     * @return StepNote
+     */
     public static function FromUxon(
         WorkbenchInterface $workbench,
         string $flowRunUid,
