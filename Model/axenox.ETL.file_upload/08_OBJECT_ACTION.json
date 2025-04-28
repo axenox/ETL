@@ -210,6 +210,46 @@
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "USE_IN_OBJECT_BASKET_FLAG": 0,
             "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "Upload: FileUpload Show Notes",
+            "CREATED_ON": "2025-04-22 14:54:49",
+            "MODIFIED_ON": "2025-04-28 16:57:42",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f098b9fa09f95098b973ee9ba91084",
+            "OBJECT": "0x11ef97055df83b389705025041000001",
+            "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
+            "ALIAS": "FileUploadShowNotes",
+            "NAME": "FileUpload Show Notes",
+            "SHORT_DESCRIPTION": "",
+            "CONFIG_UXON": {
+                "input_object_alias": "axenox.ETL.file_upload",
+                "input_rows_min": 1,
+                "input_rows_max": 1,
+                "maximize": true,
+                "icon": "info-circle",
+                "name": "Notes",
+                "dialog": {
+                    "caption": "Notes",
+                    "widgets": [
+                        {
+                            "attribute_alias": "flow_run__UID",
+                            "id": "run",
+                            "hidden": true
+                        },
+                        {
+                            "~snippet": "axenox.ETL.NotesForFlowRun",
+                            "parameters": {
+                                "FilterLink": "=run"
+                            }
+                        }
+                    ]
+                }
+            },
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "USE_IN_OBJECT_BASKET_FLAG": 0,
+            "DOCS": ""
         }
     ],
     "totals_rows": [],
