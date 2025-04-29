@@ -166,14 +166,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
         
-        $logBook->addLine('Extracted JSON data to "From-Sheet".');
+        $logBook->addLine('Extracted JSON data to `From-Sheet`.');
         $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
         
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
-            $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
+            $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $flowRunUid, $stepRunUid, $logBook);
             
             if($fromSheet->countRows() === 0) {
                 $this->getCrudCounter()->stop();
@@ -186,20 +186,17 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
         }
         
+        $logBook->addSection('Data Mapping');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false, $logBook);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
-        $logBook->addLine('Mapped "From-Sheet" according to schema "' . get_class($toObjectSchema) . '" resulting in "To-Sheet".');
+        $logBook->addLine('Mapped `From-Sheet` according to schema "' . get_class($toObjectSchema) . '" resulting in `To-Sheet`.');
         $logBook->addDataSheet('To-Sheet', $toSheet);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
         // $toSheet = $this->removeRelationColumns($toSheet);
-
-        $msg = 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
-        $logBook->addLine($msg);
-        yield $msg;
         
         $writer = $this->saveData(
             $toSheet, 
@@ -241,6 +238,26 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
+
+        // Perform 'to_data_checks'.
+        if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+            $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $flowRunUid, $stepRunUid, $logBook);
+        }
+
+        $logBook->addSection('Saving Data');
+        $rowCount = $toSheet->countRows();
+        if($rowCount === 0) {
+            $msg = 'No rows left to import for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
+            $logBook->addLine($msg);
+            
+            yield $msg;
+            return $toSheet;
+        } else {
+            $msg = 'Importing ' . $rowCount . ' rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
+            $logBook->addLine($msg);
+            yield $msg;
+        }
+        
         if ($rowByRow === true) {
             foreach ($toSheet->getRows() as $i => $row) {
                 $saveSheet = $toSheet->copy();
@@ -273,22 +290,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 }
                 //$saveSheet->removeRows();
             }
+            
             return $toSheet;
         }
 
         $transaction = $this->getWorkbench()->data()->startTransaction();
 
         try {
-            // Perform 'to_data_checks'.
-            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
-            }
-            
-            if($toSheet->countRows() > 0) {
-                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-                // that can be used to update known entire
-                $toSheet->dataCreate(false, $transaction);
-            }
+            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+            // that can be used to update known entire
+            $toSheet->dataCreate(false, $transaction);
         } catch (\Throwable $e) {
             throw $e;
         }
