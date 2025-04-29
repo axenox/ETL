@@ -115,6 +115,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         $taskData->setCellValue('flow_run', 0, $flowRunUID);
         $taskData->dataUpdate(false);
         $this->taskData = $taskData;
+        $this->logData->merge($taskData);
     }
 
     /**
@@ -145,9 +146,16 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
             $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
             $logData->setCellValue('response_body', 0, $response->getBody()->__toString());
         }
-        $logData->dataUpdate(false);
-        $this->logData->merge($logData);
-        $this->finished = true;
+        try {
+            $this->finished = true;
+            $logData->dataUpdate(false);
+            $this->logData->merge($logData);
+        } catch (\Throwable $eUpdate) {
+            // Do not throw an error if the logging fails, just log it to the main log.
+            // The web service should still output the regular error result even if
+            // something went wrong when logging!
+            $this->facade->getWorkbench()->getLogger()->logException($eUpdate);
+        }
     }
 
     /**
