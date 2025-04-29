@@ -1,7 +1,5 @@
 -- UP
 
-DROP INDEX IF EXISTS IX_etl_step_run_step_success_invalidated ON etl_step_run;
-
 CREATE INDEX IX_etl_step_run_step_success_invalidated
 ON etl_step_run (
   step_oid,
@@ -13,4 +11,4 @@ ON etl_step_run (
 
 -- DOWN
 
-DROP INDEX IF EXISTS IX_etl_step_run_step_success_invalidated ON etl_step_run;
+DROP INDEX IX_etl_step_run_step_success_invalidated ON etl_step_run;
