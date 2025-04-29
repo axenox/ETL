@@ -45,12 +45,11 @@ trait ITakeStepNotesTrait
         if($this->noteOnSuccessUxon === null) {
             return null;
         }
-
-        return new StepNote(
+        
+        return StepNote::FromUxon(
             $this->getWorkbench(),
             $flowRunUid,
             $stepRunUid,
-            null,
             $this->noteOnSuccessUxon
         );
     }
@@ -74,26 +73,26 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_failure` UXON.
      *
-     * @param string             $flowRunUid
-     * @param string             $stepRunUid
-     * @param ExceptionInterface $exception
+     * @param string     $flowRunUid
+     * @param string     $stepRunUid
+     * @param \Throwable $exception
      * @return StepNote|null
      */
     public function getNoteOnFailure(
         string $flowRunUid,
         string $stepRunUid,
-        ExceptionInterface $exception) : ?StepNote
+        \Throwable $exception) : ?StepNote
     {
         if($this->noteOnFailureUxon === null) {
             return null;
         }
 
-        return new StepNote(
+        return StepNote::FromUxon(
             $this->getWorkbench(),
             $flowRunUid,
             $stepRunUid,
-            $exception,
-            $this->noteOnFailureUxon
+            $this->noteOnFailureUxon,
+            $exception
         );
     }
 }
