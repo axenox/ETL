@@ -214,9 +214,9 @@
         {
             "_EXPORT_SUMMARY": "Upload: FileUpload Show Notes",
             "CREATED_ON": "2025-04-22 14:54:49",
-            "MODIFIED_ON": "2025-04-28 16:57:42",
+            "MODIFIED_ON": "2025-04-29 13:42:56",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f098b9fa09f95098b973ee9ba91084",
             "OBJECT": "0x11ef97055df83b389705025041000001",
             "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
@@ -239,10 +239,91 @@
                             "hidden": true
                         },
                         {
-                            "~snippet": "axenox.ETL.NotesForFlowRun",
-                            "parameters": {
-                                "FilterLink": "=run"
-                            }
+                            "widget_type": "DataTable",
+                            "object_alias": "axenox.ETL.step_note",
+                            "caption": "Notes",
+                            "filters": [
+                                {
+                                    "attribute_alias": "flow_run",
+                                    "hidden": true,
+                                    "comparator": "==",
+                                    "value": "=run",
+                                    "apply_on_change": true,
+                                    "required": true
+                                },
+                                {
+                                    "attribute_alias": "step_run__step__name"
+                                },
+                                {
+                                    "attribute_alias": "step_run__status"
+                                },
+                                {
+                                    "attribute_alias": "log_level"
+                                }
+                            ],
+                            "columns": [
+                                {
+                                    "attribute_alias": "message"
+                                },
+                                {
+                                    "attribute_alias": "log_level"
+                                },
+                                {
+                                    "attribute_alias": "count_errors",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "exception_log_id",
+                                    "caption": "Log-ID"
+                                },
+                                {
+                                    "attribute_alias": "count_warnings"
+                                },
+                                {
+                                    "attribute_alias": "count_writes",
+                                    "caption": "W",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "count_creates",
+                                    "caption": "C",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "count_reads",
+                                    "caption": "R",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "count_updates",
+                                    "caption": "U",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "count_deletes",
+                                    "caption": "D",
+                                    "footer": "SUM"
+                                },
+                                {
+                                    "attribute_alias": "exception_flag",
+                                    "hidden": true
+                                },
+                                {
+                                    "attribute_alias": "monitor_error__UID",
+                                    "hidden": true
+                                },
+                                {
+                                    "attribute_alias": "step_run__step",
+                                    "hidden": true
+                                }
+                            ],
+                            "sorters": [
+                                {
+                                    "attribute_alias": "step_run__flow_run_pos",
+                                    "direction": "asc"
+                                }
+                            ],
+                            "paginate": false
                         }
                     ]
                 }
