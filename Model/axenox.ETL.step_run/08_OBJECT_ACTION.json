@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Step run: Debug details",
             "CREATED_ON": "2021-03-30 15:52:33",
-            "MODIFIED_ON": "2025-04-17 18:49:45",
+            "MODIFIED_ON": "2021-03-30 16:03:02",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eb82432d5c90588243025041000001",
@@ -79,18 +79,7 @@
             "CONFIG_UXON": {
                 "input_object_alias": "axenox.ETL.step_run",
                 "icon": "bug",
-                "uxon_attribute": "debug_widget",
-                "input_mappers": [
-                    {
-                        "from_object_alias": "axenox.ETL.step_note",
-                        "column_to_column_mappings": [
-                            {
-                                "from": "step_run",
-                                "to": "UID"
-                            }
-                        ]
-                    }
-                ]
+                "uxon_attribute": "debug_widget"
             },
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "USE_IN_OBJECT_BASKET_FLAG": 0,
@@ -99,7 +88,7 @@
         {
             "_EXPORT_SUMMARY": "Step run: Error details",
             "CREATED_ON": "2021-03-30 16:02:37",
-            "MODIFIED_ON": "2025-04-17 18:49:20",
+            "MODIFIED_ON": "2021-03-30 16:02:37",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ebb96f95b6c668b96f025041000001",
@@ -111,18 +100,7 @@
             "CONFIG_UXON": {
                 "input_object_alias": "axenox.ETL.step_run",
                 "icon": "exclamation-circle",
-                "uxon_attribute": "error_widget",
-                "input_mappers": [
-                    {
-                        "from_object_alias": "axenox.ETL.step_note",
-                        "column_to_column_mappings": [
-                            {
-                                "from": "step_run",
-                                "to": "UID"
-                            }
-                        ]
-                    }
-                ]
+                "uxon_attribute": "error_widget"
             },
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "USE_IN_OBJECT_BASKET_FLAG": 0,

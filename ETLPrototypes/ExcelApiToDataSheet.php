@@ -103,6 +103,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
 
         $toObject = $this->getToObject();
+        $this->getCrudCounter()->start([$toObject]);
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
@@ -301,6 +302,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Improve excel reading performance by skipping empty cells. This will also help avoid
         // getting completely empty rows, that cannot be used for imports anyway.
         $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
+        $this->getCrudCounter()->addObject($fakeObj);
 
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
