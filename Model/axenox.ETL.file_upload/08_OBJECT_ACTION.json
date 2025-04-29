@@ -212,16 +212,16 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Upload: FileUpload Show Notes",
+            "_EXPORT_SUMMARY": "Upload: Details",
             "CREATED_ON": "2025-04-22 14:54:49",
-            "MODIFIED_ON": "2025-04-29 13:42:56",
+            "MODIFIED_ON": "2025-04-29 14:14:42",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f098b9fa09f95098b973ee9ba91084",
             "OBJECT": "0x11ef97055df83b389705025041000001",
             "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
             "ALIAS": "FileUploadShowNotes",
-            "NAME": "FileUpload Show Notes",
+            "NAME": "Details",
             "SHORT_DESCRIPTION": "",
             "CONFIG_UXON": {
                 "input_object_alias": "axenox.ETL.file_upload",
@@ -234,21 +234,15 @@
                     "caption": "Notes",
                     "widgets": [
                         {
-                            "attribute_alias": "flow_run__UID",
-                            "id": "run",
-                            "hidden": true
-                        },
-                        {
                             "widget_type": "DataTable",
                             "object_alias": "axenox.ETL.step_note",
+                            "paginate": false,
                             "caption": "Notes",
                             "filters": [
                                 {
                                     "attribute_alias": "flow_run",
                                     "hidden": true,
                                     "comparator": "==",
-                                    "value": "=run",
-                                    "apply_on_change": true,
                                     "required": true
                                 },
                                 {
@@ -322,8 +316,7 @@
                                     "attribute_alias": "step_run__flow_run_pos",
                                     "direction": "asc"
                                 }
-                            ],
-                            "paginate": false
+                            ]
                         }
                     ]
                 }
