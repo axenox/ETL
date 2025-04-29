@@ -91,8 +91,8 @@ class DataCheckWithStepNote extends DataCheck
             $checkSheet->addRow($row);
 
             // Rendering placeholders.
+            $placeHoldersToValues = [];
             if(!empty($this->placeHolders)) {
-                $placeHoldersToValues = [];
                 foreach ($this->placeHolders as $placeHolder) {
                     $placeHoldersToValues[$placeHolder] = $row[$placeHolder];
                 }
