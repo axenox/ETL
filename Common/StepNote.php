@@ -7,6 +7,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -71,6 +72,20 @@ class StepNote implements NoteInterface
             
             if($exception instanceof ExceptionInterface) {
                 $this->exceptionLogId = $exception->getId();
+                if ($this->message === "") {
+                    switch (true) {
+                        /* TODO Create DataSheetValueExceptionInterface and implementi it
+                        * - DataSheetMissingRequiredValueError
+                        * - DataSheetInvalidValueError
+                        * - LATER in DataSheetDuplicatesError, which currently does not have any information about rows
+                        * other than in its message
+                        case $exception instanceof DataSheetValueExceptionInterface:
+                        case $exception instanceof DataSheetInvalidValueError:
+                            $this->message = $exception->getMessageWithoutRowNumbers();*/
+                        default:
+                            $this->message = $exception->getMessageModel($this->getWorkbench())->getTitle();
+                    }
+                }
             }
         }
     }
