@@ -287,6 +287,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface $dataSheet
      * @param UxonObject|null    $uxon
+     * @param string             $sectionTitle
      * @param string             $flowRunUid
      * @param string             $stepRunUid
      * @param FlowStepLogBook    $logBook
@@ -295,6 +296,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function performDataChecks(
         DataSheetInterface $dataSheet, 
         ?UxonObject $uxon,
+        string $sectionTitle,
         string $flowRunUid,
         string $stepRunUid,
         FlowStepLogBook $logBook) : void
@@ -304,7 +306,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             return;
         }
         
-        $logBook->addLine('Performing data checks.');
+        $logBook->addSection($sectionTitle);
         $logBook->addIndent(1);
         
         $errors = null;
@@ -332,10 +334,11 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
         }
 
-        $logBook->addIndent(-1);
         if($errors === null) {
-            $logBook->addLine('Checked data PASSED all data checks.');
+            $logBook->addLine('Data PASSED all checks.');
+            $logBook->addIndent(-1);
         } else if ($stopOnError) {
+            $logBook->addIndent(-1);
             throw $errors;
         }
     }
