@@ -85,6 +85,8 @@ class DataCheckWithStepNote extends DataCheck
         $checkSheet = $sheet->copy();
         $errors = null;
         $rowsToRemove = [];
+        $conditionString = $this->getConditionGroup($checkSheet->getMetaObject())->__toString();
+        $conditionJson = $this->getConditionGroupUxon()->toJson();
         
         foreach ($sheet->getRows() as $rowNr => $row) {
             $checkSheet->removeRows();
@@ -97,16 +99,24 @@ class DataCheckWithStepNote extends DataCheck
                     $placeHoldersToValues[$placeHolder] = $row[$placeHolder];
                 }
 
-                $conditionJson = $this->getConditionGroupUxon()->toJson();
-                $conditionJson = StringDataType::replacePlaceholders($conditionJson, $placeHoldersToValues);
-                $conditionUxon = UxonObject::fromJson($conditionJson)->getProperty('conditions');
+                $renderedJson = StringDataType::replacePlaceholders($conditionJson, $placeHoldersToValues);
+                $conditionUxon = UxonObject::fromJson($renderedJson)->getProperty('conditions');
                 $this->setConditions($conditionUxon);
             }
             
             try {
                 parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
-                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check "' . $this->__toString() . '".';
+                $placeHolderInfo = '';
+                if(!empty($placeHoldersToValues)) {
+                    $last = array_key_last($placeHoldersToValues);
+                    foreach ($placeHoldersToValues as $key => $value) {
+                        $placeHolderInfo .= '[#' . $key . '#]: ' . $value . ($key !== $last ? ', ' : '');
+                    }
+                    $placeHolderInfo = ' with placeholders `' . $placeHolderInfo . '`';
+                }
+                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '.';
+                
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
                 if($removeInvalidRows) {
