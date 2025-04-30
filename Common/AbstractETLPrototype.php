@@ -297,6 +297,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         DataSheetInterface $dataSheet, 
         ?UxonObject $uxon,
         string $sectionTitle,
+        // TODO replace these two with StepData
         string $flowRunUid,
         string $stepRunUid,
         FlowStepLogBook $logBook) : void
@@ -351,7 +352,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -363,6 +364,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
+     * IDEA move to a DataSheetStepTrait? to/from- DataChecks only make sense for data sheets, not for SQL steps.
      * @return UxonObject|null
      */
     public function getFromDataChecksUxon() : ?UxonObject
@@ -379,7 +381,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property to_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
