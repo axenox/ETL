@@ -20,6 +20,7 @@ class NoteTaker implements NoteTakerInterface
     protected static array $noteTakers = [];
     protected DataSheetInterface $pendingNotes;
     protected bool $hasPendingNotes = false;
+    protected int $currentOrderingId = 0;
 
     /**
      * @param MetaObjectInterface $storageObject
@@ -51,6 +52,7 @@ class NoteTaker implements NoteTakerInterface
         $this->pendingNotes->removeRows();
 
         $this->hasPendingNotes = false;
+        $this->currentOrderingId = 0;
     }
 
     /**
@@ -77,7 +79,10 @@ class NoteTaker implements NoteTakerInterface
      */
     public function addNote(NoteInterface $note) : void
     {
-        $this->pendingNotes->addRow($note->getNoteData());
+        $data = $note->getNoteData();
+        $data['ordering_id'] = $this->currentOrderingId++;
+        
+        $this->pendingNotes->addRow($data);
         $this->hasPendingNotes = true;
     }
 
