@@ -129,7 +129,7 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
-                    $this->logRunSuccess($step, $logRow, $flowRunUid, $stepRunUid, $log, $stepResult);
+                    $this->logRunSuccess($step, $logRow, $stepData, $log, $stepResult);
                 } catch (\Throwable $e) {
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
@@ -139,7 +139,7 @@ class StepGroup implements DataFlowStepInterface
                         $e = new InternalError($e->getMessage(), null, $e);
                     }
                     try {
-                        $this->logRunError($step, $logRow, $flowRunUid, $stepRunUid, $e, $log);
+                        $this->logRunError($step, $logRow, $stepData, $e, $log);
                     } catch (\Throwable $el) {
                         $this->getWorkbench()->getLogger()->logException($el);
                         yield PHP_EOL . $indent
@@ -291,9 +291,8 @@ class StepGroup implements DataFlowStepInterface
      *
      * @param DataFlowStepInterface       $step
      * @param array                       $row
-     * @param string                      $flowRunUid
-     * @param string                      $stepRunUid
-     * @param string $output
+     * @param ETLStepDataInterface        $stepData
+     * @param string                      $output
      * @param ETLStepResultInterface|null $result
      * @return DataSheetInterface
      * @throws \Exception
@@ -301,8 +300,7 @@ class StepGroup implements DataFlowStepInterface
     protected function logRunSuccess(
         DataFlowStepInterface $step, 
         array $row, 
-        string $flowRunUid,
-        string $stepRunUid,
+        ETLStepDataInterface $stepData,
         string $output,
         ETLStepResultInterface $result = null) : DataSheetInterface
     {
@@ -326,7 +324,7 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         if($step instanceof AbstractETLPrototype) {
-            $note = $step->getNoteOnSuccess($flowRunUid, $stepRunUid);
+            $note = $step->getNoteOnSuccess($stepData);
             if ($note !== null) {
                 $note->importCrudCounter($step->getCrudCounter());
                 $note->takeNote();
@@ -342,8 +340,7 @@ class StepGroup implements DataFlowStepInterface
      *
      * @param DataFlowStepInterface $step
      * @param array                 $row
-     * @param string                $flowRunUid
-     * @param string                $stepRunUid
+     * @param ETLStepDataInterface  $stepData
      * @param ExceptionInterface    $exception
      * @param string                $output
      * @return DataSheetInterface
@@ -351,9 +348,8 @@ class StepGroup implements DataFlowStepInterface
      */
     protected function logRunError(
         DataFlowStepInterface $step, 
-        array $row, 
-        string $flowRunUid,
-        string $stepRunUid,
+        array $row,
+        ETLStepDataInterface $stepData,
         ExceptionInterface $exception, 
         string $output = '') : DataSheetInterface
     {
@@ -373,7 +369,7 @@ class StepGroup implements DataFlowStepInterface
         }
         
         if($step instanceof AbstractETLPrototype) {
-            $note = $step->getNoteOnFailure($flowRunUid, $stepRunUid, $exception);
+            $note = $step->getNoteOnFailure($stepData, $exception);
             if($note !== null) {
                 $note->importCrudCounter($step->getCrudCounter());
                 $note->takeNote();

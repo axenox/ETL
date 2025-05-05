@@ -173,7 +173,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
-            $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $flowRunUid, $stepRunUid, $logBook);
+            $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $stepData, $logBook);
             
             if($fromSheet->countRows() === 0) {
                 $this->getCrudCounter()->stop();
@@ -202,8 +202,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $flowRunUid,
-            $stepRunUid, 
             $logBook,
             $this->isSkipInvalidRows());
 
@@ -221,8 +219,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param DataSheetInterface   $toSheet
      * @param CrudCounter          $crudCounter
      * @param ETLStepDataInterface $stepData
-     * @param string               $flowRunUid
-     * @param string               $stepRunUid
      * @param FlowStepLogBook      $logBook
      * @param bool                 $rowByRow
      * @return \Generator
@@ -232,8 +228,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         DataSheetInterface $toSheet,
         CrudCounter        $crudCounter, 
         ETLStepDataInterface $stepData, 
-        string $flowRunUid,
-        string $stepRunUid,
         FlowStepLogBook $logBook,
         bool $rowByRow = false) : \Generator
     {
@@ -241,7 +235,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         // Perform 'to_data_checks'.
         if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-            $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $flowRunUid, $stepRunUid, $logBook);
+            $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
         }
 
         $logBook->addSection('Saving Data');
@@ -268,8 +262,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $saveSheet, 
                         $crudCounter, 
                         $stepData, 
-                        $flowRunUid, 
-                        $stepRunUid,
                         $logBook,
                         false);
                     
@@ -280,8 +272,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
                     NoteTaker::takeNote(new StepNote(
                         $this->getWorkbench(),
-                        $flowRunUid,
-                        $stepRunUid,
+                        $stepData,
                         'Error on row ' . $i+1 . '.',
                         $e
                     ));
