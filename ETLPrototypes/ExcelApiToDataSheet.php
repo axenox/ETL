@@ -145,8 +145,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $flowRunUid,
-            $stepRunUid,
             $logBook,
             $this->isSkipInvalidRows());
         

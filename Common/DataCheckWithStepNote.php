@@ -3,6 +3,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\DataSheets\DataCheck;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\StringDataType;
@@ -57,17 +58,16 @@ class DataCheckWithStepNote extends DataCheck
     }
 
     /**
-     * @param DataSheetInterface    $sheet
-     * @param LogBookInterface|null $logBook
-     * @param string                $flowRunUid
-     * @param string                $stepRunUid
+     * @param DataSheetInterface        $sheet
+     * @param LogBookInterface|null     $logBook
+     * @param ETLStepDataInterface|null $stepData
      * @return DataSheetInterface
      */
     public function check(
         DataSheetInterface $sheet, 
-        LogBookInterface $logBook = null, 
-        string $flowRunUid = '', 
-        string $stepRunUid = ''): DataSheetInterface
+        LogBookInterface $logBook = null,
+        ETLStepDataInterface $stepData = null
+    ): DataSheetInterface
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
         
@@ -141,15 +141,16 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         if($errors) {
-            if($noteOnFailure = $this->getNoteOnFailure($flowRunUid, $stepRunUid, $errors)) {
+            if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
                 $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
+                $noteOnFailure->setCountErrors(count($errors->getAllErrors()));
                 $noteOnFailure->takeNote();
             }
             
             throw $errors;
         } 
         
-        if($noteOnSuccess = $this->getNoteOnSuccess($flowRunUid, $stepRunUid)) {
+        if($noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
             $noteOnSuccess->importCrudCounter($this->getStep()?->getCrudCounter());
             $noteOnSuccess->takeNote();
         }

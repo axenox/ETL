@@ -285,21 +285,18 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * TRUE, the step will be terminated, if at least one row failed at least one data check. In either case, all
      * checks will be performed first.
      *
-     * @param DataSheetInterface $dataSheet
-     * @param UxonObject|null    $uxon
-     * @param string             $sectionTitle
-     * @param string             $flowRunUid
-     * @param string             $stepRunUid
-     * @param FlowStepLogBook    $logBook
+     * @param DataSheetInterface   $dataSheet
+     * @param UxonObject|null      $uxon
+     * @param string               $sectionTitle
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
      * @return void
      */
     protected function performDataChecks(
         DataSheetInterface $dataSheet, 
         ?UxonObject $uxon,
         string $sectionTitle,
-        // TODO replace these two with StepData
-        string $flowRunUid,
-        string $stepRunUid,
+        ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook) : void
     {
         if($uxon === null) {
@@ -326,7 +323,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, $logBook, $flowRunUid, $stepRunUid);
+                $check->check($dataSheet, $logBook, $stepData);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
