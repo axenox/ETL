@@ -25,6 +25,7 @@ use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use exface\Core\CommonLogic\DataSheets\DataColumn;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
@@ -108,7 +109,7 @@ use exface\Core\Interfaces\Log\LoggerInterface;
  * 
  * ```
  *
- * @author Andrej Kabachnik, Miriam Seitz
+ * @author Andrej Kabachnik, Georg Bieger
  */
 class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 {
@@ -116,7 +117,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
     private $additionalColumns = null;
     private $schemaName = null;
-    private $mapperUxon = null;
+    private $propertiesMapperUxon = null;
+    private $outputMapperUxon = null;
     private $skipInvalidRows = false;
 
     /**
@@ -127,10 +129,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $flowRunUid = $stepData->getFlowRunUid();
-    	$stepRunUid = $stepData->getStepRunUid();
-    	$placeholders = $this->getPlaceholders($stepData);
-    	$result = new UxonEtlStepResult($stepRunUid);
+        $placeholders = $this->getPlaceholders($stepData);
+    	$result = new UxonEtlStepResult($stepData->getStepRunUid());
         $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
 
@@ -198,21 +198,28 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // TODO remove this?
         // $toSheet = $this->removeRelationColumns($toSheet);
         
-        $writer = $this->saveData(
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
+        $logBook->addLine($msg);
+        yield $msg;
+        
+        $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook,
-            $this->isSkipInvalidRows());
-
-        $this->getCrudCounter()->stop();
+            $this->isSkipInvalidRows()
+        );
         
         yield from $writer;
-        $toSheet = $writer->getReturn();
+        $resultSheet = $writer->getReturn();
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        $logBook->addDataSheet('Saved sheet', $resultSheet);
+
+        $this->getCrudCounter()->stop();
 
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
     /**
@@ -224,7 +231,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @return \Generator
      * @throws \Throwable
      */
-    protected function saveData(
+    protected function writeData(
         DataSheetInterface $toSheet,
         CrudCounter        $crudCounter, 
         ETLStepDataInterface $stepData, 
@@ -232,43 +239,39 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
+        $resultSheet = null;
 
-        // Perform 'to_data_checks'.
-        if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-            $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
-        }
-
-        $logBook->addSection('Saving Data');
-        $rowCount = $toSheet->countRows();
-        if($rowCount === 0) {
-            $msg = 'No rows left to import for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
-            $logBook->addLine($msg);
-            
-            yield $msg;
-            return $toSheet;
-        } else {
-            $msg = 'Importing ' . $rowCount . ' rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
-            $logBook->addLine($msg);
-            yield $msg;
-        }
-        
         if ($rowByRow === true) {
+            $saveSheet = $toSheet;
+            $resultSheet = null;
             foreach ($toSheet->getRows() as $i => $row) {
-                $saveSheet = $toSheet->copy();
+                $saveSheet = $saveSheet->copy();
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
                 try {
-                    $writer = $this->saveData(
+                    $writer = $this->writeData(
                         $saveSheet, 
                         $crudCounter, 
                         $stepData, 
                         $logBook,
-                        false);
-                    
+                        false
+                    );
+                    // Write the line
                     foreach ($writer as $line) {
                         // Do nothing, just call the writer
                     }
+                    // Get the resulting data sheet of that single line an add it to the global
+                    // result data
+                    $rowResultSheet = $writer->getReturn();
+                    if ($resultSheet === null) {
+                        $resultSheet = $rowResultSheet;
+                    } else {
+                        foreach ($rowResultSheet->getRows() as $resultRow) {
+                            $resultSheet->addRow($resultRow, false, false);
+                        }
+                    }
                 } catch (\Throwable $e) {
+                    // If anything goes wrong, just continue with the next row
                     yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
                     NoteTaker::takeNote(new StepNote(
                         $this->getWorkbench(),
@@ -279,25 +282,36 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                 }
-                //$saveSheet->removeRows();
             }
             
-            return $toSheet;
+        } else {
+
+            foreach($this->getOutputMappers() as $i => $mapper) {
+                $toSheet = $mapper->map($toSheet, null, $logBook);
+            }
+
+            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+            // writes for each row, so it will end up here anyway
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
+            }
+
+            $transaction = $this->getWorkbench()->data()->startTransaction();
+
+            try {
+                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+                // that can be used to update known entire
+                $toSheet->dataCreate(false, $transaction);
+            } catch (\Throwable $e) {
+                throw $e;
+            }
+
+            $transaction->commit();
+
+            $resultSheet = $toSheet;
         }
 
-        $transaction = $this->getWorkbench()->data()->startTransaction();
-
-        try {
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $toSheet->dataCreate(false, $transaction);
-        } catch (\Throwable $e) {
-            throw $e;
-        }
-
-        $transaction->commit();
-
-        return $toSheet;
+        return $resultSheet;
     }
 
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
@@ -362,6 +376,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         'ignore_if_missing_from_column' => ! $propSchema->isRequired()
                     ];
                     break;
+                case $propSchema->isBoundToData():
+                    $col2col[] = [
+                        'from' => $propName,
+                        'to' => $propName,
+                        'ignore_if_missing_from_column' => ! $propSchema->isRequired()
+                    ];
+                    break;
             }
         }
         $uxon = new UxonObject([
@@ -393,7 +414,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     protected function setPropertiesToDataSheetMapper(UxonObject $uxon) : JsonApiToDataSheet 
     {
-        $this->mapperUxon = $uxon;
+        $this->propertiesMapperUxon = $uxon;
         return $this;
     }
 
@@ -408,7 +429,39 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     protected function getPropertiesToDataMapperUxon() : ?UxonObject
     {
-        return $this->mapperUxon;
+        return $this->propertiesMapperUxon;
+    }
+
+    /**
+     * Additional mapper applied before the result data sheet is saved
+     * 
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper[]
+     * @uxon-property output_mappers
+     * @uxon-template [{"column_to_column_mappings": [{"from": "", "to": ""}]}]
+     * 
+     * @param \exface\Core\CommonLogic\UxonObject $uxon
+     * @return JsonApiToDataSheet
+     */
+    protected function setOutputMappers(UxonObject $uxon) : JsonApiToDataSheet 
+    {
+        $this->outputMapperUxon = $uxon;
+        return $this;
+    }
+
+    /**
+     * 
+     * @return UxonObject
+     */
+    protected function getOutputMappers() : array
+    {
+        if ($this->outputMapperUxon === null || $this->outputMapperUxon->isEmpty()) {
+            return [];
+        }
+        $mappers = [];
+        foreach ($this->outputMapperUxon as $mapperUxon) {
+            $mappers[] = DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $mapperUxon, $this->getToObject(), $this->getToObject());
+        }
+        return $mappers;
     }
 
     /**
@@ -481,6 +534,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     {
         $importData = [];
         foreach ($bodyLine as $propertyName => $value) {
+            $colName = DataColumn::sanitizeColumnName($propertyName);
             $property = $toObjectSchema->getProperty($propertyName);
             switch(true) {
                 // If we are not looking for this property, but it is a real array, see if it contains
@@ -502,7 +556,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                             $value = implode(EXF_LIST_SEPARATOR, $value);
                         }
                     }
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
                 // Object values, that are to be put in a DataSheet also need to be converted to string,
                 // but they are converted to JSON - e.g. geometries for geo data
@@ -510,11 +564,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     if (is_array($value)) {
                         $value =  json_encode($value);
                     }
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
                 // Take regular properties as-is
                 default:
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
             }
         }

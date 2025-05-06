@@ -1,7 +1,6 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
@@ -19,6 +18,7 @@ use exface\Core\QueryBuilders\ExcelBuilder;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 
 /**
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
@@ -139,19 +139,28 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Saving relations is very complex and not yet supported for OpenApi Imports
         $this->removeRelationColumns($toSheet);
 
-        yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
+        $logBook->addLine($msg);
+        yield $msg;
 
-        $writer = $this->saveData(
+        $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook,
-            $this->isSkipInvalidRows());
+            $this->isSkipInvalidRows()
+        );
         
         yield from $writer;
-        $toSheet = $writer->getReturn();
+        $resultSheet = $writer->getReturn();
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        $logBook->addDataSheet('Saved sheet', $resultSheet);
+
+        $this->getCrudCounter()->stop();
+
+        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
     /**
