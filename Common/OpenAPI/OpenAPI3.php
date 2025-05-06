@@ -53,12 +53,8 @@ class OpenAPI3 implements APISchemaInterface
         $this->openAPIJson = $openAPIJson;
         $this->apiVersion = $apiVersion;
 
-        // TODO get rid of these obj-json transformations and do enhancement on the array and
-        // convert to object once only
-        $jsonObj = json_decode($openAPIJson, false);
-        // Process attribute groups and other magic stuff
-        $jsonObj = $this->enhanceSchema($jsonObj);
-        $jsonArray = json_decode(json_encode($jsonObj), true);
+        $jsonArray = json_decode($openAPIJson, true);
+        $jsonArray = $this->enhanceSchema($jsonArray);
         // Instatiate a cebe/openapi schema and use it to resolve references
         $schema = new OpenApi($jsonArray);
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
@@ -197,40 +193,23 @@ class OpenAPI3 implements APISchemaInterface
      *
      * TODO geb 2025-03-11: We could make this filter configurable, but only if needed.
      *
-     * @param string             $json
-     * @return stdClass
+     * @param array $json
+     * @return array
      */
-    protected function enhanceSchema(stdClass $json) : stdClass
+    protected function enhanceSchema(array $json) : array
     {
         if ($this->apiVersion !== null) {
-             $json->info->version = $this->apiVersion;
+             $json['info']['version'] = $this->apiVersion;
         }
-        $schemas = $json->components->schemas;
         
-        foreach ($schemas as $schema) {
-            $objectAlias = $schema->{'x-object-alias'};
+        foreach ($json['components']['schemas'] as $schemaName => $schema) {
+            $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
                 continue;
             }
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            $properties = &$schema->properties;
-            foreach ($properties as $propertyName => $property) {
-                $result = OpenAPI3ObjectSchema::toGroup($property, $object);
-                if($result === false) {
-                    continue;
-                }
-                
-                foreach ($result as $key => $value) {
-                    if(!empty($properties->{$key})) {
-                        continue;
-                    }
-                    
-                    $properties->{$key} = $value;
-                }
-                
-                unset($properties->{$propertyName});
-            }
+            $json['components']['schemas'][$schemaName] = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
         }
         
         return $json;
@@ -275,6 +254,7 @@ class OpenAPI3 implements APISchemaInterface
                 || $name === AbstractOpenApiPrototype::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_DATAADDRESS
                 || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
                 || $name === OpenAPI3Property::X_LOOKUP
+                || $name === OpenAPI3Property::X_PROPERTIES_FROM_DATA
             ) {
                 continue;
             }
