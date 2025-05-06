@@ -131,7 +131,13 @@ class DataCheckWithStepNote extends DataCheck
                     $logBook->addLine($logLine);
                 }
                 
-                $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null);
+                $errors = $errors ?? new DataCheckFailedErrorMultiple(
+                    '',
+                    null,
+                    null,
+                    $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.SINGULAR'),
+                    $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.PLURAL')
+                );
                 $errors->appendError($e, $rowNr + 1);
             }
         }

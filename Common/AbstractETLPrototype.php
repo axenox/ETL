@@ -325,7 +325,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             try {
                 $check->check($dataSheet, $logBook, $stepData);
             } catch (DataCheckFailedErrorMultiple $e) {
-                $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null);
+                $errors = $errors ?? new DataCheckFailedErrorMultiple(
+                    '', 
+                    null, 
+                    null,
+                    $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.SINGULAR'),
+                    $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.PLURAL')
+                );
                 $errors->merge($e);
                 
                 $stopOnError |= $check->getStopOnCheckFailed();
