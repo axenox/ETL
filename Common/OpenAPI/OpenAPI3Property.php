@@ -221,7 +221,38 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
-     * The meta model attribute this property is bound to
+     * Generate multiple properties from data (e.g. master data).
+     * 
+     * For example, to generate properties for every available event type:
+     * 
+     * ```
+     * {
+     *  "properties": {
+     *      "EventTypes": {
+     *          "type": "date",
+     *          "description": "[#Description#]",
+     *          "example": "28.06.2025",
+     *          "x-excel-column": "[#ExcelColumn#]",
+     *          "x-properties-from-data": {
+     *              "object_alias": "nbr.OneLink.Termintyp",
+     *              "columns": [
+     *                  {"attribute_alias": "Name"},
+     *                  {"attribute_alias": "ExcelColumn"},
+     *                  {"attribute_alias": "Description"}
+     *              ]
+     *          }
+     *      }
+     * }
+     * 
+     * ```
+     * 
+     * The property `EventTypes` will be replaced by as many properties as there are event types.
+     * 
+     * **IMPORTANT**: The name of each property will be taken from the first column of the
+     * data sheet!
+     * 
+     * Other options of the property will be simply inherited from the template. Placeholders can be
+     * use to include any additional data. Any columns from the defined data sheet can be used as placeholders.
      * 
      * @uxon-property x-properties-from-data
      * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheet
