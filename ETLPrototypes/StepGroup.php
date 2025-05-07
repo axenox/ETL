@@ -360,6 +360,11 @@ class StepGroup implements DataFlowStepInterface
         $row['error_flag'] = true;
         $row['error_message'] = $exception->getMessage();
         $row['error_log_id'] = $exception->getId();
+        
+        $debugContainer = WidgetFactory::createDebugMessage($this->getWorkbench(), $ds->getMetaObject());
+        $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
+        $row['debug_widget'] = $widgetJson;
+        
         try {
             $widgetJson = $exception->createWidget(UiPageFactory::createEmpty($this->getWorkbench()))->exportUxonObject()->toJson();
             $row['error_widget'] = $widgetJson;
