@@ -7,6 +7,7 @@ use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\JsonDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\MetaObjectFactory;
@@ -156,8 +157,16 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                     $propNameCol = $dataSheet->getColumns()->getFirst();
                     $dataSheet->dataRead();
                     
-                    foreach ($propNameCol->getValues() as $dataPropName) {
-                        $schema['properties'][$dataPropName] = $property;
+                    $tpl = JsonDataType::encodeJson($property);
+                    $phs = StringDataType::findPlaceholders($tpl);
+                    
+                    foreach ($dataSheet->getRows() as $row) {
+                        $phVals = [];
+                        foreach ($phs as $ph) {
+                            $phVals[$ph] = $row[$ph];
+                        }
+                        $json = StringDataType::replacePlaceholders($tpl, $phVals);
+                        $schema['properties'][$row[$propNameCol->getName()]] = JsonDataType::decodeJson($json);
                     }
                     
                     unset ($schema['properties'][$propertyName]);
