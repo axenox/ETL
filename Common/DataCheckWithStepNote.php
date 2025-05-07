@@ -59,6 +59,7 @@ class DataCheckWithStepNote extends DataCheck
 
     /**
      * @param DataSheetInterface        $sheet
+     * @param string|null               $rowNrColumnAlias
      * @param LogBookInterface|null     $logBook
      * @param ETLStepDataInterface|null $stepData
      * @return DataSheetInterface
@@ -66,6 +67,7 @@ class DataCheckWithStepNote extends DataCheck
     public function check(
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
+        string $rowNrColumnAlias = null,
         ETLStepDataInterface $stepData = null
     ): DataSheetInterface
     {
@@ -82,7 +84,11 @@ class DataCheckWithStepNote extends DataCheck
             }
         }
         
+        // Prepare check sheet.
         $checkSheet = $sheet->copy();
+        $rowNrColumnAlias = $rowNrColumnAlias ?? self::ROW_NUMBER_COLUMN_ALIAS;
+        $this->ensureRowNumbers($checkSheet, $rowNrColumnAlias);
+        
         $errors = null;
         $rowsToRemove = [];
         $conditionString = $this->getConditionGroup($checkSheet->getMetaObject())->__toString();
@@ -105,7 +111,7 @@ class DataCheckWithStepNote extends DataCheck
             }
             
             try {
-                parent::check($checkSheet);
+                parent::check($checkSheet, null, $rowNrColumnAlias);
             } catch (DataCheckFailedError $e) {
                 $placeHolderInfo = '';
                 if(!empty($placeHoldersToValues)) {
@@ -117,16 +123,19 @@ class DataCheckWithStepNote extends DataCheck
                 }
                 $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '.';
                 
-                $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
+                $errorMessage = StringDataType::replacePlaceholders($e->getMessageWithoutValues(), $placeHoldersToValues);
+                $affectedRows = $e->getValues();
                 
                 if($removeInvalidRows) {
                     $rowsToRemove[] = $rowNr;
                     $logBook->addLine($logLine . ' REMOVED matching lines from processing.');
-                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
+                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e);
+                    $e->setValues($affectedRows);
                 } else if(!empty($isValidAlias)) {
                     $sheet->setCellValue($isValidAlias, $rowNr, $isInValidValue);
                     $logBook->addLine($logLine . ' Marked matching lines as INVALID.');
-                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
+                    $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e);
+                    $e->setValues($affectedRows);
                 } else {
                     $logBook->addLine($logLine);
                 }
@@ -138,7 +147,7 @@ class DataCheckWithStepNote extends DataCheck
                     $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.SINGULAR'),
                     $this->getWorkbench()->getCoreApp()->getTranslator()->translate('ROW.PLURAL')
                 );
-                $errors->appendError($e, $rowNr + 1);
+                $errors->appendError($e, false);
             }
         }
         
@@ -147,6 +156,8 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         if($errors) {
+            $errors->updateMessage();
+            
             if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
                 $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
                 $noteOnFailure->setCountErrors(count($errors->getAllErrors()));

@@ -310,6 +310,11 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $errors = null;
         $stopOnError = false;
         
+        $tempColAlias = 'tempCol' . $stepData->getFlowRunUid() . $stepData->getStepRunUid();
+        foreach ($dataSheet->getRows() as $rowNr => $row) {
+            $dataSheet->setCellValue($tempColAlias, $rowNr, $rowNr + 1);
+        } 
+        
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
                 $this->getWorkbench(), 
@@ -323,7 +328,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, $logBook, $stepData);
+                $check->check($dataSheet, $logBook, $tempColAlias, $stepData);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple(
                     '', 
@@ -337,6 +342,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $stopOnError |= $check->getStopOnCheckFailed();
             }
         }
+        
+        $dataSheet->getColumns()->removeByKey($tempColAlias);
 
         if($errors === null) {
             $logBook->addLine('Data PASSED all checks.');
