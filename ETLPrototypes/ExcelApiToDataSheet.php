@@ -59,7 +59,7 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
  *      }
  * ]
  *
- * @author miriam.seitz
+ * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
 {
@@ -313,7 +313,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
-            if ($excelColName === null) {
+            if ($excelColName === null || $excelColName === '') {
                 continue;
             }
             

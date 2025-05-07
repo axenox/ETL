@@ -289,6 +289,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             foreach($this->getOutputMappers() as $i => $mapper) {
                 $toSheet = $mapper->map($toSheet, null, $logBook);
             }
+            if ($toSheet->isEmpty()) {
+                return $toSheet;
+            }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
             // writes for each row, so it will end up here anyway
@@ -309,6 +312,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $transaction->commit();
 
             $resultSheet = $toSheet;
+        }
+
+        // If no row actually worked, we will not have a result sheet at all. This means, nothing was
+        // written. However, it is easier to understand, what happened if we return an empty sheet
+        // and not NULL, so we just compy the to-sheet and empty it.
+        if ($resultSheet === null) {
+            $resultSheet = $toSheet->copy()->removeRows();
         }
 
         return $resultSheet;
