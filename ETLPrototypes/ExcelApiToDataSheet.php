@@ -80,7 +80,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $flowRunUid = $stepData->getFlowRunUid();
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
@@ -115,10 +114,11 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-
+        $logBook->addDataSheet('Excel data', $fromSheet);
+        
         // Validate data in the from-sheet against the JSON schema
         if ($this->isValidatingApiSchema()) {
-        foreach ($fromSheet->getRows() as $i => $row) {
+            foreach ($fromSheet->getRows() as $i => $row) {
                 $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
@@ -133,7 +133,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         // Apply the mapper
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet);
+        $logBook->addSection('Filling data sheet');
+        $toSheet = $mapper->map($fromSheet, false, $logBook);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
@@ -141,6 +142,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
+        $logBook->addDataSheet('To-data', $toSheet);
         yield $msg;
 
         $writer = $this->writeData(
@@ -150,11 +152,14 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $logBook,
             $this->isSkipInvalidRows()
         );
-        
+
+        $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
-        $logBook->addDataSheet('Saved sheet', $resultSheet);
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
 
         $this->getCrudCounter()->stop();
 

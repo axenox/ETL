@@ -165,6 +165,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+        $logBook->addDataSheet('JSON data', $fromSheet);
         
         $logBook->addLine('Extracted JSON data to `From-Sheet`.');
         $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
@@ -186,13 +187,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
         }
         
-        $logBook->addSection('Data Mapping');
+        $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $mapper->map($fromSheet, false, $logBook);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         $logBook->addLine('Mapped `From-Sheet` according to schema "' . get_class($toObjectSchema) . '" resulting in `To-Sheet`.');
-        $logBook->addDataSheet('To-Sheet', $toSheet);
+        $logBook->addDataSheet('To-data', $toSheet);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
@@ -210,10 +211,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $this->isSkipInvalidRows()
         );
         
+        $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
-        $logBook->addDataSheet('Saved sheet', $resultSheet);
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
 
         $this->getCrudCounter()->stop();
 
@@ -248,6 +252,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $saveSheet = $saveSheet->copy();
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
+                if ($i > 0) {
+                    $logBook->addSection('Saving row index ' . $i);
+                }
                 try {
                     $writer = $this->writeData(
                         $saveSheet, 
@@ -287,7 +294,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         } else {
 
             foreach($this->getOutputMappers() as $i => $mapper) {
-                $toSheet = $mapper->map($toSheet, null, $logBook);
+                $toSheet = $mapper->map($toSheet, false, $logBook);
             }
             if ($toSheet->isEmpty()) {
                 return $toSheet;
