@@ -2,6 +2,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
@@ -337,6 +338,10 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             $logBook->addIndent(-1);
         } else if ($stopOnError) {
             $logBook->addIndent(-1);
+            $logBook->addLine('Terminating step, because one or more data checks FAILED.');
+            $this->getCrudCounter()->stop();
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            
             throw $errors;
         }
     }
