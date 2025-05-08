@@ -17,8 +17,10 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Factories\ExpressionFactory;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Model\ExpressionInterface;
 use exface\Core\Interfaces\Model\MetaAttributeInterface;
@@ -40,9 +42,11 @@ class OpenAPI3Property implements APIPropertyInterface
     use OpenAPI3UxonTrait;
     
     const X_ATTRIBUTE_ALIAS = 'x-attribute-alias';
+    const X_ATTRIBUTE_GROUP_ALIAS = 'x-attribute-group-alias';
     const X_LOOKUP = 'x-lookup';
     const X_CALCULATION = 'x-calculation';
     const X_CUSTOM_ATTRIBUTE = 'x-custom-attribute';
+    const X_PROPERTIES_FROM_DATA = 'x-properties-from-data';
 
     private $objectSchema = null;
     private $name = null;
@@ -184,6 +188,89 @@ class OpenAPI3Property implements APIPropertyInterface
     public function getAttributeAlias() : ?string
     {
         return $this->jsonSchema[self::X_ATTRIBUTE_ALIAS] ?? null;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToAttributeGroup()
+     */
+    public function isBoundToAttributeGroup() : bool
+    {
+        return null !== $this->getAttributeAlias();
+    }
+
+    /**
+     * The meta model attribute group this property originates from
+     * 
+     * @uxon-property x-attribute-group-alias
+     * @uxon-type metamodel:attribute_group
+     *
+     * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeGroupAlias()
+     */
+    public function getAttributeGroupAlias() : ?string
+    {
+        return $this->jsonSchema[self::X_ATTRIBUTE_GROUP_ALIAS] ?? null;
+    }
+
+    /**
+     * 
+     */
+    public function isBoundToData() : bool
+    {
+        return null !== $this->getDataSheetToLoadProperties();
+    }
+
+    /**
+     * Generate multiple properties from data (e.g. master data).
+     * 
+     * For example, to generate properties for every available event type:
+     * 
+     * ```
+     * {
+     *  "properties": {
+     *      "EventTypes": {
+     *          "type": "date",
+     *          "description": "[#Description#]",
+     *          "example": "28.06.2025",
+     *          "x-excel-column": "[#ExcelColumn#]",
+     *          "x-properties-from-data": {
+     *              "object_alias": "nbr.OneLink.Termintyp",
+     *              "columns": [
+     *                  {"attribute_alias": "Name"},
+     *                  {"attribute_alias": "ExcelColumn"},
+     *                  {"attribute_alias": "Description"}
+     *              ]
+     *          }
+     *      }
+     * }
+     * 
+     * ```
+     * 
+     * The property `EventTypes` will be replaced by as many properties as there are event types.
+     * 
+     * **IMPORTANT**: The name of each property will be taken from the first column of the
+     * data sheet!
+     * 
+     * Other options of the property will be simply inherited from the template. Placeholders can be
+     * use to include any additional data. Any columns from the defined data sheet can be used as placeholders.
+     * 
+     * @uxon-property x-properties-from-data
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheet
+     * @uxon-template {"object_alias": "", "columns": [{"attribute_alias": ""}]}
+     * 
+     * @return DataSheetInterface|null
+     */
+    public function getDataSheetToLoadProperties() : ?DataSheetInterface
+    {
+        $json = $this->jsonSchema[self::X_PROPERTIES_FROM_DATA] ?? null;
+        if (empty($json)) {
+            return null;
+        }
+        $uxon = UxonObject::fromAnything($json);
+        if (! $uxon->isEmpty()) {
+            return DataSheetFactory::createFromUxon($this->objectSchema->getMetaObject()->getWorkbench(), $uxon);
+        }
+        return null;
     }
 
     /**

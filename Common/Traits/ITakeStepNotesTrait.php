@@ -77,7 +77,16 @@ trait ITakeStepNotesTrait
     public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
     {
         if($this->noteOnFailureUxon === null) {
-            return null;
+            $logLevel = $exception instanceof ExceptionInterface ? 
+                $exception->getLogLevel() : 'error';
+            
+            return new StepNote(
+                $this->getWorkbench(),
+                $stepData,
+                $exception->getMessage(),
+                $exception,
+                $logLevel
+            );
         }
 
         return StepNote::FromUxon(

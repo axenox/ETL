@@ -1,7 +1,6 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
@@ -19,6 +18,7 @@ use exface\Core\QueryBuilders\ExcelBuilder;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 
 /**
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
@@ -59,7 +59,7 @@ use axenox\ETL\Common\UxonEtlStepResult;
  *      }
  * ]
  *
- * @author miriam.seitz
+ * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
 {
@@ -80,7 +80,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $flowRunUid = $stepData->getFlowRunUid();
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
@@ -115,10 +114,11 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-
+        $logBook->addDataSheet('Excel data', $fromSheet);
+        
         // Validate data in the from-sheet against the JSON schema
         if ($this->isValidatingApiSchema()) {
-        foreach ($fromSheet->getRows() as $i => $row) {
+            foreach ($fromSheet->getRows() as $i => $row) {
                 $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
@@ -133,25 +133,39 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         // Apply the mapper
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet);
+        $logBook->addSection('Filling data sheet');
+        $toSheet = $mapper->map($fromSheet, false, $logBook);
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
         $this->removeRelationColumns($toSheet);
 
-        yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
+        $logBook->addLine($msg);
+        $logBook->addDataSheet('To-data', $toSheet);
+        yield $msg;
 
-        $writer = $this->saveData(
+        $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook,
-            $this->isSkipInvalidRows());
-        
+            $this->isSkipInvalidRows()
+        );
+
+        $logBook->addSection('Saving data');
         yield from $writer;
-        $toSheet = $writer->getReturn();
+        $resultSheet = $writer->getReturn();
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
+
+        $this->getCrudCounter()->stop();
+
+        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
     /**
@@ -304,7 +318,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
-            if ($excelColName === null) {
+            if ($excelColName === null || $excelColName === '') {
                 continue;
             }
             
