@@ -5,11 +5,13 @@ use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
+use exface\Core\CommonLogic\Model\Expression;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
+use exface\Core\Factories\FormulaFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 
@@ -18,7 +20,9 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
  * 
  * Adds the following custom OpenAPI properties:
  * 
- * - `x-object-alias` - the meta object alias
+ * - `x-object-alias` - namespaced alias of the object represented by this schema
+ * - `x-update-if-matching-attributes` - array of attribute aliases to use to determine if the import row
+ * is a create or an update.
  * 
  * @author Andrej Kabachnik
  */
@@ -27,6 +31,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     use OpenAPI3UxonTrait;
 
     const X_OBJECT_ALIAS = 'x-object-alias';
+    const X_UPDATE_IF_MATCHING_ATTRIBUTES = 'x-update-if-matching-attributes';
 
     private $openAPISchema = null;
     private $jsonSchema = null;
@@ -102,11 +107,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     }    
 
     /**
-     * Converts a given stdClass instance to an attribute group.
-     * 
-     * If the given instance does not contain a property `X_ATTRIBUTE_GROUP_ALIAS` this
-     * function will return FALSE. If it does, it will return an array containing schema
-     * conform instances of all attributes belonging to that attribute group.
+     * Renders templates for attribute groups or data-driven properties in the given schema
      * 
      * @param array $property
      * @param MetaObjectInterface $object
@@ -131,6 +132,24 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                         }
                         $alias = $attribute->getAlias();
                         $attrProp = $property;
+
+                        // Handle placeholders
+                        $attrPropTpl = JsonDataType::encodeJson($attrProp);
+                        $phs = StringDataType::findPlaceholders($attrPropTpl);
+                        if (! empty ($phs)) {
+                            $attrPhs = $attribute->exportUxonObject()->toArray();
+                            $attrPropTpl = StringDataType::replacePlaceholders($attrPropTpl, $attrPhs);
+                            $attrProp = JsonDataType::decodeJson($attrPropTpl);
+                        }
+                        // Evaluate formulas if the value of a property option is a formula
+                        foreach ($attrProp as $key => $val) {
+                            if (Expression::detectFormula($val)) {
+                                $formula = FormulaFactory::createFromString($object->getWorkbench(), $val);
+                                $attrProp[$key] = $formula->evaluate();
+                            }
+                        }
+
+                        // Determine data type
                         if (empty($attrProp['type'] ?? null)) {
                             try {
                                 $typeProp = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
@@ -143,7 +162,6 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                         $attrProp['nullable'] = $attribute->isRequired() !== true;
                         $attrProp['description'] = $attribute->getShortDescription() ?? "";
                         $attrProp['x-attribute-alias'] = $alias;
-                        $attrProp['x-excel-column'] = $attribute->getName();
 
                         $schema['properties'][$alias] = $attrProp;
                     }
@@ -193,7 +211,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      */
     public function getUpdateIfMatchingAttributeAliases() : array
     {
-        return $this->jsonSchema['x-update-if-matching-attributes'] ?? [];
+        return $this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? [];
     }
     
     /**
@@ -212,7 +230,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      */
     public function isUpdateIfMatchingAttributes() : bool
     {
-        return empty($this->jsonSchema['x-update-if-matching-attributes'] ?? []) === false;
+        return empty($this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? []) === false;
     }
 
     /**
