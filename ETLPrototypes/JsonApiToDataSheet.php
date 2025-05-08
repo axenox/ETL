@@ -29,59 +29,124 @@ use exface\Core\CommonLogic\DataSheets\DataColumn;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
- * Read data received through an annotated API (like OpenAPI) using object and attribute annotations
+ * Imports data received through an annotated API (like OpenAPI) using object and attribute annotations.
+ * 
+ * This steps allows to transform JSON web service requests into data sheets without having to describe
+ * the structure of the JSON as an object of the meta model. Instead, you can map JSON properties directly
+ * to attributes of any meta object of you choice directly in the web service definition using simple
+ * annotations.
+ * 
+ * This step can be easyily combined with `ExcelApiToDataSheet` to use the same API definition to import
+ * JSON data as well as uploaded Excel data. In this case, special `x-excel-` annotations will become
+ * available too.
+ * 
+ * For example, in an OpenAPI3 web service, we can define a schema to import orders directly into the
+ * `ORDER` object of our app. Using the `x-object-alias` annotation we bind the JSON schema to the meta
+ * object. Now we can map properties of the JSON order object to attributes via `x-attribute-alias`.
+ * 
+ * ```
+ * {
+ *  "schemas": {
+ *      "Order": {
+ *          "type": "object",
+ *          "x-object-alias": "my.App.ORDER",
+ *          "properties: {
+ *              "Number" {
+ *                  "type": "string",
+ *                  "description": "Order number",
+ *                  "x-attribute-alias": "NUMBER"
+ *              },
+ *              "Date" {
+ *                  "type": "string",
+ *                  "description": "Order date formatted as DD.MM.YYYY",
+ *                  "example": "23.06.2024",
+ *                  "x-calculation": "=Date(Date)",
+ *                  "x-attribute-alias": "DATE"
+ *              },
+ *              "SupplierNo" {
+ *                  "type": "string",
+ *                  "description": "Supplier number",
+ *                  "x-attribute-alias": "SUPPLIER",
+ *                  "x-lookup": {
+ *                      "lookup_object_alias": "my.App.SUPPLIER",
+ *                      "lookup_column": "UID",
+ *                      "matches": [
+ *                          {"from": "SupplierNo", "lookup": "NO"}
+ *                      ]
+ *                  }
+ *              }
+ *          }
+ *      }
+ *  }
+ * }
+ * 
+ * ```
+ * 
+ * As you can see, each JSON property will be transformed into an attribute of the `ORDER`:
+ * 
+ * - `Number` will be copied to the `NUMBER` attribute as-is
+ * - `Date` is expected in DD.MM.YYYY in JSON, so it will be parsed using the `=Date()` formula before
+ * being passed to the `DATE` attribute
+ * - `SupplierNo` is the supplier number, while we need the UID of the `SUPPLIER` object in our `SUPPLIER`
+ * attribute - that is why we need an `x-lookup` to search for the `SupplierNo` in the `NO` column of our
+ * supplier data and lookup the UID of the matching row.
+ * 
+ * Most of the schema is regular JSON schema syntax. Merely the `x-` annotatios are added by this step
+ * specifically. All in all, it still remains a valid OpenAPI3 definition and will be correctly parsed
+ * by any OpenAPI library.
+ * 
+ * ## Workflow
+ * 
+ * Technically, the step will
+ * 
+ * 1. Read the web service request into a data sheet based on an auto-created temporary meta object. It
+ * will have attributes/columns for every JSON property.
+ * 2. Run the `from_data_checks` on that temporary data sheet if defined in the step
+ * 3. Transform this data sheet to one based on the to-object of the step by mapping JSON-property columns
+ * to the respective `x-attribute-alias`. Other annotations like `x-calculation` or `x-lookup` allow to
+ * further customize the mappings applied.
+ * 4. Save the entire data sheet or every row separately depending on `skip_invalid_rows`. Thus, subsequent
+ * operations will either be applied to every single row or the the entire data sheet as a whole.
+ * 5. Run `to_data_checks` on the resulting data sheet if defined in the step
+ * 6. Apply additional `output_mappers` allowing to further transform the resulting data - e.g. transpose
+ * columns, etc.
  * 
  * ## Annotations
  * 
- * ´´´
- * {
- *     "Object": {
- *          "type": "object",
- *          "x-object-alias": "alias",
- *          "properties: {
- *              "Id" {
- *                  "type": "string",
- *                  "x-attribute-alias": "UID"
- *              }
- *          }
- *     }
- * }
- *
- * ´´´
- *
- * Only use direct Attribute aliases in the definition and never relation paths or formulars!
- * e.g `"x-attribute-alias": "Objekt_ID"`
- * If you want to link objects, use the id/uid in the original attribute.
- * e.g. `"x-attribute-alias": "Request"` -> '0x11EFBD3FD893913ABD3F005056BEF75D'
- *
- * The from-object HAS to be defined within the request schema of the route to the step!
- * e.g. with multiple structural concepts
+ * ### OpenAPI v3
  * 
- * ```
- * "requestBody": {
- *   "description": "Die zu importierenden Daten im Json format.",
- *   "required": true,
- *   "content": {
- *     "application/json": {
- *       "schema": {
- *         "type": "object",
- *         "properties": {
- *           "Objekte": {
- *             "type": "array",
- *             "items": {
- *               "$ref": "#/components/schemas/Object"
- *             },
- *             "x-object-alias": "full.namespace.Object"
- *           }
- *         }
- *       }
- *     }
- *   }
- * }
+ * A schema used in OpenAPI can be bound to a meta object suing `x-` annotations in that schema.
  * 
- * ```
+ * #### Schema annotations
+ * 
+ * - `x-object-alias` - namespaced alias of the object represented by this schema
+ * - `x-update-if-matching-attributes` - array of attribute aliases to use to determine if the import row
+ * is a create or an update.
+ * 
+ * #### Property annotations
+ * 
+ * Each schema property the following cusotm OpenAPI properties:
+ * 
+ * - `x-attribute-alias` - the meta model attribute this property is bound to
+ * - `x-lookup` - the Uxon object to look up for this property
+ * - `x-calculation` - the calculation expression for this property
+ * - `x-custom-attribute` - create a custom attribute for the object right here (for export-steps only)
+ * - `x-excel-column` - only if a `ExcelApiToDataSheet` step exists int the same flow
+ * 
+ * #### Property template annotations
+ * 
+ * Some special annotations make a schma property be treated as a template. In this case, it will be
+ * replaced with multiple auto-generated properties when the OpenAPI.json is rendered.
+ * 
+ * - `x-attribute-group-alias` - replaces this property with properties generated from each attribute of
+ * the group. If the property has any other options like `type`, `description`, etc. they will be used
+ * as a template and remain visible unless the generated properties overwrite them
+ * - `x-properties-from-data` replace this property with properties generated from a data sheet. In contrast
+ * to `x-attribute-group-alias`, this properties may not even be bound to meta attributes - they can be
+ * generated absolutely freely. Other options of the property may use placeholders, that will be filled with
+ * values from the data sheet.
  *
- * ## Customizing the data sheet with placeholders
+ * ## Customizing the resulting data sheet
  * 
  * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
  * filters, sorters, aggregators, etc. from placeholders available in the flow step.
@@ -108,6 +173,10 @@ use exface\Core\Interfaces\Log\LoggerInterface;
  * }
  * 
  * ```
+ * 
+ * ## Applying additional logic via output mappers
+ * 
+ * TODO
  *
  * @author Andrej Kabachnik, Georg Bieger
  */
