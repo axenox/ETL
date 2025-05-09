@@ -309,6 +309,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
+    /**
+     * @param DataSheetMapperInterface $mapper
+     * @param DataSheetInterface       $fromSheet
+     * @param ETLStepDataInterface     $stepData
+     * @param LogBookInterface         $logBook
+     * @return DataSheetInterface
+     * @throws \Throwable
+     */
     protected function applyDataSheetMapper(
         DataSheetMapperInterface $mapper,
         DataSheetInterface $fromSheet,
@@ -361,6 +369,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $toSheet = null;
         $rowSheet = $fromSheet->copy();
+        // TODO We should think of a way to not do this row by row.
+        // TODO Also, this fails on the first failed mapper, making the error less insightful.
         foreach ($fromSheet->getRows() as $rowNr => $row) {
             $rowSheet->removeRows();
             $rowSheet->addRow($row);
