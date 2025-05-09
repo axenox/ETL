@@ -150,7 +150,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
                 NoteTaker::takeNote(new StepNote(
                     $this->getWorkbench(),
                     $stepData,
-                    $rowToken . '(' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
+                    $rowToken . ' (' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
                     $e,
                     $e->getLogLevel()
                 ));
