@@ -11,6 +11,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -189,7 +190,30 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet, false, $logBook);
+
+        try {
+            $toSheet = $mapper->map($fromSheet, false, $logBook);
+        } catch (\Throwable $error)
+        {
+            $e = $error->getPrevious();
+            
+            if($e instanceof DataSheetMissingRequiredValueError) {
+                $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
+                $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
+                NoteTaker::takeNote(new StepNote(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $rowToken . '(' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
+                    $e,
+                    $e->getLogLevel()
+                ));
+
+                throw $e;
+            } 
+            
+            throw $error;
+        }
+        
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         $logBook->addLine('Mapped `From-Sheet` according to schema "' . get_class($toObjectSchema) . '" resulting in `To-Sheet`.');
