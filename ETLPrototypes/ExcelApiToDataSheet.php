@@ -140,11 +140,16 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $logBook->addSection('Filling data sheet');
 
-        try {
-            $toSheet = $mapper->map($fromSheet, false, $logBook);
-        } catch (\Throwable $error)
-        {
-            $this->handleMapperException($error, $fromSheet, $stepData);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -398,6 +403,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     protected function getFromDataRowNumber(int $dataSheetRowIdx): int
     {
-        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? true : false);
+        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
     }
 }
