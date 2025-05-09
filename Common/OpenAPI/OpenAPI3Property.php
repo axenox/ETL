@@ -171,7 +171,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-lookup
      * @uxon-type \exface\Core\CommonLogic\DataSheets\Mappings\LookupMapping
-     * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
+     * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute", "if_not_found": "leave_empty","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
      * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getLookupUxon()
      */
