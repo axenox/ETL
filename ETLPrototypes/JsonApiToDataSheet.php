@@ -20,6 +20,7 @@ use exface\Core\Factories\DataSheetMapperFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
+use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
@@ -260,11 +261,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
 
-        try {
-            $toSheet = $mapper->map($fromSheet, false, $logBook);
-        } catch (\Throwable $error)
-        {
-            $this->handleMapperException($error, $fromSheet, $stepData);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+        
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -303,49 +309,81 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
-    /**
-     * @param \Throwable           $exception
-     * @param DataSheetInterface   $fromSheet
-     * @param ETLStepDataInterface $stepData
-     * @return void
-     * @throws \Throwable
-     */
-    protected function handleMapperException(\Throwable $exception, DataSheetInterface $fromSheet, ETLStepDataInterface $stepData) : void
+    protected function applyDataSheetMapper(
+        DataSheetMapperInterface $mapper,
+        DataSheetInterface $fromSheet,
+        ETLStepDataInterface $stepData,
+        LogBookInterface $logBook
+    ) : DataSheetInterface
     {
-        $e = $exception->getPrevious();
+        if(!$this->isSkipInvalidRows()) {
+            try {
+                $toSheet = $mapper->map($fromSheet, false, $logBook);
+            } catch (\Throwable $exception)
+            {
+                $e = $exception->getPrevious();
 
-        if($e instanceof DataSheetMissingRequiredValueError) {
-            $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-            $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-            $rowNrs = $e->getRowNumbers();
-            foreach ($rowNrs as $i => $rowNr) {
-                $rowNrs[$i] += 1;
+                if($e instanceof DataSheetMissingRequiredValueError) {
+                    $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
+                    $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
+                    $rowNrs = $e->getRowNumbers();
+                    foreach ($rowNrs as $i => $rowNr) {
+                        $rowNrs[$i] += 1;
+                    }
+
+                    $message = 'Invalid or missing data in column `' . $e->getColumnName() . '` for ' . $rowToken . ' (' . implode(',', $rowNrs) . ')';
+                    $e = new DataSheetMissingRequiredValueError(
+                        $fromSheet,
+                        $message,
+                        $e->getAlias(),
+                        $e,
+                        $e->getColumn(),
+                        $rowNrs
+                    );
+                    $e->setUseExceptionMessageAsTitle(true);
+
+                    NoteTaker::takeNote(new StepNote(
+                        $this->getWorkbench(),
+                        $stepData,
+                        $message,
+                        $e,
+                        $e->getLogLevel()
+                    ));
+
+                    throw $e;
+                }
+
+                throw $exception;
             }
-
-            $message = 'Invalid or missing data in column `' . $e->getColumnName() . '` for ' . $rowToken . ' (' . implode(',', $rowNrs) . ')';
-            $e = new DataSheetMissingRequiredValueError(
-                $fromSheet,
-                $message,
-                $e->getAlias(),
-                $e,
-                $e->getColumn(),
-                $rowNrs
-            );
-            $e->setUseExceptionMessageAsTitle(true);
-
-            NoteTaker::takeNote(new StepNote(
-                $this->getWorkbench(),
-                $stepData,
-                $message,
-                $e,
-                $e->getLogLevel()
-            ));
-
-
-            throw $e;
+            
+            return $toSheet;
         }
-
-        throw $exception;
+        
+        $toSheet = null;
+        $rowSheet = $fromSheet->copy();
+        foreach ($fromSheet->getRows() as $rowNr => $row) {
+            $rowSheet->removeRows();
+            $rowSheet->addRow($row);
+            try {
+                $mappedSheet = $mapper->map($rowSheet, false, $logBook);
+                if($toSheet !== null) {
+                    $toSheet->addRows($mappedSheet->getRows());
+                } else {
+                    $toSheet = $mappedSheet->copy();
+                }
+            } catch (\Throwable $exception)
+            {
+                $logBook->addIndent(-2);
+                NoteTaker::takeNote(new StepNote(
+                    $this->getWorkbench(),
+                    $stepData,
+                    'Missing or invalid value in row ' . $this->getFromDataRowNumber($rowNr) . ' (REMOVED row from processing).',
+                    $exception
+                ));
+            }
+        }
+        
+        return $toSheet;
     }
 
     /**
@@ -786,7 +824,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view of a human.
+     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view
+     * of a human.
      * 
      * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
      * the data sheet - so the row index matches visually. However, if the from-data was an excel,
