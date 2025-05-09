@@ -348,11 +348,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     }
                 } catch (\Throwable $e) {
                     // If anything goes wrong, just continue with the next row
-                    yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
+                    yield 'Error on row ' . $this->getFromDataRowNumber($i) . '. ' . $e->getMessage() . PHP_EOL;
                     NoteTaker::takeNote(new StepNote(
                         $this->getWorkbench(),
                         $stepData,
-                        'Error on row ' . $i+1 . '.',
+                        'Error on row ' . $this->getFromDataRowNumber($i) . '.',
                         $e
                     ));
                     
@@ -730,5 +730,21 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function isSkipInvalidRows() : bool
     {
         return $this->skipInvalidRows;
+    }
+
+    /**
+     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view of a human.
+     * 
+     * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
+     * the data sheet - so the row index matches visually. However, if the from-data was an excel,
+     * the row numbering starts with 1 AND the excel often has a header-row, so the data sheet row
+     * 7 will correspond to excel line 9 from the point of view of the user.
+     * 
+     * @param int $dataSheetRowIdx
+     * @return int
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
+    {
+        return $dataSheetRowIdx;
     }
 }

@@ -72,6 +72,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
+    private $excelHasHeaderRow = false;
+
     /**
      *
      * {@inheritDoc}
@@ -362,5 +364,30 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     protected function isValidatingApiSchema() : bool
     {
         return $this->validateApiSchema;
+    }
+
+    /**
+     * Set to FALSE if the excel table does NOT have a header row with column names
+     * 
+     * @uxon-property excel_has_header_row
+     * @uxon-type boolean
+     * @uxon-default true
+     * 
+     * @param bool $trueOrFalse
+     * @return ExcelApiToDataSheet
+     */
+    protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
+    {
+        $this->excelHasHeaderRow = $trueOrFalse;
+        return $this;
+    }
+    
+    /**
+     * {@inheritDoc}
+     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    {
+        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? true : false);
     }
 }
