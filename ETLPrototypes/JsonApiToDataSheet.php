@@ -426,6 +426,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // writes for each row, so it will end up here anyway
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
+
+                if($toSheet->countRows() === 0) {
+                    $logBook->addLine('All input rows removed by failed data checks.');
+                    return $toSheet;
+                }
             }
 
             $transaction = $this->getWorkbench()->data()->startTransaction();
