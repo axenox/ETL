@@ -142,23 +142,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $toSheet = $mapper->map($fromSheet, false, $logBook);
         } catch (\Throwable $error)
         {
-            $e = $error->getPrevious();
-
-            if($e instanceof DataSheetMissingRequiredValueError) {
-                $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-                $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-                NoteTaker::takeNote(new StepNote(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $rowToken . ' (' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
-                    $e,
-                    $e->getLogLevel()
-                ));
-
-                throw $e;
-            }
-
-            throw $error;
+            $this->handleMapperException($error, $fromSheet, $stepData);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);

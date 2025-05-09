@@ -264,23 +264,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $toSheet = $mapper->map($fromSheet, false, $logBook);
         } catch (\Throwable $error)
         {
-            $e = $error->getPrevious();
-            
-            if($e instanceof DataSheetMissingRequiredValueError) {
-                $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-                $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-                NoteTaker::takeNote(new StepNote(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $rowToken . ' (' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
-                    $e,
-                    $e->getLogLevel()
-                ));
-
-                throw $e;
-            } 
-            
-            throw $error;
+            $this->handleMapperException($error, $fromSheet, $stepData);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -317,6 +301,51 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
+    }
+
+    /**
+     * @param \Throwable           $exception
+     * @param DataSheetInterface   $fromSheet
+     * @param ETLStepDataInterface $stepData
+     * @return void
+     * @throws \Throwable
+     */
+    protected function handleMapperException(\Throwable $exception, DataSheetInterface $fromSheet, ETLStepDataInterface $stepData) : void
+    {
+        $e = $exception->getPrevious();
+
+        if($e instanceof DataSheetMissingRequiredValueError) {
+            $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
+            $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
+            $rowNrs = $e->getRowNumbers();
+            foreach ($rowNrs as $i => $rowNr) {
+                $rowNrs[$i] += 1;
+            }
+
+            $message = 'Invalid or missing data in column `' . $e->getColumnName() . '` for ' . $rowToken . ' (' . implode(',', $rowNrs) . ')';
+            $e = new DataSheetMissingRequiredValueError(
+                $fromSheet,
+                $message,
+                $e->getAlias(),
+                $e,
+                $e->getColumn(),
+                $rowNrs
+            );
+            $e->setUseExceptionMessageAsTitle(true);
+
+            NoteTaker::takeNote(new StepNote(
+                $this->getWorkbench(),
+                $stepData,
+                $message,
+                $e,
+                $e->getLogLevel()
+            ));
+
+
+            throw $e;
+        }
+
+        throw $exception;
     }
 
     /**
