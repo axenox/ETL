@@ -7,6 +7,11 @@ use axenox\ETL\Interfaces\NoteTakerInterface;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\WorkbenchInterface;
+use axenox\ETL\Interfaces\ETLStepDataInterface;
+use exface\Core\Interfaces\Log\LoggerInterface;
+use exface\Core\DataTypes\StringDataType;
 
 /**
  * @inheritdoc 
@@ -111,6 +116,40 @@ class NoteTaker implements NoteTakerInterface
         self::$noteTakers[$alias] = $noteTaker;
         
         return $noteTaker;
+    }
+
+    /**
+     * Instantiates a note from a given exception
+     * 
+     * @param \exface\Core\Interfaces\WorkbenchInterface $workbench
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @param \exface\Core\Interfaces\Exceptions\ExceptionInterface $exception
+     * @param string|null $preamble
+     * @return StepNote
+     */
+    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null) : NoteInterface
+    {
+        if ($exception instanceof ExceptionInterface) {
+            $logLevel = $exception->getLogLevel();
+            $text = $exception->getMessageModel($workbench)->getTitle();
+        } else {
+            $logLevel = LoggerInterface::CRITICAL;
+            $text = $exception->getMessage();
+        }
+
+        if ($preamble !== null) {
+            $text = StringDataType::endSentence($preamble) . ' ' . $text;
+        }
+        
+        $note = new StepNote(
+            $workbench,
+            $stepData,
+            $text,
+            $exception,
+            $logLevel
+        );
+
+        return $note;
     }
 
     /**
