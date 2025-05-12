@@ -60,7 +60,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $this->fromObject = $fromObject;
         $this->toObject = $toObject;
         $this->name = $name;
-        $this->crudCounter = new CrudCounter($this->workbench);
+        $this->crudCounter = new CrudCounter($this->workbench, 1);
         
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
