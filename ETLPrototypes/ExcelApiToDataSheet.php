@@ -75,6 +75,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
+    private $excelHasHeaderRow = false;
+
     /**
      *
      * {@inheritDoc}
@@ -138,27 +140,16 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $logBook->addSection('Filling data sheet');
 
-        try {
-            $toSheet = $mapper->map($fromSheet, false, $logBook);
-        } catch (\Throwable $error)
-        {
-            $e = $error->getPrevious();
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
 
-            if($e instanceof DataSheetMissingRequiredValueError) {
-                $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-                $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-                NoteTaker::takeNote(new StepNote(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $rowToken . '(' . implode(',', $e->getRowNumbers()) . '): Failed to find a matching row during data lookup.',
-                    $e,
-                    $e->getLogLevel()
-                ));
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
 
-                throw $e;
-            }
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
 
-            throw $error;
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
@@ -388,5 +379,30 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     protected function isValidatingApiSchema() : bool
     {
         return $this->validateApiSchema;
+    }
+
+    /**
+     * Set to FALSE if the excel table does NOT have a header row with column names
+     * 
+     * @uxon-property excel_has_header_row
+     * @uxon-type boolean
+     * @uxon-default true
+     * 
+     * @param bool $trueOrFalse
+     * @return ExcelApiToDataSheet
+     */
+    protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
+    {
+        $this->excelHasHeaderRow = $trueOrFalse;
+        return $this;
+    }
+    
+    /**
+     * {@inheritDoc}
+     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    {
+        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
     }
 }

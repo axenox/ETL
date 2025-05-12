@@ -4,7 +4,6 @@ namespace axenox\ETL\Common\OpenAPI;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
 use exface\Core\CommonLogic\Model\CustomAttribute;
-use exface\Core\CommonLogic\Model\Expression;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -16,7 +15,6 @@ use exface\Core\DataTypes\NumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
-use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataTypeFactory;
 use exface\Core\Factories\ExpressionFactory;
@@ -28,12 +26,29 @@ use exface\Core\Interfaces\Model\MetaAttributeInterface;
 /**
  * Represents an OpenAPI 3.x property with additional annotations connecting it to the meta model
  * 
- * Allows the following cusotm OpenAPI properties:
+ * ## Property annotations
+ * 
+ * Each schema property the following cusotm OpenAPI properties:
  * 
  * - `x-attribute-alias` - the meta model attribute this property is bound to
  * - `x-lookup` - the Uxon object to look up for this property
  * - `x-calculation` - the calculation expression for this property
- * - `x-custom-attribute` - create a custom attribute for the object right here
+ * - `x-custom-attribute` - create a custom attribute for the object right here (for export-steps only)
+ * 
+ * ## Template annotations
+ * 
+ * Some special annotations make a schma property be treated as a template. In this case, it will be
+ * replaced with multiple auto-generated properties when the OpenAPI.json is rendered.
+ * 
+ * - `x-attribute-group-alias` - replaces this property with properties generated from each attribute of
+ * the group. If the property has any other options like `type`, `description`, etc. they will be used
+ * as a template and remain visible unless the generated properties overwrite them. Template properties
+ * support placeholders for attribute UXON properties like `[#alias#]` and formulas like `=Lookup()` or
+ * even formulas with placeholders inside!
+ * - `x-properties-from-data` replace this property with properties generated from a data sheet. In contrast
+ * to `x-attribute-group-alias`, this properties may not even be bound to meta attributes - they can be
+ * generated absolutely freely. Other options of the property may use placeholders, that will be filled with
+ * values from the data sheet.
  * 
  * @author  Andrej Kabachnik
  */
@@ -156,7 +171,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-lookup
      * @uxon-type \exface\Core\CommonLogic\DataSheets\Mappings\LookupMapping
-     * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
+     * @uxon-template {"lookup_object_alias":"// Look in this object","lookup_column":"// Take this value from the lookup-object and put it into the property attribute", "if_not_found": "leave_empty","matches":[{"from":"// OpenAPI property","lookup":"// column in the lookup data"}]}
      * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getLookupUxon()
      */
@@ -202,6 +217,30 @@ class OpenAPI3Property implements APIPropertyInterface
     /**
      * The meta model attribute group this property originates from
      * 
+     * For an API importing or exporting `ORDER` objects we can quickly publish all custom attributes
+     * of orders with a single template - just add a property with `x-attribute-group-alias` and you are
+     * done.
+     * 
+     * However, if we also need an x-excel-column for every generated property, we need some more configuration
+     * here. In the simplest case, we could use `"x-excel-column": "[#name#]"`, which would expect excel columns
+     * to be named after the attributes. 
+     * 
+     * Or we can even use a `=Lookup()` formula to take the excel column names from a special column in the definition 
+     * of the attributes. Assume, our `ORDER` has a `CustomAttributesJsonBehavior` and the attribute definitions are 
+     * stored in `my.App.ORDER_ATTRIBUTE`.
+     * 
+     * ```
+     * {
+     *  "properties": {
+     *      "CustomAttributes": {
+     *          "x-attribute-group-alias": "~CUSTOM",
+     *          "x-excel-column": "=Lookup('ExcelColumn', 'my.App.ORDER_ATTRIBUTE', 'ALIAS == [#alias#]')"
+     *      }
+     *  }
+     * }
+     * 
+     * ```
+     * 
      * @uxon-property x-attribute-group-alias
      * @uxon-type metamodel:attribute_group
      *
@@ -213,7 +252,9 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
+     * Returns TRUE if this property is a template for properties generated from a data sheet
      * 
+     * @return bool
      */
     public function isBoundToData() : bool
     {
@@ -336,10 +377,6 @@ class OpenAPI3Property implements APIPropertyInterface
     public function getFormatOption(string $format, string $option) : mixed 
     {
         $value = $this->jsonSchema['x-' . $format . '-' . $option] ?? null;
-        if (is_string($value)) {
-            $value = $this->replacePlaceholders($value);
-            $value = $this->evaluateFormulas($value);
-        }
         return $value;
     }
 
@@ -452,35 +489,6 @@ class OpenAPI3Property implements APIPropertyInterface
             default:
                 throw new InvalidArgumentException('Openapi schema type: ' . $openApiType . ' not recognized.');
         }
-    }
-
-    /**
-     * 
-     * @param string $value
-     * @return string
-     */
-    protected function replacePlaceholders(string $value) : string
-    {
-        return StringDataType::replacePlaceholders($value, $this->jsonSchema);
-    }
-
-    /**
-     * 
-     * @param string $value
-     * @throws \exface\Core\Exceptions\RuntimeException
-     * @return array|string
-     */
-    protected function evaluateFormulas(string $value) : string
-    {
-        if (Expression::detectFormula($value) === true) {
-            $expr = ExpressionFactory::createFromString($this->workbench, $value);
-            if ($expr->isStatic()) {
-                return $expr->evaluate() ?? '';
-            } else {
-                throw new RuntimeException('Cannot use dynamic formula "' . $value . '" in an OpenAPI custom attribute!');
-            }
-        }
-        return $value;
     }
 
     /**
