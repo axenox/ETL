@@ -1,11 +1,14 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
+use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -136,7 +139,19 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Apply the mapper
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $logBook->addSection('Filling data sheet');
-        $toSheet = $mapper->map($fromSheet, false, $logBook);
+
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
+        }
+        
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
@@ -388,6 +403,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     protected function getFromDataRowNumber(int $dataSheetRowIdx): int
     {
-        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? true : false);
+        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
     }
 }
