@@ -3,8 +3,9 @@
 namespace axenox\ETL\Common\Traits;
 
 use axenox\ETL\Common\StepNote;
+use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
-use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 
 /**
  * This trait contains all functions and accessors necessary to enable a class to take step notes.
@@ -33,14 +34,11 @@ trait ITakeStepNotesTrait
 
     /**
      * Generates a new step note, using the `note_on_success` UXON.
-     * 
-     * @param string $flowRunUid
-     * @param string $stepRunUid
+     *
+     * @param ETLStepDataInterface $stepData
      * @return StepNote|null
      */
-    public function getNoteOnSuccess(
-        string $flowRunUid,
-        string $stepRunUid) : ?StepNote
+    public function getNoteOnSuccess(ETLStepDataInterface $stepData) : ?StepNote
     {
         if($this->noteOnSuccessUxon === null) {
             return null;
@@ -48,8 +46,7 @@ trait ITakeStepNotesTrait
         
         return StepNote::FromUxon(
             $this->getWorkbench(),
-            $flowRunUid,
-            $stepRunUid,
+            $stepData,
             $this->noteOnSuccessUxon
         );
     }
@@ -73,24 +70,19 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_failure` UXON.
      *
-     * @param string     $flowRunUid
-     * @param string     $stepRunUid
-     * @param \Throwable $exception
+     * @param ETLStepDataInterface $stepData
+     * @param \Throwable           $exception
      * @return StepNote|null
      */
-    public function getNoteOnFailure(
-        string $flowRunUid,
-        string $stepRunUid,
-        \Throwable $exception) : ?StepNote
+    public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
     {
         if($this->noteOnFailureUxon === null) {
-            return null;
+            return NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception);
         }
 
         return StepNote::FromUxon(
             $this->getWorkbench(),
-            $flowRunUid,
-            $stepRunUid,
+            $stepData,
             $this->noteOnFailureUxon,
             $exception
         );

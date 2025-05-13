@@ -2,11 +2,11 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\iCanGenerateDebugWidgets;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -60,7 +60,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $this->fromObject = $fromObject;
         $this->toObject = $toObject;
         $this->name = $name;
-        $this->crudCounter = new CrudCounter($this->workbench);
+        $this->crudCounter = new CrudCounter($this->workbench, 1);
         
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
@@ -285,18 +285,18 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * TRUE, the step will be terminated, if at least one row failed at least one data check. In either case, all
      * checks will be performed first.
      *
-     * @param DataSheetInterface $dataSheet
-     * @param UxonObject|null    $uxon
-     * @param string             $flowRunUid
-     * @param string             $stepRunUid
-     * @param FlowStepLogBook    $logBook
+     * @param DataSheetInterface   $dataSheet
+     * @param UxonObject|null      $uxon
+     * @param string               $sectionTitle
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
      * @return void
      */
     protected function performDataChecks(
         DataSheetInterface $dataSheet, 
         ?UxonObject $uxon,
-        string $flowRunUid,
-        string $stepRunUid,
+        string $sectionTitle,
+        ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook) : void
     {
         if($uxon === null) {
@@ -304,7 +304,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             return;
         }
         
-        $logBook->addLine('Performing data checks.');
+        $logBook->addSection($sectionTitle);
         $logBook->addIndent(1);
         
         $errors = null;
@@ -323,7 +323,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, $logBook, $flowRunUid, $stepRunUid);
+                $check->check($dataSheet, $logBook, $stepData);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
@@ -332,10 +332,15 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
         }
 
-        $logBook->addIndent(-1);
         if($errors === null) {
-            $logBook->addLine('Checked data PASSED all data checks.');
+            $logBook->addLine('Data PASSED all checks.');
+            $logBook->addIndent(-1);
         } else if ($stopOnError) {
+            $logBook->addIndent(-1);
+            $logBook->addLine('Terminating step, because one or more data checks FAILED.');
+            $this->getCrudCounter()->stop();
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            
             throw $errors;
         }
     }
@@ -348,7 +353,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -360,6 +365,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
+     * IDEA move to a DataSheetStepTrait? to/from- DataChecks only make sense for data sheets, not for SQL steps.
      * @return UxonObject|null
      */
     public function getFromDataChecksUxon() : ?UxonObject
@@ -376,7 +382,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property to_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"is_valid_alias":"","is_invalid_value":false, "stop_on_check_failed":false, "note_on_success":{"message":"Check Passed", "log_level":"info"}, "note_on_failure": {"message":"Check Failed", "log_level":"info"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this

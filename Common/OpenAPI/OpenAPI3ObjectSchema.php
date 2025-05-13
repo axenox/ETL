@@ -5,19 +5,24 @@ use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
+use exface\Core\CommonLogic\Model\Expression;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\JsonDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Factories\DataSheetFactory;
+use exface\Core\Factories\FormulaFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
-use stdClass;
 
 /**
  * Represents an OpenAPI 3.x schema bound to a meta object
  * 
  * Adds the following custom OpenAPI properties:
  * 
- * - `x-object-alias` - the meta object alias
+ * - `x-object-alias` - namespaced alias of the object represented by this schema
+ * - `x-update-if-matching-attributes` - array of attribute aliases to use to determine if the import row
+ * is a create or an update.
  * 
  * @author Andrej Kabachnik
  */
@@ -26,6 +31,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     use OpenAPI3UxonTrait;
 
     const X_OBJECT_ALIAS = 'x-object-alias';
+    const X_UPDATE_IF_MATCHING_ATTRIBUTES = 'x-update-if-matching-attributes';
 
     private $openAPISchema = null;
     private $jsonSchema = null;
@@ -101,51 +107,92 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     }    
 
     /**
-     * Converts a given stdClass instance to an attribute group.
+     * Renders templates for attribute groups or data-driven properties in the given schema
      * 
-     * If the given instance does not contain a property `x-attribute-group-alias` this
-     * function will return FALSE. If it does, it will return an array containing schema
-     * conform instances of all attributes belonging to that attribute group.
-     * 
-     * @param stdClass            $property
+     * @param array $property
      * @param MetaObjectInterface $object
-     * @return array|false
+     * @return array
      */
-    public static function toGroup(stdClass $property, MetaObjectInterface $object) : array|false
+    public static function enhanceSchema(array $schema, MetaObjectInterface $object) : array
     {
-        $attributeGroup = $property->{'x-attribute-group-alias'};
-        if(empty($attributeGroup)) {
-            return false;
-        }
+        $properties = $schema['properties'];
+        foreach ($properties as $propertyName => $property) {
+            switch (true) {
+                // x-attribute-group-alias
+                case array_key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $property):
+                    $groupAlias = $property[OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS];
+                    if(empty($groupAlias)) {
+                        unset ($schema['properties'][$propertyName]);
+                        break;
+                    }
 
-        $result = [];
-        foreach($object->getAttributeGroup($attributeGroup) as $attribute) {
-            if(! $attribute->isWritable()) {
-                continue;
-            }
+                    foreach($object->getAttributeGroup($groupAlias) as $attribute) {
+                        if(! $attribute->isWritable()) {
+                            continue;
+                        }
+                        $alias = $attribute->getAlias();
+                        $attrProp = $property;
 
-            $alias = $attribute->getAlias();
-            $property = new stdClass();
+                        // Handle placeholders
+                        $attrPropTpl = JsonDataType::encodeJson($attrProp);
+                        $phs = StringDataType::findPlaceholders($attrPropTpl);
+                        if (! empty ($phs)) {
+                            $attrPhs = $attribute->exportUxonObject()->toArray();
+                            $attrPropTpl = StringDataType::replacePlaceholders($attrPropTpl, $attrPhs);
+                            $attrProp = JsonDataType::decodeJson($attrPropTpl);
+                        }
+                        // Evaluate formulas if the value of a property option is a formula
+                        foreach ($attrProp as $key => $val) {
+                            if (Expression::detectFormula($val)) {
+                                $formula = FormulaFactory::createFromString($object->getWorkbench(), $val);
+                                $attrProp[$key] = $formula->evaluate();
+                            }
+                        }
 
-            try {
-                $propertySchema = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
-            } catch (InvalidArgumentException $e) {
-                continue;
+                        // Determine data type
+                        if (empty($attrProp['type'] ?? null)) {
+                            try {
+                                $typeProp = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
+                                $attrProp = array_merge($attrProp, $typeProp);
+                            } catch (InvalidArgumentException $e) {
+                                $object->getWorkbench()->getLogger()->logException($e);
+                            }
+                        }
+                        
+                        $attrProp['nullable'] = $attribute->isRequired() !== true;
+                        $attrProp['description'] = $attribute->getShortDescription() ?? "";
+                        $attrProp['x-attribute-alias'] = $alias;
+
+                        $schema['properties'][$alias] = $attrProp;
+                    }
+                    unset ($schema['properties'][$propertyName]);
+                    break;
+                
+                // x-properties-from-data
+                case array_key_exists(OpenAPI3Property::X_PROPERTIES_FROM_DATA, $property):
+                    $array = $property[OpenAPI3Property::X_PROPERTIES_FROM_DATA];
+                    $dataSheet = DataSheetFactory::createFromUxon($object->getWorkbench(), UxonObject::fromAnything($array));
+                    $propNameCol = $dataSheet->getColumns()->getFirst();
+                    $dataSheet->dataRead();
+                    
+                    $tpl = JsonDataType::encodeJson($property);
+                    $phs = StringDataType::findPlaceholders($tpl);
+                    
+                    foreach ($dataSheet->getRows() as $row) {
+                        $phVals = [];
+                        foreach ($phs as $ph) {
+                            $phVals[$ph] = $row[$ph];
+                        }
+                        $json = StringDataType::replacePlaceholders($tpl, $phVals);
+                        $schema['properties'][$row[$propNameCol->getName()]] = JsonDataType::decodeJson($json);
+                    }
+                    
+                    unset ($schema['properties'][$propertyName]);
+                    break;
             }
-            
-            foreach ($propertySchema as $prop => $val){
-                $property->$prop = $val;
-            }
-            
-            $property->nullable = $attribute->isRequired() !== true;
-            $property->description = $attribute->getShortDescription() ?? "";
-            $property->{'x-attribute-alias'} = $alias;
-            $property->{'x-excel-column'} = $attribute->getName();
-            
-            $result[$alias] = $property;
         }
         
-        return $result;
+        return $schema;
     }
 
     /**
@@ -160,26 +207,11 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     
     /**
      * 
-     * @param MetaObjectInterface $object
-     */
-    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object)
-    {
-        $behavior = BehaviorFactory::createFromUxon($object, PreventDuplicatesBehavior::class, new UxonObject([
-            'compare_attributes' => $this->getUpdateIfMatchingAttributeAliases(),
-            'on_duplicate_multi_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE,
-            'on_duplicate_single_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE
-        ]));
-        $object->getBehaviors()->add($behavior);
-        return;
-    }
-    
-    /**
-     * 
      * @return string[]
      */
     public function getUpdateIfMatchingAttributeAliases() : array
     {
-        return $this->jsonSchema['x-update-if-matching-attributes'] ?? [];
+        return $this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? [];
     }
     
     /**
@@ -198,7 +230,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      */
     public function isUpdateIfMatchingAttributes() : bool
     {
-        return empty($this->jsonSchema['x-update-if-matching-attributes'] ?? []) === false;
+        return empty($this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? []) === false;
     }
 
     /**

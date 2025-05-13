@@ -2,6 +2,7 @@
 
 namespace axenox\ETL\Common;
 
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -43,17 +44,15 @@ class StepNote implements NoteInterface
     private ?int $countWarnings = null;
 
     /**
-     * @param WorkbenchInterface $workbench
-     * @param string             $flowRunUid
-     * @param string             $stepRunUid
-     * @param string             $message
-     * @param Throwable|null     $exception
-     * @param string|null        $logLevel
+     * @param WorkbenchInterface   $workbench
+     * @param ETLStepDataInterface $stepData
+     * @param string               $message
+     * @param Throwable|null       $exception
+     * @param string|null          $logLevel
      */
     public function __construct(
         WorkbenchInterface $workbench,
-        string $flowRunUid, 
-        string $stepRunUid,
+        ETLStepDataInterface $stepData,
         string $message = "",
         Throwable $exception = null,
         string $logLevel = null,
@@ -61,8 +60,8 @@ class StepNote implements NoteInterface
     {
         $this->workbench = $workbench;
         $this->storageObject = MetaObjectFactory::createFromString($workbench,'axenox.ETL.step_note');
-        $this->flowRunUid = $flowRunUid;
-        $this->stepRunUid = $stepRunUid;
+        $this->flowRunUid = $stepData->getFlowRunUid();
+        $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
         $this->logLevel = $logLevel ?? ($exception ? 'error' : 'info');
         
@@ -71,29 +70,41 @@ class StepNote implements NoteInterface
             
             if($exception instanceof ExceptionInterface) {
                 $this->exceptionLogId = $exception->getId();
+                if ($this->message === "") {
+                    switch (true) {
+                        /* TODO Create DataSheetValueExceptionInterface and implement it
+                        * - DataSheetMissingRequiredValueError
+                        * - DataSheetInvalidValueError
+                        * - LATER in DataSheetDuplicatesError, which currently does not have any information about rows
+                        * other than in its message
+                        case $exception instanceof DataSheetValueExceptionInterface:
+                        case $exception instanceof DataSheetInvalidValueError:
+                            $this->message = $exception->getMessageWithoutRowNumbers();*/
+                        default:
+                            $this->message = $exception->getMessageModel($this->getWorkbench())->getTitle();
+                    }
+                }
             }
         }
     }
 
     /**
      * Create a new step note instance, using a UXON config.
-     * 
-     * @param WorkbenchInterface $workbench
-     * @param string             $flowRunUid
-     * @param string             $stepRunUid
-     * @param UxonObject         $uxon
-     * @param Throwable|null     $exception
+     *
+     * @param WorkbenchInterface   $workbench
+     * @param ETLStepDataInterface $stepData
+     * @param UxonObject           $uxon
+     * @param Throwable|null       $exception
      * @return StepNote
      */
     public static function FromUxon(
         WorkbenchInterface $workbench,
-        string $flowRunUid,
-        string $stepRunUid,
+        ETLStepDataInterface $stepData,
         UxonObject $uxon,
         Throwable $exception = null,
     ) : StepNote 
     {
-        $note = new StepNote($workbench, $flowRunUid, $stepRunUid);
+        $note = new StepNote($workbench, $stepData);
         $note->setException($exception);
         $note->importUxonObject($uxon);
         return $note;
@@ -359,7 +370,7 @@ class StepNote implements NoteInterface
      */
     public function getCountErrors() : ?int
     {
-        return $this->countErrors;
+        return max($this->hasException() ? 1 : 0, $this->countErrors);
     }
 
     /**

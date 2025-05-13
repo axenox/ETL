@@ -11,7 +11,6 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
-use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -19,68 +18,135 @@ use exface\Core\Factories\DataSheetMapperFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
+use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use exface\Core\CommonLogic\DataSheets\DataColumn;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
- * Read data received through an annotated API (like OpenAPI) using object and attribute annotations
+ * Imports data received through an annotated API (like OpenAPI) using object and attribute annotations.
+ * 
+ * This steps allows to transform JSON web service requests into data sheets without having to describe
+ * the structure of the JSON as an object of the meta model. Instead, you can map JSON properties directly
+ * to attributes of any meta object of you choice directly in the web service definition using simple
+ * annotations.
+ * 
+ * This step can be easyily combined with `ExcelApiToDataSheet` to use the same API definition to import
+ * JSON data as well as uploaded Excel data. In this case, special `x-excel-` annotations will become
+ * available too.
+ * 
+ * For example, in an OpenAPI3 web service, we can define a schema to import orders directly into the
+ * `ORDER` object of our app. Using the `x-object-alias` annotation we bind the JSON schema to the meta
+ * object. Now we can map properties of the JSON order object to attributes via `x-attribute-alias`.
+ * 
+ * ```
+ * {
+ *  "schemas": {
+ *      "Order": {
+ *          "type": "object",
+ *          "x-object-alias": "my.App.ORDER",
+ *          "properties: {
+ *              "Number" {
+ *                  "type": "string",
+ *                  "description": "Order number",
+ *                  "x-attribute-alias": "NUMBER"
+ *              },
+ *              "Date" {
+ *                  "type": "string",
+ *                  "description": "Order date formatted as DD.MM.YYYY",
+ *                  "example": "23.06.2024",
+ *                  "x-calculation": "=Date(Date)",
+ *                  "x-attribute-alias": "DATE"
+ *              },
+ *              "SupplierNo" {
+ *                  "type": "string",
+ *                  "description": "Supplier number",
+ *                  "x-attribute-alias": "SUPPLIER",
+ *                  "x-lookup": {
+ *                      "lookup_object_alias": "my.App.SUPPLIER",
+ *                      "lookup_column": "UID",
+ *                      "matches": [
+ *                          {"from": "SupplierNo", "lookup": "NO"}
+ *                      ]
+ *                  }
+ *              }
+ *          }
+ *      }
+ *  }
+ * }
+ * 
+ * ```
+ * 
+ * As you can see, each JSON property will be transformed into an attribute of the `ORDER`:
+ * 
+ * - `Number` will be copied to the `NUMBER` attribute as-is
+ * - `Date` is expected in DD.MM.YYYY in JSON, so it will be parsed using the `=Date()` formula before
+ * being passed to the `DATE` attribute
+ * - `SupplierNo` is the supplier number, while we need the UID of the `SUPPLIER` object in our `SUPPLIER`
+ * attribute - that is why we need an `x-lookup` to search for the `SupplierNo` in the `NO` column of our
+ * supplier data and lookup the UID of the matching row.
+ * 
+ * Most of the schema is regular JSON schema syntax. Merely the `x-` annotatios are added by this step
+ * specifically. All in all, it still remains a valid OpenAPI3 definition and will be correctly parsed
+ * by any OpenAPI library.
+ * 
+ * ## Workflow
+ * 
+ * Technically, the step will
+ * 
+ * 1. Read the web service request into a data sheet based on an auto-created temporary meta object. It
+ * will have attributes/columns for every JSON property.
+ * 2. Run the `from_data_checks` on that temporary data sheet if defined in the step
+ * 3. Transform this data sheet to one based on the to-object of the step by mapping JSON-property columns
+ * to the respective `x-attribute-alias`. Other annotations like `x-calculation` or `x-lookup` allow to
+ * further customize the mappings applied.
+ * 4. Save the entire data sheet or every row separately depending on `skip_invalid_rows`. Thus, subsequent
+ * operations will either be applied to every single row or the the entire data sheet as a whole.
+ * 5. Run `to_data_checks` on the resulting data sheet if defined in the step
+ * 6. Apply additional `output_mappers` allowing to further transform the resulting data - e.g. transpose
+ * columns, etc.
  * 
  * ## Annotations
  * 
- * ´´´
- * {
- *     "Object": {
- *          "type": "object",
- *          "x-object-alias": "alias",
- *          "properties: {
- *              "Id" {
- *                  "type": "string",
- *                  "x-attribute-alias": "UID"
- *              }
- *          }
- *     }
- * }
- *
- * ´´´
- *
- * Only use direct Attribute aliases in the definition and never relation paths or formulars!
- * e.g `"x-attribute-alias": "Objekt_ID"`
- * If you want to link objects, use the id/uid in the original attribute.
- * e.g. `"x-attribute-alias": "Request"` -> '0x11EFBD3FD893913ABD3F005056BEF75D'
- *
- * The from-object HAS to be defined within the request schema of the route to the step!
- * e.g. with multiple structural concepts
+ * ### OpenAPI v3
  * 
- * ```
- * "requestBody": {
- *   "description": "Die zu importierenden Daten im Json format.",
- *   "required": true,
- *   "content": {
- *     "application/json": {
- *       "schema": {
- *         "type": "object",
- *         "properties": {
- *           "Objekte": {
- *             "type": "array",
- *             "items": {
- *               "$ref": "#/components/schemas/Object"
- *             },
- *             "x-object-alias": "full.namespace.Object"
- *           }
- *         }
- *       }
- *     }
- *   }
- * }
+ * A schema used in OpenAPI can be bound to a meta object suing `x-` annotations in that schema.
  * 
- * ```
+ * #### Schema annotations
+ * 
+ * - `x-object-alias` - namespaced alias of the object represented by this schema
+ * - `x-update-if-matching-attributes` - array of attribute aliases to use to determine if the import row
+ * is a create or an update.
+ * 
+ * #### Property annotations
+ * 
+ * Each schema property the following cusotm OpenAPI properties:
+ * 
+ * - `x-attribute-alias` - the meta model attribute this property is bound to
+ * - `x-lookup` - the Uxon object to look up for this property
+ * - `x-calculation` - the calculation expression for this property
+ * - `x-custom-attribute` - create a custom attribute for the object right here (for export-steps only)
+ * - `x-excel-column` - only if a `ExcelApiToDataSheet` step exists int the same flow
+ * 
+ * #### Property template annotations
+ * 
+ * Some special annotations make a schma property be treated as a template. In this case, it will be
+ * replaced with multiple auto-generated properties when the OpenAPI.json is rendered.
+ * 
+ * - `x-attribute-group-alias` - replaces this property with properties generated from each attribute of
+ * the group. If the property has any other options like `type`, `description`, etc. they will be used
+ * as a template and remain visible unless the generated properties overwrite them
+ * - `x-properties-from-data` replace this property with properties generated from a data sheet. In contrast
+ * to `x-attribute-group-alias`, this properties may not even be bound to meta attributes - they can be
+ * generated absolutely freely. Other options of the property may use placeholders, that will be filled with
+ * values from the data sheet.
  *
- * ## Customizing the data sheet with placeholders
+ * ## Customizing the resulting data sheet
  * 
  * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
  * filters, sorters, aggregators, etc. from placeholders available in the flow step.
@@ -107,8 +173,12 @@ use exface\Core\Interfaces\Log\LoggerInterface;
  * }
  * 
  * ```
+ * 
+ * ## Applying additional logic via output mappers
+ * 
+ * TODO
  *
- * @author Andrej Kabachnik, Miriam Seitz
+ * @author Andrej Kabachnik, Georg Bieger
  */
 class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 {
@@ -116,7 +186,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
     private $additionalColumns = null;
     private $schemaName = null;
-    private $mapperUxon = null;
+    private $propertiesMapperUxon = null;
+    private $outputMapperUxon = null;
     private $skipInvalidRows = false;
 
     /**
@@ -127,10 +198,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $flowRunUid = $stepData->getFlowRunUid();
-    	$stepRunUid = $stepData->getStepRunUid();
-    	$placeholders = $this->getPlaceholders($stepData);
-    	$result = new UxonEtlStepResult($stepRunUid);
+        $placeholders = $this->getPlaceholders($stepData);
+    	$result = new UxonEtlStepResult($stepData->getStepRunUid());
         $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
 
@@ -165,15 +234,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+        $logBook->addDataSheet('JSON data', $fromSheet);
         
-        $logBook->addLine('Extracted JSON data to "From-Sheet".');
+        $logBook->addLine('Extracted JSON data to `From-Sheet`.');
         $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
         
         $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
-            $this->performDataChecks($fromSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
+            $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $stepData, $logBook);
             
             if($fromSheet->countRows() === 0) {
                 $this->getCrudCounter()->stop();
@@ -186,116 +256,217 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
         }
         
+        $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet, false, $logBook);
+
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+        
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
+        }
+        
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
-        $logBook->addLine('Mapped "From-Sheet" according to schema "' . get_class($toObjectSchema) . '" resulting in "To-Sheet".');
-        $logBook->addDataSheet('To-Sheet', $toSheet);
+        $logBook->addLine('Mapped `From-Sheet` according to schema "' . get_class($toObjectSchema) . '" resulting in `To-Sheet`.');
+        $logBook->addDataSheet('To-data', $toSheet);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
         // $toSheet = $this->removeRelationColumns($toSheet);
-
-        $msg = 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data sent via webservice request.';
+        
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
         
-        $writer = $this->saveData(
+        $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $flowRunUid,
-            $stepRunUid, 
             $logBook,
-            $this->isSkipInvalidRows());
+            $this->isSkipInvalidRows()
+        );
+        
+        $logBook->addSection('Saving data');
+        yield from $writer;
+        $resultSheet = $writer->getReturn();
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
 
         $this->getCrudCounter()->stop();
-        
-        yield from $writer;
-        $toSheet = $writer->getReturn();
 
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
+    }
+
+    /**
+     * @param DataSheetMapperInterface $mapper
+     * @param DataSheetInterface       $fromSheet
+     * @param ETLStepDataInterface     $stepData
+     * @param LogBookInterface         $logBook
+     * @return DataSheetInterface
+     * @throws \Throwable
+     */
+    protected function applyDataSheetMapper(
+        DataSheetMapperInterface $mapper,
+        DataSheetInterface $fromSheet,
+        ETLStepDataInterface $stepData,
+        LogBookInterface $logBook
+    ) : DataSheetInterface
+    {
+        $translator = $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
+        if(!$this->isSkipInvalidRows()) {
+            try {
+                // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
+                $toSheet = $mapper->map($fromSheet, false, $logBook);
+            } catch (\Throwable $exception) {
+                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception));                
+                throw $exception;
+            }
+            
+            return $toSheet;
+        }
+        
+        $toSheet = null;
+        $rowSheet = $fromSheet->copy();
+        // TODO We should think of a way to not do this row by row.
+        // TODO Also, this fails on the first failed mapper, making the error less insightful.
+        foreach ($fromSheet->getRows() as $i => $row) {
+            $rowSheet->removeRows();
+            $rowSheet->addRow($row);
+            try {
+                $mappedSheet = $mapper->map($rowSheet, false, $logBook);
+                if($toSheet !== null) {
+                    $toSheet->addRows($mappedSheet->getRows());
+                } else {
+                    $toSheet = $mappedSheet->copy();
+                }
+            } catch (\Throwable $exception) {
+                $logBook->addIndent(-2);
+                $rowNo = $this->getFromDataRowNumber($i);
+                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception, $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)));
+            }
+        }
+        
+        return $toSheet;
     }
 
     /**
      * @param DataSheetInterface   $toSheet
      * @param CrudCounter          $crudCounter
      * @param ETLStepDataInterface $stepData
-     * @param string               $flowRunUid
-     * @param string               $stepRunUid
      * @param FlowStepLogBook      $logBook
      * @param bool                 $rowByRow
      * @return \Generator
      * @throws \Throwable
      */
-    protected function saveData(
+    protected function writeData(
         DataSheetInterface $toSheet,
         CrudCounter        $crudCounter, 
         ETLStepDataInterface $stepData, 
-        string $flowRunUid,
-        string $stepRunUid,
         FlowStepLogBook $logBook,
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
+        $resultSheet = null;
+
         if ($rowByRow === true) {
+            $saveSheet = $toSheet;
+            $resultSheet = null;
             foreach ($toSheet->getRows() as $i => $row) {
-                $saveSheet = $toSheet->copy();
+                $saveSheet = $saveSheet->copy();
                 $saveSheet->removeRows();
                 $saveSheet->addRow($row, false, false);
+                if ($i > 0) {
+                    $logBook->addSection('Saving row index ' . $i);
+                }
                 try {
-                    $writer = $this->saveData(
+                    $writer = $this->writeData(
                         $saveSheet, 
                         $crudCounter, 
                         $stepData, 
-                        $flowRunUid, 
-                        $stepRunUid,
                         $logBook,
-                        false);
-                    
+                        false
+                    );
+                    // Write the line
                     foreach ($writer as $line) {
                         // Do nothing, just call the writer
                     }
+                    // Get the resulting data sheet of that single line an add it to the global
+                    // result data
+                    $rowResultSheet = $writer->getReturn();
+                    if ($resultSheet === null) {
+                        $resultSheet = $rowResultSheet;
+                    } else {
+                        foreach ($rowResultSheet->getRows() as $resultRow) {
+                            $resultSheet->addRow($resultRow, false, false);
+                        }
+                    }
                 } catch (\Throwable $e) {
-                    yield 'Error on row ' . $i+1 . '. ' . $e->getMessage() . PHP_EOL;
+                    // If anything goes wrong, just continue with the next row
+                    yield 'Error on row ' . $this->getFromDataRowNumber($i) . '. ' . $e->getMessage() . PHP_EOL;
                     NoteTaker::takeNote(new StepNote(
                         $this->getWorkbench(),
-                        $flowRunUid,
-                        $stepRunUid,
-                        'Error on row ' . $i+1 . '.',
+                        $stepData,
+                        'Error on row ' . $this->getFromDataRowNumber($i) . '.',
                         $e
                     ));
                     
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                 }
-                //$saveSheet->removeRows();
-            }
-            return $toSheet;
-        }
-
-        $transaction = $this->getWorkbench()->data()->startTransaction();
-
-        try {
-            // Perform 'to_data_checks'.
-            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, $flowRunUid, $stepRunUid, $logBook);
             }
             
-            if($toSheet->countRows() > 0) {
+        } else {
+
+            foreach($this->getOutputMappers() as $i => $mapper) {
+                $toSheet = $mapper->map($toSheet, false, $logBook);
+            }
+            if ($toSheet->isEmpty()) {
+                return $toSheet;
+            }
+
+            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+            // writes for each row, so it will end up here anyway
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
+
+                if($toSheet->countRows() === 0) {
+                    $logBook->addLine('All input rows removed by failed data checks.');
+                    return $toSheet;
+                }
+            }
+
+            $transaction = $this->getWorkbench()->data()->startTransaction();
+
+            try {
                 // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
                 // that can be used to update known entire
                 $toSheet->dataCreate(false, $transaction);
+            } catch (\Throwable $e) {
+                throw $e;
             }
-        } catch (\Throwable $e) {
-            throw $e;
+
+            $transaction->commit();
+
+            $resultSheet = $toSheet;
         }
 
-        $transaction->commit();
+        // If no row actually worked, we will not have a result sheet at all. This means, nothing was
+        // written. However, it is easier to understand, what happened if we return an empty sheet
+        // and not NULL, so we just compy the to-sheet and empty it.
+        if ($resultSheet === null) {
+            $resultSheet = $toSheet->copy()->removeRows();
+        }
 
-        return $toSheet;
+        return $resultSheet;
     }
 
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
@@ -360,6 +531,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         'ignore_if_missing_from_column' => ! $propSchema->isRequired()
                     ];
                     break;
+                case $propSchema->isBoundToData():
+                    $col2col[] = [
+                        'from' => $propName,
+                        'to' => $propName,
+                        'ignore_if_missing_from_column' => ! $propSchema->isRequired()
+                    ];
+                    break;
             }
         }
         $uxon = new UxonObject([
@@ -391,7 +569,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     protected function setPropertiesToDataSheetMapper(UxonObject $uxon) : JsonApiToDataSheet 
     {
-        $this->mapperUxon = $uxon;
+        $this->propertiesMapperUxon = $uxon;
         return $this;
     }
 
@@ -406,7 +584,39 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     protected function getPropertiesToDataMapperUxon() : ?UxonObject
     {
-        return $this->mapperUxon;
+        return $this->propertiesMapperUxon;
+    }
+
+    /**
+     * Additional mapper applied before the result data sheet is saved
+     * 
+     * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper[]
+     * @uxon-property output_mappers
+     * @uxon-template [{"column_to_column_mappings": [{"from": "", "to": ""}]}]
+     * 
+     * @param \exface\Core\CommonLogic\UxonObject $uxon
+     * @return JsonApiToDataSheet
+     */
+    protected function setOutputMappers(UxonObject $uxon) : JsonApiToDataSheet 
+    {
+        $this->outputMapperUxon = $uxon;
+        return $this;
+    }
+
+    /**
+     * 
+     * @return UxonObject
+     */
+    protected function getOutputMappers() : array
+    {
+        if ($this->outputMapperUxon === null || $this->outputMapperUxon->isEmpty()) {
+            return [];
+        }
+        $mappers = [];
+        foreach ($this->outputMapperUxon as $mapperUxon) {
+            $mappers[] = DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $mapperUxon, $this->getToObject(), $this->getToObject());
+        }
+        return $mappers;
     }
 
     /**
@@ -479,6 +689,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     {
         $importData = [];
         foreach ($bodyLine as $propertyName => $value) {
+            $colName = DataColumn::sanitizeColumnName($propertyName);
             $property = $toObjectSchema->getProperty($propertyName);
             switch(true) {
                 // If we are not looking for this property, but it is a real array, see if it contains
@@ -500,7 +711,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                             $value = implode(EXF_LIST_SEPARATOR, $value);
                         }
                     }
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
                 // Object values, that are to be put in a DataSheet also need to be converted to string,
                 // but they are converted to JSON - e.g. geometries for geo data
@@ -508,11 +719,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     if (is_array($value)) {
                         $value =  json_encode($value);
                     }
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
                 // Take regular properties as-is
                 default:
-                    $importData[$propertyName] = $value;
+                    $importData[$colName] = $value;
                     break;
             }
         }
@@ -583,5 +794,22 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function isSkipInvalidRows() : bool
     {
         return $this->skipInvalidRows;
+    }
+
+    /**
+     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view
+     * of a human.
+     * 
+     * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
+     * the data sheet - so the row index matches visually. However, if the from-data was an excel,
+     * the row numbering starts with 1 AND the excel often has a header-row, so the data sheet row
+     * 7 will correspond to excel line 9 from the point of view of the user.
+     * 
+     * @param int $dataSheetRowIdx
+     * @return int
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
+    {
+        return $dataSheetRowIdx;
     }
 }
