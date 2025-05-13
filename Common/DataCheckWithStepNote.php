@@ -3,6 +3,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\DataSheets\DataCheck;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\StringDataType;
@@ -57,17 +58,16 @@ class DataCheckWithStepNote extends DataCheck
     }
 
     /**
-     * @param DataSheetInterface    $sheet
-     * @param LogBookInterface|null $logBook
-     * @param string                $flowRunUid
-     * @param string                $stepRunUid
+     * @param DataSheetInterface        $sheet
+     * @param LogBookInterface|null     $logBook
+     * @param ETLStepDataInterface|null $stepData
      * @return DataSheetInterface
      */
     public function check(
         DataSheetInterface $sheet, 
-        LogBookInterface $logBook = null, 
-        string $flowRunUid = '', 
-        string $stepRunUid = ''): DataSheetInterface
+        LogBookInterface $logBook = null,
+        ETLStepDataInterface $stepData = null
+    ): DataSheetInterface
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
         
@@ -85,6 +85,8 @@ class DataCheckWithStepNote extends DataCheck
         $checkSheet = $sheet->copy();
         $errors = null;
         $rowsToRemove = [];
+        $conditionString = $this->getConditionGroup($checkSheet->getMetaObject())->__toString();
+        $conditionJson = $this->getConditionGroupUxon()->toJson();
         
         foreach ($sheet->getRows() as $rowNr => $row) {
             $checkSheet->removeRows();
@@ -97,16 +99,24 @@ class DataCheckWithStepNote extends DataCheck
                     $placeHoldersToValues[$placeHolder] = $row[$placeHolder];
                 }
 
-                $conditionJson = $this->getConditionGroupUxon()->toJson();
-                $conditionJson = StringDataType::replacePlaceholders($conditionJson, $placeHoldersToValues);
-                $conditionUxon = UxonObject::fromJson($conditionJson)->getProperty('conditions');
+                $renderedJson = StringDataType::replacePlaceholders($conditionJson, $placeHoldersToValues);
+                $conditionUxon = UxonObject::fromJson($renderedJson)->getProperty('conditions');
                 $this->setConditions($conditionUxon);
             }
             
             try {
                 parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
-                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check "' . $this->__toString() . '".';
+                $placeHolderInfo = '';
+                if(!empty($placeHoldersToValues)) {
+                    $last = array_key_last($placeHoldersToValues);
+                    foreach ($placeHoldersToValues as $key => $value) {
+                        $placeHolderInfo .= '[#' . $key . '#]: ' . $value . ($key !== $last ? ', ' : '');
+                    }
+                    $placeHolderInfo = ' with placeholders `' . $placeHolderInfo . '`';
+                }
+                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '.';
+                
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
                 if($removeInvalidRows) {
@@ -131,15 +141,16 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         if($errors) {
-            if($noteOnFailure = $this->getNoteOnFailure($flowRunUid, $stepRunUid, $errors)) {
+            if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
                 $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
+                $noteOnFailure->setCountErrors(count($errors->getAllErrors()));
                 $noteOnFailure->takeNote();
             }
             
             throw $errors;
         } 
         
-        if($noteOnSuccess = $this->getNoteOnSuccess($flowRunUid, $stepRunUid)) {
+        if($noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
             $noteOnSuccess->importCrudCounter($this->getStep()?->getCrudCounter());
             $noteOnSuccess->takeNote();
         }

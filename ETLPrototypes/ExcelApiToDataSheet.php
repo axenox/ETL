@@ -1,12 +1,14 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -19,6 +21,7 @@ use exface\Core\QueryBuilders\ExcelBuilder;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 
 /**
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
@@ -59,7 +62,7 @@ use axenox\ETL\Common\UxonEtlStepResult;
  *      }
  * ]
  *
- * @author miriam.seitz
+ * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
 {
@@ -72,6 +75,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
+    private $excelHasHeaderRow = true;
+
     /**
      *
      * {@inheritDoc}
@@ -80,7 +85,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $flowRunUid = $stepData->getFlowRunUid();
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
@@ -115,10 +119,11 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-
+        $logBook->addDataSheet('Excel data', $fromSheet);
+        
         // Validate data in the from-sheet against the JSON schema
         if ($this->isValidatingApiSchema()) {
-        foreach ($fromSheet->getRows() as $i => $row) {
+            foreach ($fromSheet->getRows() as $i => $row) {
                 $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
@@ -133,27 +138,51 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         // Apply the mapper
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $mapper->map($fromSheet);
+        $logBook->addSection('Filling data sheet');
+
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+
+        if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+
+            yield $msg . PHP_EOL;
+            return $result->setProcessedRowsCounter(0);
+        }
+        
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
 
         // Saving relations is very complex and not yet supported for OpenApi Imports
         $this->removeRelationColumns($toSheet);
 
-        yield 'Importing rows ' . $toSheet->countRows() . ' for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from an Excel file import.';
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
+        $logBook->addLine($msg);
+        $logBook->addDataSheet('To-data', $toSheet);
+        yield $msg;
 
-        $writer = $this->saveData(
+        $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $flowRunUid,
-            $stepRunUid,
             $logBook,
-            $this->isSkipInvalidRows());
-        
+            $this->isSkipInvalidRows()
+        );
+
+        $logBook->addSection('Saving data');
         yield from $writer;
-        $toSheet = $writer->getReturn();
+        $resultSheet = $writer->getReturn();
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
+
+        $this->getCrudCounter()->stop();
+
+        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($toSheet->countRows());
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
 
     /**
@@ -306,7 +335,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
-            if ($excelColName === null) {
+            if ($excelColName === null || $excelColName === '') {
                 continue;
             }
             
@@ -350,5 +379,30 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     protected function isValidatingApiSchema() : bool
     {
         return $this->validateApiSchema;
+    }
+
+    /**
+     * Set to FALSE if the excel table does NOT have a header row with column names
+     * 
+     * @uxon-property excel_has_header_row
+     * @uxon-type boolean
+     * @uxon-default true
+     * 
+     * @param bool $trueOrFalse
+     * @return ExcelApiToDataSheet
+     */
+    protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
+    {
+        $this->excelHasHeaderRow = $trueOrFalse;
+        return $this;
+    }
+    
+    /**
+     * {@inheritDoc}
+     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    {
+        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
     }
 }
