@@ -120,14 +120,18 @@ class NoteTaker implements NoteTakerInterface
 
     /**
      * Instantiates a note from a given exception
-     * 
-     * @param \exface\Core\Interfaces\WorkbenchInterface $workbench
-     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
-     * @param \exface\Core\Interfaces\Exceptions\ExceptionInterface $exception
-     * @param string|null $preamble
+     *
+     * @param WorkbenchInterface   $workbench
+     * @param ETLStepDataInterface $stepData
+     * @param \Throwable           $exception
+     * @param string|null          $preamble
      * @return StepNote
      */
-    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null) : NoteInterface
+    public static function createNoteFromException(
+        WorkbenchInterface $workbench, 
+        ETLStepDataInterface $stepData, 
+        \Throwable $exception, 
+        string $preamble = null) : NoteInterface
     {
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
@@ -141,15 +145,13 @@ class NoteTaker implements NoteTakerInterface
             $text = StringDataType::endSentence($preamble) . ' ' . $text;
         }
         
-        $note = new StepNote(
+        return new StepNote(
             $workbench,
             $stepData,
             $text,
             $exception,
             $logLevel
         );
-
-        return $note;
     }
 
     /**

@@ -11,6 +11,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -328,7 +329,25 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception));                
+                $e = $exception->getPrevious();
+                $note = NoteTaker::createNoteFromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $e ?? $exception
+                );
+                
+                if($e instanceof DataSheetMissingRequiredValueError) {
+                    $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
+                    $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
+                    $rowNrs = $e->getRowNumbers();
+                    foreach ($rowNrs as $i => $rowNr) {
+                        $rowNrs[$i] = $this->getFromDataRowNumber($rowNr);
+                    }
+                    
+                    $note->setMessage($note->getMessage() . ' ' . $rowToken . '(' . implode(',',$rowNrs) . ')');
+                }
+                
+                NoteTaker::takeNote($note);
                 throw $exception;
             }
             
@@ -352,7 +371,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             } catch (\Throwable $exception) {
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception, $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)));
+                NoteTaker::takeNote(NoteTaker::createNoteFromException(
+                    $this->getWorkbench(), 
+                    $stepData, 
+                    $exception->getPrevious(), 
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1))
+                );
             }
         }
         
