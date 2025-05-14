@@ -5,6 +5,7 @@ use axenox\ETL\Common\NoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -89,6 +90,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
+        $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
         $fileData = $this->getUploadData($stepData);
@@ -107,7 +109,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
 
         $toObject = $this->getToObject();
-        $this->getCrudCounter()->start([$toObject]);
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
@@ -120,6 +121,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
         $logBook->addDataSheet('Excel data', $fromSheet);
+        $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         // Validate data in the from-sheet against the JSON schema
         if ($this->isValidatingApiSchema()) {
@@ -143,7 +145,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
 
         if($toSheet->countRows() === 0) {
-            $this->getCrudCounter()->stop();
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
@@ -162,6 +163,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addDataSheet('To-data', $toSheet);
         yield $msg;
 
+        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
+        
         $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
@@ -173,13 +176,13 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
+        
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
         }
 
         $this->getCrudCounter()->stop();
-
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());

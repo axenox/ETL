@@ -200,9 +200,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
         $placeholders = $this->getPlaceholders($stepData);
-    	$result = new UxonEtlStepResult($stepData->getStepRunUid());
+        $result = new UxonEtlStepResult($stepData->getStepRunUid());
         $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
+        $this->getCrudCounter()->reset();
 
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
@@ -240,14 +241,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook->addLine('Extracted JSON data to `From-Sheet`.');
         $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
         
-        $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
+        $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
             $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $stepData, $logBook);
             
             if($fromSheet->countRows() === 0) {
-                $this->getCrudCounter()->stop();
                 $logBook->addLine($msg = 'All input rows removed by failed data checks.');
 
                 $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
@@ -263,7 +263,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
         
         if($toSheet->countRows() === 0) {
-            $this->getCrudCounter()->stop();
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
@@ -284,6 +283,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
+
+        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
         $writer = $this->writeData(
             $toSheet, 
@@ -292,6 +293,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $logBook,
             $this->isSkipInvalidRows()
         );
+        
+        $this->getCrudCounter()->stop();
         
         $logBook->addSection('Saving data');
         yield from $writer;
@@ -302,7 +305,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $this->getCrudCounter()->stop();
-
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
@@ -400,8 +402,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
-        $resultSheet = null;
-
+        
         if ($rowByRow === true) {
             $saveSheet = $toSheet;
             $resultSheet = null;
