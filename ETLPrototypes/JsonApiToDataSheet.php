@@ -332,34 +332,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $e = $exception->getPrevious();
 
                 if($e instanceof DataSheetMissingRequiredValueError) {
-                    $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-                    $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-                    $rowNrs = $e->getRowNumbers();
-                    foreach ($rowNrs as $i => $rowNr) {
-                        $rowNrs[$i] += 1;
-                    }
-
-                    $message = 'Invalid or missing data in column `' . $e->getColumnName() . '` for ' . $rowToken . ' (' . implode(',', $rowNrs) . ')';
-                    $e = new DataSheetMissingRequiredValueError(
-                        $fromSheet,
-                        $message,
-                        $e->getAlias(),
-                        $e,
-                        $e->getColumn(),
-                        $rowNrs
-                    );
-                    $e->setUseExceptionMessageAsTitle(true);
-
-                    NoteTaker::takeNote(new StepNote(
-                        $this->getWorkbench(),
-                        $stepData,
-                        $message,
-                        $e,
-                        $e->getLogLevel()
-                    ));
-
-                    throw $e;
+                    $exception = $this->processMapperValueException($e, $fromSheet);
                 }
+                
+                NoteTaker::takeNote(new StepNote(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $e->getMessage(),
+                    $e,
+                    $e->getLogLevel()
+                ));
 
                 throw $exception;
             }
@@ -384,16 +366,58 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             } catch (\Throwable $exception)
             {
                 $logBook->addIndent(-2);
+                $e = $exception->getPrevious();
+                
+                if($e instanceof DataSheetMissingRequiredValueError) {
+                    $exception = $this->processMapperValueException($e, $fromSheet, [$rowNr]);
+                    $message = $exception->getMessage();
+                } else {
+                    $message = 'Missing or invalid value in row ' . $this->getFromDataRowNumber($rowNr) . '.';
+                }
+                
                 NoteTaker::takeNote(new StepNote(
                     $this->getWorkbench(),
                     $stepData,
-                    'Missing or invalid value in row ' . $this->getFromDataRowNumber($rowNr) . ' (REMOVED row from processing).',
+                    $message . ' (REMOVED row from processing).',
                     $exception
                 ));
             }
         }
         
         return $toSheet;
+    }
+
+    /**
+     * @param DataSheetMissingRequiredValueError $exception
+     * @param DataSheetInterface                 $fromSheet
+     * @param array|null                         $rowNumbers
+     * @return \Throwable
+     */
+    protected function processMapperValueException(
+        DataSheetMissingRequiredValueError $exception,
+        DataSheetInterface $fromSheet,
+        array $rowNumbers = null
+    ) : \Throwable
+    {
+        $rowToken = count($exception->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
+        $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
+        $rowNrs = empty($rowNumbers) ? $exception->getRowNumbers() : $rowNumbers;
+        foreach ($rowNrs as $i => $rowNr) {
+            $rowNrs[$i] = $this->getFromDataRowNumber($rowNr);
+        }
+
+        $message = $exception->getMessage() . ' `' . $exception->getColumnName() . '`, ' . $rowToken . ' (' . implode(',', $rowNrs) . ').';
+        $exception = new DataSheetMissingRequiredValueError(
+            $fromSheet,
+            $message,
+            $exception->getAlias(),
+            $exception,
+            $exception->getColumn(),
+            $rowNrs
+        );
+        $exception->setUseExceptionMessageAsTitle(true);
+
+        return $exception;
     }
 
     /**
