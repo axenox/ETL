@@ -11,8 +11,6 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
-use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
-use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -324,25 +322,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         LogBookInterface $logBook
     ) : DataSheetInterface
     {
+        $translator = $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
         if(!$this->isSkipInvalidRows()) {
             try {
+                // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
-            } catch (\Throwable $exception)
-            {
-                $e = $exception->getPrevious();
-
-                if($e instanceof DataSheetMissingRequiredValueError) {
-                    $exception = $this->processMapperValueException($e, $fromSheet);
-                }
-                
-                NoteTaker::takeNote(new StepNote(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $e->getMessage(),
-                    $e,
-                    $e->getLogLevel()
-                ));
-
+            } catch (\Throwable $exception) {
+                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception));                
                 throw $exception;
             }
             
@@ -353,7 +339,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $rowSheet = $fromSheet->copy();
         // TODO We should think of a way to not do this row by row.
         // TODO Also, this fails on the first failed mapper, making the error less insightful.
-        foreach ($fromSheet->getRows() as $rowNr => $row) {
+        foreach ($fromSheet->getRows() as $i => $row) {
             $rowSheet->removeRows();
             $rowSheet->addRow($row);
             try {
@@ -363,61 +349,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 } else {
                     $toSheet = $mappedSheet->copy();
                 }
-            } catch (\Throwable $exception)
-            {
+            } catch (\Throwable $exception) {
                 $logBook->addIndent(-2);
-                $e = $exception->getPrevious();
-                
-                if($e instanceof DataSheetMissingRequiredValueError) {
-                    $exception = $this->processMapperValueException($e, $fromSheet, [$rowNr]);
-                    $message = $exception->getMessage();
-                } else {
-                    $message = 'Missing or invalid value in row ' . $this->getFromDataRowNumber($rowNr) . '.';
-                }
-                
-                NoteTaker::takeNote(new StepNote(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $message . ' (REMOVED row from processing).',
-                    $exception
-                ));
+                $rowNo = $this->getFromDataRowNumber($i);
+                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception, $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)));
             }
         }
         
         return $toSheet;
-    }
-
-    /**
-     * @param DataSheetMissingRequiredValueError $exception
-     * @param DataSheetInterface                 $fromSheet
-     * @param array|null                         $rowNumbers
-     * @return \Throwable
-     */
-    protected function processMapperValueException(
-        DataSheetMissingRequiredValueError $exception,
-        DataSheetInterface $fromSheet,
-        array $rowNumbers = null
-    ) : \Throwable
-    {
-        $rowToken = count($exception->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-        $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-        $rowNrs = empty($rowNumbers) ? $exception->getRowNumbers() : $rowNumbers;
-        foreach ($rowNrs as $i => $rowNr) {
-            $rowNrs[$i] = $this->getFromDataRowNumber($rowNr);
-        }
-
-        $message = $exception->getMessage() . ' `' . $exception->getColumnName() . '`, ' . $rowToken . ' (' . implode(',', $rowNrs) . ').';
-        $exception = new DataSheetMissingRequiredValueError(
-            $fromSheet,
-            $message,
-            $exception->getAlias(),
-            $exception,
-            $exception->getColumn(),
-            $rowNrs
-        );
-        $exception->setUseExceptionMessageAsTitle(true);
-
-        return $exception;
     }
 
     /**

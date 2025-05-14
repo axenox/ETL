@@ -75,7 +75,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
-    private $excelHasHeaderRow = false;
+    private $excelHasHeaderRow = true;
 
     /**
      *

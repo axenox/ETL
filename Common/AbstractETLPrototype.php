@@ -7,7 +7,6 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\iCanGenerateDebugWidgets;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
