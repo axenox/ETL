@@ -323,7 +323,7 @@ class StepGroup implements DataFlowStepInterface
         $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
         $row['debug_widget'] = $widgetJson;
         
-        if($step instanceof AbstractETLPrototype) {
+        if($step instanceof AbstractETLPrototype && $result->countProcessedRows() > 0) {
             $note = $step->getNoteOnSuccess($stepData);
             if ($note !== null) {
                 $note->importCrudCounter($step->getCrudCounter());
