@@ -364,7 +364,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $this->getWorkbench(), 
                     $stepData, 
                     $exception, 
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false
                 );
                 NoteTaker::takeNote($note);
             }
@@ -433,7 +434,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $this->getWorkbench(), 
                         $stepData, 
                         $e,
-                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)
+                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                        false
                     );
                     NoteTaker::takeNote($note);
                     yield $note->getMessage();
