@@ -61,6 +61,11 @@ interface NoteInterface extends WorkbenchDependantInterface
     function getMessage() : ?string;
 
     /**
+     * @return string|null
+     */
+    function getMessageCode() : ?string;
+
+    /**
      * @param string $logLevel
      * @return NoteInterface
      */

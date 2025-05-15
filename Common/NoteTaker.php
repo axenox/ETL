@@ -6,6 +6,7 @@ use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -127,14 +128,20 @@ class NoteTaker implements NoteTakerInterface
      * @param string|null $preamble
      * @return StepNote
      */
-    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null) : NoteInterface
+    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
     {
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
-            $text = $exception->getMessageModel($workbench)->getTitle();
+            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
+                $text = $exception->getMessageTitleWithoutLocation();
+            } else {
+                $text = $exception->getMessageModel($workbench)->getTitle();
+            }
+            $code = $exception->getAlias();
         } else {
             $logLevel = LoggerInterface::CRITICAL;
             $text = $exception->getMessage();
+            $code = null;
         }
 
         if ($preamble !== null) {
@@ -148,6 +155,7 @@ class NoteTaker implements NoteTakerInterface
             $exception,
             $logLevel
         );
+        $note->setMessageCode($code);
 
         return $note;
     }

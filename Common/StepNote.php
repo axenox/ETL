@@ -31,6 +31,7 @@ class StepNote implements NoteInterface
     private string $flowRunUid;
     private string $stepRunUid;
     private ?string $message = null;
+    private ?string $messageCode = null;
     private ?string $logLevel = null;
     private bool $exceptionFlag = false;
     private ?string $exceptionMessage = null;
@@ -138,6 +139,7 @@ class StepNote implements NoteInterface
             'flow_run' => $this->getFlowRunUid(),
             'step_run' => $this->getStepRunUid(),
             'message' => $this->getMessage(),
+            'message_code' => $this->getMessageCode(),
             'log_level' => $this->getLogLevel(),
             'exception_flag' => $this->hasException(),
             'exception_message' => $this->getExceptionMessage(),
@@ -199,6 +201,31 @@ class StepNote implements NoteInterface
     public function getMessage(): ?string
     {
         return $this->message;
+    }
+
+    /**
+     * @inheritdoc
+     * @see NoteInterface::getMessageCode()
+     */
+    public function getMessageCode() : ?string
+    {
+        return $this->messageCode;
+    }
+
+    /**
+     * Link a message from the meta model by message code
+     * 
+     * @uxon-property message
+     * @uxon-type metamodel:exface.Core.MESSAGE:CODE
+     * 
+     * @param string $message
+     * @return $this
+     * @see NoteInterface::setMessage()
+     */
+    public function setMessageCode(string $code) : StepNote
+    {
+        $this->messageCode = $code;
+        return $this;
     }
 
     /**
