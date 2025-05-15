@@ -132,9 +132,11 @@ class NoteTaker implements NoteTakerInterface
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
             $text = $exception->getMessageModel($workbench)->getTitle();
+            $code = $exception->getAlias();
         } else {
             $logLevel = LoggerInterface::CRITICAL;
             $text = $exception->getMessage();
+            $code = null;
         }
 
         if ($preamble !== null) {
@@ -148,6 +150,7 @@ class NoteTaker implements NoteTakerInterface
             $exception,
             $logLevel
         );
+        $note->setMessageCode($code);
 
         return $note;
     }
