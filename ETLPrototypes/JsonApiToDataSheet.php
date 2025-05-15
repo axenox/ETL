@@ -23,6 +23,7 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 use exface\Core\CommonLogic\DataSheets\DataColumn;
@@ -322,13 +323,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         LogBookInterface $logBook
     ) : DataSheetInterface
     {
-        $translator = $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
+        $translator = $this->getTranslator();
         if(!$this->isSkipInvalidRows()) {
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception));                
+                NoteTaker::takeNote(
+                    NoteTaker::createNoteFromException(
+                        $this->getWorkbench(), 
+                        $stepData, 
+                        $exception
+                    )
+                );                
                 throw $exception;
             }
             
@@ -350,12 +357,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $toSheet = $mappedSheet->copy();
                 }
             } catch (\Throwable $exception) {
+                $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                NoteTaker::takeNote(NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception, $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)));
+                $note = NoteTaker::createNoteFromException(
+                    $this->getWorkbench(), 
+                    $stepData, 
+                    $exception, 
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)
+                );
+                NoteTaker::takeNote($note);
             }
         }
-        
+
         return $toSheet;
     }
 
@@ -381,6 +395,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         if ($rowByRow === true) {
             $saveSheet = $toSheet;
             $resultSheet = null;
+            $translator = $this->getTranslator();
             foreach ($toSheet->getRows() as $i => $row) {
                 $saveSheet = $saveSheet->copy();
                 $saveSheet->removeRows();
@@ -412,15 +427,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     }
                 } catch (\Throwable $e) {
                     // If anything goes wrong, just continue with the next row
-                    yield 'Error on row ' . $this->getFromDataRowNumber($i) . '. ' . $e->getMessage() . PHP_EOL;
-                    NoteTaker::takeNote(new StepNote(
-                        $this->getWorkbench(),
-                        $stepData,
-                        'Error on row ' . $this->getFromDataRowNumber($i) . '.',
-                        $e
-                    ));
-                    
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+                    $rowNo = $this->getFromDataRowNumber($i);
+                    $note = NoteTaker::createNoteFromException(
+                        $this->getWorkbench(), 
+                        $stepData, 
+                        $e,
+                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1)
+                    );
+                    NoteTaker::takeNote($note);
+                    yield $note->getMessage();
                 }
             }
             
@@ -811,5 +827,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
     {
         return $dataSheetRowIdx;
+    }
+
+    protected function getTranslator() : TranslationInterface
+    {
+        return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
     }
 }
