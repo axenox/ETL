@@ -1,0 +1,5 @@
+{
+    "NAME": "Anleitung",
+    "SHORT_DESCRIPTION": "Zusätzlich Informationen und Empfehlungen anzeigen",
+    "CONFIG_UXON.ERROR_TEXT.THERE_ARE_NO_INSTRUCTIONS_FOR_THIS_NOTE": "Für diese Notiz gibt es keine passende Anleitung"
+}
