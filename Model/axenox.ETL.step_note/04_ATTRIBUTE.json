@@ -727,9 +727,9 @@
             "CUSTOM_DATA_TYPE": null
         },
         {
-            "_EXPORT_SUMMARY": "Log level [log_level]",
+            "_EXPORT_SUMMARY": "MessageType [message_type]",
             "CREATED_ON": "2025-04-14 17:33:44",
-            "MODIFIED_ON": "2025-04-17 13:32:33",
+            "MODIFIED_ON": "2025-05-16 16:57:45",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0bae5d9bbfef2bae5025041000001",
@@ -746,13 +746,13 @@
             "DELETE_WITH_RELATED_OBJECT": 0,
             "DEFAULT_DISPLAY_UXON": null,
             "COMMENTS": "",
-            "NAME": "Log level",
+            "NAME": "MessageType",
             "RELATION_CARDINALITY": "",
             "TYPE": "D",
             "COPYABLEFLAG": 1,
-            "ALIAS": "log_level",
-            "DATATYPE": "0x11ebaeb9a50e158aaeb9025041000001",
-            "DATA_ADDRESS": "log_level",
+            "ALIAS": "message_type",
+            "DATATYPE": "0x11e8ebf600b07e5287f10205857feb81",
+            "DATA_ADDRESS": "message_type",
             "OBJECT": "0x11f08c55d9b1d6d48c55025041000001",
             "FORMATTER": "",
             "DISPLAYORDER": null,
@@ -770,8 +770,7 @@
             "DEFAULT_VALUE": "",
             "FIXED_VALUE": "",
             "CUSTOM_DATA_TYPE": {
-                "length_max": 20,
-                "use_numeric_levels": false
+                "length_max": 20
             }
         },
         {

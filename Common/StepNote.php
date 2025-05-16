@@ -8,6 +8,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -32,7 +33,7 @@ class StepNote implements NoteInterface
     private string $stepRunUid;
     private ?string $message = null;
     private ?string $messageCode = null;
-    private ?string $logLevel = null;
+    private ?string $messageType = null;
     private bool $exceptionFlag = false;
     private ?string $exceptionMessage = null;
     private ?string $exceptionLogId = null;
@@ -64,7 +65,7 @@ class StepNote implements NoteInterface
         $this->flowRunUid = $stepData->getFlowRunUid();
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
-        $this->logLevel = $logLevel ?? ($exception ? 'error' : 'info');
+        $this->messageType = $logLevel ?? ($exception ? 'error' : 'info');
         
         if($this->exceptionFlag = $exception !== null) {
             $this->exceptionMessage = $exception->getMessage();
@@ -140,7 +141,7 @@ class StepNote implements NoteInterface
             'step_run' => $this->getStepRunUid(),
             'message' => $this->getMessage(),
             'message_code' => $this->getMessageCode(),
-            'log_level' => $this->getLogLevel(),
+            'message_type' => $this->getMessageType(),
             'exception_flag' => $this->hasException(),
             'exception_message' => $this->getExceptionMessage(),
             'exception_log_id' => $this->getExceptionLogId(),
@@ -214,11 +215,11 @@ class StepNote implements NoteInterface
 
     /**
      * Link a message from the meta model by message code
-     * 
-     * @uxon-property message
+     *
+     * @uxon-property message_code
      * @uxon-type metamodel:exface.Core.MESSAGE:CODE
-     * 
-     * @param string $message
+     *
+     * @param string $code
      * @return $this
      * @see NoteInterface::setMessage()
      */
@@ -231,26 +232,34 @@ class StepNote implements NoteInterface
     /**
      * Assign a log-level for this note.
      * 
-     * @uxon-property log_level
-     * @uxon-type [debug,info,notice,warning,error,critical,alert,emergency]
+     * @uxon-property message_type
+     * @uxon-type [hint,info,success,question,warning,error]
      * 
-     * @param string $logLevel
+     * @param string $messageType
      * @return NoteInterface
-     * @see NoteInterface::setLogLevel()
+     * @see NoteInterface::setMessageType()
      */
-    public function setLogLevel(string $logLevel): NoteInterface
+    public function setMessageType(string $messageType): NoteInterface
     {
-        $this->logLevel = LogLevelDataType::cast($logLevel);
+        $this->messageType = MessageTypeDataType::cast($messageType);
         return $this;
     }
 
     /**
-     * @inheritdoc
-     * @see NoteInterface::getLogLevel()
+     * @deprecated 
      */
-    public function getLogLevel(): ?string
+    public function setLogLevel(string $logLevel): NoteInterface
     {
-        return $this->logLevel;
+        return $this->setMessageType($logLevel);
+    }
+
+    /**
+     * @inheritdoc
+     * @see NoteInterface::getMessageType()
+     */
+    public function getMessageType(): ?string
+    {
+        return $this->messageType;
     }
 
     /**
