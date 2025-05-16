@@ -214,7 +214,7 @@
         {
             "_EXPORT_SUMMARY": "Upload: Details",
             "CREATED_ON": "2025-04-22 14:54:49",
-            "MODIFIED_ON": "2025-04-30 14:45:43",
+            "MODIFIED_ON": "2025-05-16 17:01:31",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f098b9fa09f95098b973ee9ba91084",
@@ -252,7 +252,7 @@
                                     "attribute_alias": "step_run__status"
                                 },
                                 {
-                                    "attribute_alias": "log_level"
+                                    "attribute_alias": "message_type"
                                 }
                             ],
                             "columns": [
@@ -260,7 +260,7 @@
                                     "attribute_alias": "message"
                                 },
                                 {
-                                    "attribute_alias": "log_level"
+                                    "attribute_alias": "message_type"
                                 },
                                 {
                                     "attribute_alias": "count_errors",
