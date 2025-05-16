@@ -11,7 +11,6 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
-use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -24,6 +23,7 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 use exface\Core\CommonLogic\DataSheets\DataColumn;
@@ -200,10 +200,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
         $placeholders = $this->getPlaceholders($stepData);
-        $result = new UxonEtlStepResult($stepData->getStepRunUid());
+    	$result = new UxonEtlStepResult($stepData->getStepRunUid());
         $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
-        $this->getCrudCounter()->reset();
 
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
@@ -241,13 +240,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook->addLine('Extracted JSON data to `From-Sheet`.');
         $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
         
-        $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+        $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
 
         // Perform 'from_data_checks'.
         if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
             $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $stepData, $logBook);
             
             if($fromSheet->countRows() === 0) {
+                $this->getCrudCounter()->stop();
                 $logBook->addLine($msg = 'All input rows removed by failed data checks.');
 
                 $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
@@ -263,6 +263,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
         
         if($toSheet->countRows() === 0) {
+            $this->getCrudCounter()->stop();
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
@@ -283,8 +284,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
-
-        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
         $writer = $this->writeData(
             $toSheet, 
@@ -293,8 +292,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $logBook,
             $this->isSkipInvalidRows()
         );
-        
-        $this->getCrudCounter()->stop();
         
         $logBook->addSection('Saving data');
         yield from $writer;
@@ -305,6 +302,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $this->getCrudCounter()->stop();
+
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
@@ -325,31 +323,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         LogBookInterface $logBook
     ) : DataSheetInterface
     {
-        $translator = $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
+        $translator = $this->getTranslator();
         if(!$this->isSkipInvalidRows()) {
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                $e = $exception->getPrevious();
-                $note = NoteTaker::createNoteFromException(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $e ?? $exception
-                );
-                
-                if($e instanceof DataSheetMissingRequiredValueError) {
-                    $rowToken = count($e->getRowNumbers()) === 1 ? 'ROW.SINGULAR' : 'ROW.PLURAL';
-                    $rowToken = $this->getWorkbench()->getCoreApp()->getTranslator()->translate($rowToken);
-                    $rowNrs = $e->getRowNumbers();
-                    foreach ($rowNrs as $i => $rowNr) {
-                        $rowNrs[$i] = $this->getFromDataRowNumber($rowNr);
-                    }
-                    
-                    $note->setMessage($note->getMessage() . ' ' . $rowToken . '(' . implode(',',$rowNrs) . ')');
-                }
-                
-                NoteTaker::takeNote($note);
+                NoteTaker::takeNote(
+                    NoteTaker::createNoteFromException(
+                        $this->getWorkbench(), 
+                        $stepData, 
+                        $exception
+                    )
+                );                
                 throw $exception;
             }
             
@@ -371,17 +357,20 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $toSheet = $mappedSheet->copy();
                 }
             } catch (\Throwable $exception) {
+                $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                NoteTaker::takeNote(NoteTaker::createNoteFromException(
+                $note = NoteTaker::createNoteFromException(
                     $this->getWorkbench(), 
                     $stepData, 
-                    $exception->getPrevious(), 
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1))
+                    $exception, 
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false
                 );
+                NoteTaker::takeNote($note);
             }
         }
-        
+
         return $toSheet;
     }
 
@@ -402,10 +391,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
-        
+        $resultSheet = null;
+
         if ($rowByRow === true) {
             $saveSheet = $toSheet;
             $resultSheet = null;
+            $translator = $this->getTranslator();
             foreach ($toSheet->getRows() as $i => $row) {
                 $saveSheet = $saveSheet->copy();
                 $saveSheet->removeRows();
@@ -437,15 +428,17 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     }
                 } catch (\Throwable $e) {
                     // If anything goes wrong, just continue with the next row
-                    yield 'Error on row ' . $this->getFromDataRowNumber($i) . '. ' . $e->getMessage() . PHP_EOL;
-                    NoteTaker::takeNote(new StepNote(
-                        $this->getWorkbench(),
-                        $stepData,
-                        'Error on row ' . $this->getFromDataRowNumber($i) . '.',
-                        $e
-                    ));
-                    
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+                    $rowNo = $this->getFromDataRowNumber($i);
+                    $note = NoteTaker::createNoteFromException(
+                        $this->getWorkbench(), 
+                        $stepData, 
+                        $e,
+                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                        false
+                    );
+                    NoteTaker::takeNote($note);
+                    yield $note->getMessage();
                 }
             }
             
@@ -836,5 +829,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
     {
         return $dataSheetRowIdx;
+    }
+
+    protected function getTranslator() : TranslationInterface
+    {
+        return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
     }
 }

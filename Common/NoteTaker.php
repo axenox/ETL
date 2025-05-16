@@ -6,6 +6,7 @@ use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -120,38 +121,43 @@ class NoteTaker implements NoteTakerInterface
 
     /**
      * Instantiates a note from a given exception
-     *
-     * @param WorkbenchInterface   $workbench
-     * @param ETLStepDataInterface $stepData
-     * @param \Throwable           $exception
-     * @param string|null          $preamble
+     * 
+     * @param \exface\Core\Interfaces\WorkbenchInterface $workbench
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @param \exface\Core\Interfaces\Exceptions\ExceptionInterface $exception
+     * @param string|null $preamble
      * @return StepNote
      */
-    public static function createNoteFromException(
-        WorkbenchInterface $workbench, 
-        ETLStepDataInterface $stepData, 
-        \Throwable $exception, 
-        string $preamble = null) : NoteInterface
+    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
     {
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
-            $text = $exception->getMessageModel($workbench)->getTitle();
+            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
+                $text = $exception->getMessageTitleWithoutLocation();
+            } else {
+                $text = $exception->getMessageModel($workbench)->getTitle();
+            }
+            $code = $exception->getAlias();
         } else {
             $logLevel = LoggerInterface::CRITICAL;
             $text = $exception->getMessage();
+            $code = null;
         }
 
         if ($preamble !== null) {
             $text = StringDataType::endSentence($preamble) . ' ' . $text;
         }
         
-        return new StepNote(
+        $note = new StepNote(
             $workbench,
             $stepData,
             $text,
             $exception,
             $logLevel
         );
+        $note->setMessageCode($code);
+
+        return $note;
     }
 
     /**
