@@ -371,7 +371,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
         }
 
-        return $toSheet;
+        return $toSheet ?? DataSheetFactory::createFromObject($this->getToObject());
     }
 
     /**
