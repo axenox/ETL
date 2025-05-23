@@ -727,11 +727,11 @@
             "CUSTOM_DATA_TYPE": null
         },
         {
-            "_EXPORT_SUMMARY": "MessageType [message_type]",
+            "_EXPORT_SUMMARY": "Type [message_type]",
             "CREATED_ON": "2025-04-14 17:33:44",
-            "MODIFIED_ON": "2025-05-16 16:57:45",
+            "MODIFIED_ON": "2025-05-23 10:06:18",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f0bae5d9bbfef2bae5025041000001",
             "SORTABLEFLAG": 1,
             "FILTERABLEFLAG": 1,
@@ -746,7 +746,7 @@
             "DELETE_WITH_RELATED_OBJECT": 0,
             "DEFAULT_DISPLAY_UXON": null,
             "COMMENTS": "",
-            "NAME": "MessageType",
+            "NAME": "Type",
             "RELATION_CARDINALITY": "",
             "TYPE": "D",
             "COPYABLEFLAG": 1,
