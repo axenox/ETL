@@ -115,7 +115,8 @@ class DataCheckWithStepNote extends DataCheck
                     }
                     $placeHolderInfo = ' with placeholders `' . $placeHolderInfo . '`';
                 }
-                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '.';
+                $badIdxs = $e->getRowIndexes();
+                $logLine = 'Found ' . count($badIdxs) . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '. Rows indexes ' . image_type_to_extension(', ', $badIdxs);
                 
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
