@@ -65,7 +65,7 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Flow step: On/Off",
+            "_EXPORT_SUMMARY": "Flow step: On/Off [EtlStepOnOffToggle]",
             "CREATED_ON": "2021-03-29 16:39:59",
             "MODIFIED_ON": "2021-04-13 12:52:39",
             "CREATED_BY_USER": "0x11e999bb0f9cb5a8910a005056905f94",

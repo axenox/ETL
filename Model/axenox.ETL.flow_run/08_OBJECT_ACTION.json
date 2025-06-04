@@ -65,7 +65,7 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Flow run: Invalidate",
+            "_EXPORT_SUMMARY": "Flow run: Invalidate [FlowRunInvalidate]",
             "CREATED_ON": "2021-06-09 17:48:08",
             "MODIFIED_ON": "2021-06-09 17:48:54",
             "CREATED_BY_USER": "0x11ea7e29e1126ef3a7eb0050568905af",
