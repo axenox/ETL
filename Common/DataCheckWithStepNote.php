@@ -67,7 +67,7 @@ class DataCheckWithStepNote extends DataCheck
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
         ETLStepDataInterface $stepData = null
-    ): DataSheetInterface
+    ) : string
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
         
@@ -105,7 +105,7 @@ class DataCheckWithStepNote extends DataCheck
             }
             
             try {
-                parent::check($checkSheet);
+                $result = parent::check($checkSheet);
             } catch (DataCheckFailedError $e) {
                 $placeHolderInfo = '';
                 if(!empty($placeHoldersToValues)) {
@@ -156,7 +156,7 @@ class DataCheckWithStepNote extends DataCheck
             $noteOnSuccess->takeNote();
         }
         
-        return $sheet;
+        return $result;
     }
 
     /**
