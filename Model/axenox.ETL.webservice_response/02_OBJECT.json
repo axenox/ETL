@@ -85,12 +85,11 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Web response [axenox.ETL.webservice_response]",
-            "CREATED_ON": "2025-06-10 13:36:03",
-            "MODIFIED_ON": "2025-06-10 13:36:15",
-            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "UID": "0x11f0b8e51747e80ab8e5af5c36834f09",
+            "CREATED_ON": "2024-10-30 12:00:19",
+            "MODIFIED_ON": "2024-10-30 12:09:08",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0x11ef9886273d9b929886025041000001",
             "READABLE_FLAG": 1,
             "WRITABLE_FLAG": 1,
             "COMMENTS": "",
@@ -102,140 +101,7 @@
             "SHORT_DESCRIPTION": "",
             "PARENT_OBJECT": null,
             "DATA_ADDRESS_PROPS": null,
-            "DEFAULT_EDITOR_UXON": {
-                "widget_type": "Dialog",
-                "readonly": true,
-                "widgets": [
-                    {
-                        "widget_type": "Tabs",
-                        "tabs": [
-                            {
-                                "caption": "HTTP",
-                                "widgets": [
-                                    {
-                                        "widget_type": "WidgetGroup",
-                                        "caption": "Request",
-                                        "widgets": [
-                                            {
-                                                "attribute_alias": "CREATED_ON"
-                                            },
-                                            {
-                                                "attribute_alias": "CREATED_BY_USER__LABEL"
-                                            },
-                                            {
-                                                "attribute_alias": "url_path"
-                                            },
-                                            {
-                                                "attribute_alias": "http_method"
-                                            },
-                                            {
-                                                "attribute_alias": "http_content_type"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "widget_type": "WidgetGroup",
-                                        "caption": "Response",
-                                        "widgets": [
-                                            {
-                                                "attribute_alias": "webservice_response__http_response_code"
-                                            },
-                                            {
-                                                "attribute_alias": "webservice_response__status"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "widget_type": "WidgetGroup",
-                                        "caption": "Flow",
-                                        "widgets": [
-                                            {
-                                                "attribute_alias": "flow_run__flow__LABEL"
-                                            },
-                                            {
-                                                "attribute_alias": "flow_run",
-                                                "caption": "Flow run UID"
-                                            },
-                                            {
-                                                "attribute_alias": "flow_run__duration"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "widget_type": "WidgetGroup",
-                                        "caption": "Error",
-                                        "widgets": [
-                                            {
-                                                "attribute_alias": "error_logid"
-                                            },
-                                            {
-                                                "attribute_alias": "error_message"
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "caption": "Headers",
-                                "widgets": [
-                                    {
-                                        "value": "Request Header",
-                                        "widget_type": "TextHeading",
-                                        "heading_level": 3
-                                    },
-                                    {
-                                        "height": "50%",
-                                        "width": "max",
-                                        "attribute_alias": "http_headers",
-                                        "widget_type": "InputJson",
-                                        "disabled": true,
-                                        "hide_caption": true
-                                    },
-                                    {
-                                        "value": "Response Header",
-                                        "widget_type": "TextHeading",
-                                        "heading_level": 3
-                                    },
-                                    {
-                                        "attribute_alias": "webservice_response__response_header",
-                                        "width": "max",
-                                        "height": "35%",
-                                        "widget_type": "InputJson",
-                                        "disabled": true,
-                                        "hide_caption": true
-                                    }
-                                ]
-                            },
-                            {
-                                "caption": "Request body",
-                                "widgets": [
-                                    {
-                                        "attribute_alias": "http_body",
-                                        "widget_type": "InputJson",
-                                        "disabled": true,
-                                        "height": "100%",
-                                        "width": "100%",
-                                        "hide_caption": true
-                                    }
-                                ]
-                            },
-                            {
-                                "caption": "Response body",
-                                "widgets": [
-                                    {
-                                        "attribute_alias": "webservice_response__response_body",
-                                        "widget_type": "InputJson",
-                                        "disabled": true,
-                                        "height": "100%",
-                                        "width": "100%",
-                                        "hide_caption": true
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            },
+            "DEFAULT_EDITOR_UXON": null,
             "ALIAS": "webservice_response",
             "DATA_ADDRESS": "etl_webservice_response"
         }
