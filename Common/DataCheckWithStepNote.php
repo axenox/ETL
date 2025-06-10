@@ -105,7 +105,7 @@ class DataCheckWithStepNote extends DataCheck
             }
             
             try {
-                $result = parent::check($checkSheet);
+                $result = parent::check($checkSheet, $logBook);
             } catch (DataCheckFailedError $e) {
                 $placeHolderInfo = '';
                 if(!empty($placeHoldersToValues)) {
@@ -116,7 +116,7 @@ class DataCheckWithStepNote extends DataCheck
                     $placeHolderInfo = ' with placeholders `' . $placeHolderInfo . '`';
                 }
                 $badIdxs = $e->getRowIndexes();
-                $logLine = 'Found ' . count($badIdxs) . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '. Rows indexes ' . image_type_to_extension(', ', $badIdxs);
+                $logLine = 'Found ' . count($badIdxs) . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '. Rows indexes ' . implode(', ', $badIdxs);
                 
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
