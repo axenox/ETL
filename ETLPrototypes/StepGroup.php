@@ -370,7 +370,8 @@ class StepGroup implements DataFlowStepInterface
             if($step instanceof AbstractETLPrototype) {
                 $logBook = $step->getLogBook($stepData);
                 $logBook->setIndentActive(0);
-                $logBook->addLine('**ERROR** (Code "' . $exception->getId() . '")**: ' . $exception->getMessage() . '**');
+                $logBook->addSection('ERROR - ID "' . $exception->getId() . '"');
+                $logBook->addLine('**' . $exception->getMessage() . '**');
                 $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($step, $logBook));
             }
             
