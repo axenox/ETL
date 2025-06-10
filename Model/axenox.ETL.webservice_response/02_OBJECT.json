@@ -85,17 +85,17 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Web request [axenox.ETL.webservice_request]",
-            "CREATED_ON": "2023-10-18 16:06:50",
-            "MODIFIED_ON": "2025-06-10 13:36:32",
-            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "_EXPORT_SUMMARY": "Web response [axenox.ETL.webservice_response]",
+            "CREATED_ON": "2025-06-10 13:36:03",
+            "MODIFIED_ON": "2025-06-10 13:36:15",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "UID": "0x11eeae4695964d78ae46025041000001",
+            "UID": "0x11f0b8e51747e80ab8e5af5c36834f09",
             "READABLE_FLAG": 1,
             "WRITABLE_FLAG": 1,
             "COMMENTS": "",
             "DOCS": "",
-            "NAME": "Web request",
+            "NAME": "Web response",
             "INHERIT_DATA_SOURCE_BASE_OBJECT": 1,
             "DATA_SOURCE": "0x32000000000000000000000000000000",
             "APP": "0x11ebbc50679eacdabc50025041000001",
@@ -236,8 +236,8 @@
                     }
                 ]
             },
-            "ALIAS": "webservice_request",
-            "DATA_ADDRESS": "etl_webservice_request"
+            "ALIAS": "webservice_response",
+            "DATA_ADDRESS": "etl_webservice_response"
         }
     ],
     "totals_rows": [],
