@@ -10,8 +10,8 @@
     "replaces_page_selector": null,
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2023-10-18 17:03:02",
-    "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-    "modified_on": "2024-10-23 14:20:13",
+    "modified_by_user_selector": "0x31000000000000000000000000000000",
+    "modified_on": "2025-06-04 17:07:39",
     "contents": {
         "widget_type": "SplitHorizontal",
         "object_alias": "axenox.ETL.webservice_request",
@@ -197,11 +197,12 @@
             },
             {
                 "width": "50%",
-                "caption": "Data flow log for selected request",
                 "widgets": [
                     {
                         "widget_type": "DataTable",
                         "object_alias": "axenox.ETL.step_run",
+                        "height": "50%",
+                        "caption": "Data flow log for selected request",
                         "filters": [
                             {
                                 "attribute_alias": "flow_run",
@@ -311,6 +312,116 @@
                             }
                         ],
                         "paginate": false
+                    },
+                    {
+                        "widget_type": "DataTable",
+                        "height": "50%",
+                        "object_alias": "axenox.ETL.step_note",
+                        "paginate": false,
+                        "caption": "Notes",
+                        "filters": [
+                            {
+                                "attribute_alias": "flow_run",
+                                "hidden": true,
+                                "value": "=request_table!flow_run",
+                                "comparator": "==",
+                                "required": true,
+                                "apply_on_change": true
+                            },
+                            {
+                                "attribute_alias": "step_run__step__name"
+                            },
+                            {
+                                "attribute_alias": "step_run__status"
+                            },
+                            {
+                                "attribute_alias": "message_type"
+                            }
+                        ],
+                        "columns": [
+                            {
+                                "attribute_alias": "message"
+                            },
+                            {
+                                "attribute_alias": "message_type"
+                            },
+                            {
+                                "attribute_alias": "count_errors",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "exception_log_id",
+                                "caption": "Log-ID"
+                            },
+                            {
+                                "attribute_alias": "count_warnings"
+                            },
+                            {
+                                "attribute_alias": "count_writes",
+                                "caption": "W",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_creates",
+                                "caption": "C",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_reads",
+                                "caption": "R",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_updates",
+                                "caption": "U",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "count_deletes",
+                                "caption": "D",
+                                "footer": "SUM"
+                            },
+                            {
+                                "attribute_alias": "exception_flag",
+                                "hidden": true
+                            },
+                            {
+                                "attribute_alias": "monitor_error__UID",
+                                "hidden": true
+                            },
+                            {
+                                "attribute_alias": "step_run__step",
+                                "hidden": true
+                            }
+                        ],
+                        "sorters": [
+                            {
+                                "attribute_alias": "step_run__flow_run_pos",
+                                "direction": "asc"
+                            },
+                            {
+                                "attribute_alias": "ordering_id",
+                                "direction": "asc"
+                            }
+                        ],
+                        "buttons": [
+                            {
+                                "bind_to_double_click": true,
+                                "action": {
+                                    "alias": "axenox.ETL.ShowEtlStepRunDebugDialog",
+                                    "input_mapper": {
+                                        "from_object_alias": "axenox.ETL.step_note",
+                                        "to_object_alias": "axenox.ETL.step_run",
+                                        "column_to_column_mappings": [
+                                            {
+                                                "from": "step_run",
+                                                "to": "UID"
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
                     }
                 ]
             }

@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "Data flow [axenox.ETL.flow]",
             "CREATED_ON": "2021-02-26 16:44:37",
-            "MODIFIED_ON": "2024-12-18 08:00:03",
+            "MODIFIED_ON": "2025-04-08 12:12:49",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eb90858867906c9085025041000001",
@@ -135,10 +135,18 @@
                                                         "height": 2
                                                     },
                                                     {
-                                                        "attribute_alias": "alias"
-                                                    },
-                                                    {
-                                                        "attribute_alias": "version"
+                                                        "caption": "Flow alias / version",
+                                                        "widget_type": "InlineGroup",
+                                                        "separator": ":",
+                                                        "widgets": [
+                                                            {
+                                                                "attribute_alias": "alias"
+                                                            },
+                                                            {
+                                                                "attribute_alias": "version",
+                                                                "width": "60px"
+                                                            }
+                                                        ]
                                                     },
                                                     {
                                                         "attribute_alias": "app"
@@ -224,7 +232,7 @@
                                                                 "caption": "To"
                                                             },
                                                             {
-                                                                "attribute_alias": "etl_prototype"
+                                                                "attribute_alias": "etl_prototype__LABEL"
                                                             },
                                                             {
                                                                 "attribute_alias": "step_flow_sequence",

@@ -65,7 +65,7 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Data flow: Run flow",
+            "_EXPORT_SUMMARY": "Data flow: Run flow [EtlFlowRunInConsole]",
             "CREATED_ON": "2021-06-09 17:59:36",
             "MODIFIED_ON": "2024-08-06 16:36:45",
             "CREATED_BY_USER": "0x11ea7e29e1126ef3a7eb0050568905af",
@@ -100,7 +100,7 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Data flow: Flow chart",
+            "_EXPORT_SUMMARY": "Data flow: Flow chart [EtlFlowSankeyDialog]",
             "CREATED_ON": "2024-02-01 16:34:49",
             "MODIFIED_ON": "2024-08-06 16:36:39",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
