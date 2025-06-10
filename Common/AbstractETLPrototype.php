@@ -413,7 +413,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param ETLStepDataInterface $stepData
      * @return FlowStepLogBook
      */
-    protected function getLogBook(ETLStepDataInterface $stepData) : FlowStepLogBook
+    public function getLogBook(ETLStepDataInterface $stepData) : FlowStepLogBook
     {
         foreach ($this->logBooks as $logBook) {
             if($logBook->getStepData() === $stepData) {

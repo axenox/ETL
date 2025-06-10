@@ -3,6 +3,7 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -366,6 +367,13 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         try {
+            if($step instanceof AbstractETLPrototype) {
+                $logBook = $step->getLogBook($stepData);
+                $logBook->setIndentActive(0);
+                $logBook->addLine('**ERROR** (Code "' . $exception->getId() . '")**: ' . $exception->getMessage() . '**');
+                $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($step, $logBook));
+            }
+            
             $widgetJson = $exception->createWidget(UiPageFactory::createEmpty($this->getWorkbench()))->exportUxonObject()->toJson();
             $row['error_widget'] = $widgetJson;
         } catch (\Throwable $e) {
