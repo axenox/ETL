@@ -65,11 +65,11 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Web service: Edit steps",
+            "_EXPORT_SUMMARY": "Web service: Edit steps [WebserviceSplitEditDialog]",
             "CREATED_ON": "2024-01-09 12:47:29",
-            "MODIFIED_ON": "2024-08-29 13:25:08",
+            "MODIFIED_ON": "2025-04-09 11:00:52",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11eca7f5b092f284a7f5005056bea39f",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eeb5b6dde235f4b5b6025041000001",
             "OBJECT": "0x11eebdc39597022cbdc3025041000001",
             "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
@@ -216,6 +216,37 @@
                                                                     "action_alias": "axenox.ETL.EtlStepOnOffToggle"
                                                                 },
                                                                 {
+                                                                    "caption": "New Route/Flow",
+                                                                    "icon": "plus",
+                                                                    "widget_type": "MenuButton",
+                                                                    "input_widget_id": "uid_field",
+                                                                    "menu": {
+                                                                        "widget_type": "Menu",
+                                                                        "buttons": [
+                                                                            {
+                                                                                "action_alias": "exface.Core.ShowObjectCreateDialog",
+                                                                                "caption": "Create a route for an existing flow"
+                                                                            },
+                                                                            {
+                                                                                "action_alias": "axenox.ETL.WebserviceFlowCreateJsonImport"
+                                                                            },
+                                                                            {
+                                                                                "action_alias": "axenox.ETL.WebserviceFlowCreateExcelJsonImport"
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "disabled_if": {
+                                                                        "operator": "AND",
+                                                                        "conditions": [
+                                                                            {
+                                                                                "value_left": "=uid_field",
+                                                                                "comparator": "==",
+                                                                                "value_right": ""
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                {
                                                                     "caption": "Edit flow",
                                                                     "action": {
                                                                         "alias": "exface.core.ShowObjectEditDialog",
@@ -328,7 +359,7 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Web service: Test API",
+            "_EXPORT_SUMMARY": "Web service: Test API [WebserviceSwaggerUIDialog]",
             "CREATED_ON": "2024-01-09 12:50:01",
             "MODIFIED_ON": "2024-08-29 13:25:59",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -359,11 +390,11 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Web service: Edit OpenAPI definition",
+            "_EXPORT_SUMMARY": "Web service: Edit OpenAPI definition [WebserviceEditOpenAPIDialog]",
             "CREATED_ON": "2024-01-26 12:42:18",
-            "MODIFIED_ON": "2024-08-29 13:23:21",
+            "MODIFIED_ON": "2025-04-11 16:52:23",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11eca7f5b092f284a7f5005056bea39f",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eea9d6f67e1322a9d6025041000001",
             "OBJECT": "0x11eebdc39597022cbdc3025041000001",
             "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
@@ -378,14 +409,20 @@
                 "dialog": {
                     "widgets": [
                         {
+                            "attribute_alias": "type__schema_class",
+                            "widget_type": "InputHidden",
+                            "display_only": true,
+                            "id": "schema_class_field"
+                        },
+                        {
                             "widget_type": "InputUxon",
                             "height": "100%",
                             "hide_caption": true,
                             "attribute_alias": "swagger_json",
-                            "schema": "\\axenox\\ETL\\Uxon\\OpenAPISchema"
+                            "schema": "\\axenox\\ETL\\Uxon\\OpenAPISchema",
+                            "root_prototype": "=schema_class_field"
                         }
                     ],
-                    "widget_type": "Dialog",
                     "buttons": [
                         {
                             "action_alias": "exface.Core.UpdateData",
@@ -400,7 +437,7 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Web service: On/Off",
+            "_EXPORT_SUMMARY": "Web service: On/Off [EtlWebserviceOnOffToggle]",
             "CREATED_ON": "2024-06-07 08:26:11",
             "MODIFIED_ON": "2024-06-07 08:26:11",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",

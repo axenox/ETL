@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
     "created_on": "2023-12-11 10:07:50",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2024-04-15 16:09:08",
+    "modified_on": "2025-04-11 14:37:14",
     "contents": {
         "widget_type": "DataTable",
         "object_alias": "axenox.ETL.webservice_type",
@@ -41,7 +41,7 @@
                 "attribute_alias": "app__ALIAS"
             },
             {
-                "attribute_alias": "default_response_path"
+                "attribute_alias": "schema_class"
             }
         ],
         "sorters": [

@@ -20,6 +20,8 @@ use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 
 /**
+ * DEPRECATED use JsonApiToDataSheet instead!
+ * 
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases like:
  * ´´´
  * {
@@ -252,7 +254,7 @@ class OpenApiJsonToDataSheet extends AbstractOpenApiPrototype
             switch(true) {
                 case array_key_exists($propertyName, $attributeAliasByPropertyName) === false && is_array($value):
                 case is_numeric($propertyName):
-                    $importData = $this->getImportDataFromRequestBody($value, $attributeAliasByPropertyName);
+                    $importData[$attributeAliasByPropertyName[$propertyName]] = $this->getImportDataFromRequestBody($value, $attributeAliasByPropertyName);
                     break;
                 case array_key_exists($propertyName, $attributeAliasByPropertyName):
                     // arrays and objects are represented via string in the database
@@ -306,7 +308,7 @@ class OpenApiJsonToDataSheet extends AbstractOpenApiPrototype
 
     protected function getAdditionalColumn() : array
     {
-        return $this->additionalColumns;
+        return $this->additionalColumns ?? [];
     }
 
     /**

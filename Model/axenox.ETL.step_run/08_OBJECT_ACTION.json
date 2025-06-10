@@ -65,7 +65,7 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Step run: Debug details",
+            "_EXPORT_SUMMARY": "Step run: Debug details [ShowEtlStepRunDebugDialog]",
             "CREATED_ON": "2021-03-30 15:52:33",
             "MODIFIED_ON": "2021-03-30 16:03:02",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -86,7 +86,7 @@
             "DOCS": ""
         },
         {
-            "_EXPORT_SUMMARY": "Step run: Error details",
+            "_EXPORT_SUMMARY": "Step run: Error details [ShowEtlStepRunErrorDialog]",
             "CREATED_ON": "2021-03-30 16:02:37",
             "MODIFIED_ON": "2021-03-30 16:02:37",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",

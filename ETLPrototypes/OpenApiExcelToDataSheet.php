@@ -3,6 +3,8 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
+use exface\Core\CommonLogic\Model\Attribute;
+use exface\Core\CommonLogic\Model\CustomAttribute;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -32,6 +34,8 @@ use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 
 /**
+ * DEPRECATED use ExcelApiToDataSheet instead!
+ * 
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
  * AND x-excel-sheet and with x-excel-column for the information where to read the information in the excel
  * like:
@@ -79,8 +83,7 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
 
     private $additionalColumns = null;
     private $schemaName = null;
-    private array $webservice;
-    private $filepath;
+    private array $webservice = [];
 
     /**
      *
@@ -132,8 +135,8 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
         $ds->getColumns()->addMultiple(
             ['UID', 'type__schema_json', 'swagger_json', 'enabled']);
-        $ds->getFilters()->addConditionFromString('alias', $webservice['alias']);
-        $ds->getFilters()->addConditionFromString('version', $webservice['version']);
+        $ds->getFilters()->addConditionFromString('alias', $webservice['alias'], '==');
+        $ds->getFilters()->addConditionFromString('version', $webservice['version'], '==');
         $ds->dataRead();
 
         $webservice = $ds->getSingleRow();
@@ -151,6 +154,9 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
 
         $sheetname = $toObjectSchema[self::OPEN_API_ATTRIBUTE_TO_EXCEL_SHEET];
         foreach ($toObjectSchema['properties'] as $propertyValue) {
+            if ($propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN] == NULL || $propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN] == '') {
+                throw new InvalidArgumentException('No ' . self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN . ' expression given for attribute_alias ' .$propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS]);
+            }
             $excelColumnMapping[$propertyValue[self::OPEN_API_ATTRIBUTE_TO_EXCEL_COLUMN]] = [
                 "attribute-alias" => $propertyValue[self::OPEN_API_ATTRIBUTE_TO_ATTRIBUTE_ALIAS],
                 "datatype" => ArrayDataType::getValueIfKeyExists($propertyValue, self::OPEN_API_ATTRIBUTE_TO_DATATYPE),
