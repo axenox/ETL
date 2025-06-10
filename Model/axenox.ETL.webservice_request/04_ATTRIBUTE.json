@@ -647,9 +647,6 @@
         {
             "_EXPORT_SUMMARY": "HTTP code [http_response_code]",
             "CREATED_ON": "2023-10-18 16:06:51",
-<<<<<<< HEAD
-            "MODIFIED_ON": "2024-10-30 11:43:18",
-=======
             "MODIFIED_ON": "2023-10-18 17:56:21",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
@@ -696,7 +693,6 @@
             "_EXPORT_SUMMARY": "URL path [url_path]",
             "CREATED_ON": "2023-10-18 16:06:51",
             "MODIFIED_ON": "2023-10-18 17:56:21",
->>>>>>> 607960483f7376eed6f98c7b5bbd6cc2cc98744e
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eebf5695c1c872bf56025041000001",
@@ -743,23 +739,23 @@
         {
             "_EXPORT_SUMMARY": "Content type [http_content_type]",
             "CREATED_ON": "2023-10-18 16:32:11",
-            "MODIFIED_ON": "2024-10-30 11:58:29",
+            "MODIFIED_ON": "2023-10-18 17:56:21",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eeb60e207d960ab60e025041000001",
             "SORTABLEFLAG": 1,
             "FILTERABLEFLAG": 1,
             "AGGREGATABLEFLAG": 1,
-            "DEFAULT_AGGREGATE_FUNCTION": "",
+            "DEFAULT_AGGREGATE_FUNCTION": null,
             "VALUE_LIST_DELIMITER": ",",
             "READABLEFLAG": 1,
             "WRITABLEFLAG": 1,
             "SYSTEMFLAG": 0,
             "DEFAULT_EDITOR_UXON": null,
-            "COPY_WITH_RELATED_OBJECT": 0,
-            "DELETE_WITH_RELATED_OBJECT": 0,
+            "COPY_WITH_RELATED_OBJECT": null,
+            "DELETE_WITH_RELATED_OBJECT": null,
             "DEFAULT_DISPLAY_UXON": null,
-            "COMMENTS": "",
+            "COMMENTS": null,
             "NAME": "Content type",
             "RELATION_CARDINALITY": "",
             "TYPE": "D",
@@ -777,11 +773,7 @@
             "REQUIREDFLAG": 0,
             "RELATED_OBJ": null,
             "SORTERPOS": null,
-<<<<<<< HEAD
-            "SORTERDIR": "",
-=======
             "SORTERDIR": null,
->>>>>>> 607960483f7376eed6f98c7b5bbd6cc2cc98744e
             "RELATED_OBJ_ATTR": null,
             "SHORT_DESCRIPTION": "",
             "DATA_ADDRESS_PROPS": null,
@@ -839,8 +831,6 @@
             }
         },
         {
-<<<<<<< HEAD
-=======
             "_EXPORT_SUMMARY": "Response header [response_header]",
             "CREATED_ON": "2023-11-30 15:19:20",
             "MODIFIED_ON": "2023-11-30 15:19:20",
@@ -934,9 +924,8 @@
         },
         {
             "_EXPORT_SUMMARY": "Date [date]",
->>>>>>> 607960483f7376eed6f98c7b5bbd6cc2cc98744e
             "CREATED_ON": "2023-12-19 15:35:44",
-            "MODIFIED_ON": "2024-10-30 11:43:18",
+            "MODIFIED_ON": "2024-01-09 12:38:24",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eea677e54a6fc4a677025041000001",
@@ -982,52 +971,6 @@
             "DEFAULT_VALUE": "",
             "FIXED_VALUE": "",
             "CUSTOM_DATA_TYPE": null
-        },
-        {
-            "CREATED_ON": "2024-10-30 11:42:41",
-            "MODIFIED_ON": "2024-10-30 11:43:18",
-            "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
-            "UID": "0x11ef86fbb1f6f15a86fb025041000001",
-            "SORTABLEFLAG": 1,
-            "FILTERABLEFLAG": 1,
-            "AGGREGATABLEFLAG": 1,
-            "DEFAULT_AGGREGATE_FUNCTION": null,
-            "VALUE_LIST_DELIMITER": ",",
-            "READABLEFLAG": 1,
-            "WRITABLEFLAG": 1,
-            "SYSTEMFLAG": 0,
-            "DEFAULT_EDITOR_UXON": null,
-            "COPY_WITH_RELATED_OBJECT": null,
-            "DELETE_WITH_RELATED_OBJECT": null,
-            "DEFAULT_DISPLAY_UXON": null,
-            "COMMENTS": null,
-            "NAME": "HTTP query",
-            "RELATION_CARDINALITY": "",
-            "TYPE": "D",
-            "COPYABLEFLAG": 1,
-            "ALIAS": "http_querystring",
-            "DATATYPE": "0x31310000000000000000000000000000",
-            "DATA_ADDRESS": "http_querystring",
-            "OBJECT": "0x11eeae4695964d78ae46025041000001",
-            "FORMATTER": null,
-            "DISPLAYORDER": null,
-            "LABELFLAG": 0,
-            "UIDFLAG": 0,
-            "HIDDENFLAG": 0,
-            "EDITABLEFLAG": 1,
-            "REQUIREDFLAG": 0,
-            "RELATED_OBJ": null,
-            "SORTERPOS": null,
-            "SORTERDIR": null,
-            "RELATED_OBJ_ATTR": null,
-            "SHORT_DESCRIPTION": "",
-            "DATA_ADDRESS_PROPS": null,
-            "DEFAULT_VALUE": "",
-            "FIXED_VALUE": "",
-            "CUSTOM_DATA_TYPE": {
-                "length_max": 65535
-            }
         }
     ],
     "totals_rows": [],
