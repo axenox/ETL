@@ -296,8 +296,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	{
         $requestLogData = $this->loggingMiddleware->getLogData($request);
 		$requestLogData->getFilters()->addConditionFromColumnValues($requestLogData->getUidColumn());
-		$requestLogData->getColumns()->addFromExpression('response_body');
-        $requestLogData->getColumns()->addFromExpression('response_header');
+		//$requestLogData->getColumns()->addFromExpression('response_body');
+        //$requestLogData->getColumns()->addFromExpression('response_header');
 		$requestLogData->dataRead();
         return $requestLogData;
 	}
@@ -373,13 +373,9 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $basePath .= '/' . ltrim($webserviceBase, "/");
 
         $json = $schema->publish($basePath);
-		$openApiJson = json_decode($json, true);
-		$openApiJson = $this->removeInternalAttributes($openApiJson);
-		$openApiJson = $this->prependLocalServerPaths($path, $openApiJson);
-		$openApiJson = $this->setApiVersion($request, $openApiJson);
-		$this->allowedHttpMethods = $this->extractHttpMethods($openApiJson);
-		$this->openApiCache[$path] = $openApiJson;
-		return $openApiJson;
+        $openApiJson = json_decode($json, true);
+        $this->openApiCache[$path] = $openApiJson;
+        return $openApiJson;
 	}
 
     /**
