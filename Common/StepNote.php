@@ -250,6 +250,17 @@ class StepNote implements NoteInterface
      */
     public function setLogLevel(string $logLevel): NoteInterface
     {
+        switch ($logLevel) {
+            case 'debug':
+            case 'notice':
+                $logLevel = MessageTypeDataType::INFO;
+                break;
+            case 'emergency':
+            case 'critical':
+            case 'alert':
+                $logLevel = MessageTypeDataType::ERROR;
+                break;
+        }
         return $this->setMessageType($logLevel);
     }
 
