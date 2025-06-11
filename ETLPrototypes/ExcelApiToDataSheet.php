@@ -100,13 +100,16 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
         if ($uploadUid === null) {
-            yield 'No file found in step input' . PHP_EOL;
+            $logBook->addLine($msg = 'No file found in step input');
+            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
 
         // Create a FileInfo object for the Excel file
+        $logBook->addSection('Reading from-sheet');
         $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileData->getMetaObject(), $uploadUid);
-        yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
+        $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
+        yield $msg . PHP_EOL;
 
         $toObject = $this->getToObject();
         $toSheet = $this->createBaseDataSheet($placeholders);
@@ -120,47 +123,61 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-        $logBook->addDataSheet('Excel data', $fromSheet);
+        $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
+        $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         // Validate data in the from-sheet against the JSON schema
+        $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
+            $logBook->addIndent(1);
             foreach ($fromSheet->getRows() as $i => $row) {
                 $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
                 } catch (JsonSchemaValidationError $e) {
-                    $rowErrors[$i+1] = $e->getMessage();
+                    $msg = $e->getMessage();
+                    $logBook->addLine($msg);
+                    $rowErrors[$i+1] = $msg;
                 }
             }
+            $logBook->addIndent(-1);
             if (count($rowErrors) > 0) {
                 throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
             }
         }
 
-        // Apply the mapper
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $logBook->addSection('Filling data sheet');
+        // Perform 'from_data_checks'.
+        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
+        $logBook->addDataSheet('From-Sheet', $fromSheet);
+        if($fromSheet->countRows() === 0) {
+            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
+            yield $msg . PHP_EOL;
+            $logBook->addLine($msg);
 
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            return $result->setProcessedRowsCounter(0);
+        }
+
+        // Apply the mapper
+        $logBook->addSection('Filling data sheet');
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
 
         if($toSheet->countRows() === 0) {
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
+            yield $msg . PHP_EOL;
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-
-            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
+        $logBook->addDataSheet('To-data', $toSheet);
 
-        // Saving relations is very complex and not yet supported for OpenApi Imports
-        $this->removeRelationColumns($toSheet);
-
+        $logBook->addSection('Saving data');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
-        $logBook->addDataSheet('To-data', $toSheet);
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
@@ -173,7 +190,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $this->isSkipInvalidRows()
         );
 
-        $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
         
