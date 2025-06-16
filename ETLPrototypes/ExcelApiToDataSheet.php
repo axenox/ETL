@@ -1,14 +1,13 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\NoteTaker;
-use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\DataTypes\SemanticVersionDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
@@ -282,7 +281,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
         $ds->getColumns()->addMultiple([
-            'UID', 
+            'UID',
+            'version',
             'swagger_json', 
             'type__schema_class',
             'enabled'
@@ -295,9 +295,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
         $ds->dataRead();        
 
-        $webservice = $ds->getSingleRow();
-        $schemaClass = $webservice['type__schema_class'];
-        $schema = new $schemaClass($this->getWorkbench(), $webservice['swagger_json']);
+        switch ($ds->countRows()) {
+            case 0:
+                throw new RuntimeException('Cannot find webservice for flow step "' . $this->getName() . '" using filter `' . $ds->getFilters()->__toString() . '`');
+            case 1:
+                $row = $ds->getRow(0);
+                break;
+            default:
+                $versionCol = $ds->getColumns()->get('version');
+                $bestFit = SemanticVersionDataType::findVersionBest('*', $versionCol->getValues());
+                $row = $ds->getRow($versionCol->findRowByValue($bestFit));
+                break;
+        }
+        $schemaClass = $row['type__schema_class'];
+        $schema = new $schemaClass($this->getWorkbench(), $row['swagger_json']);
         return $schema;
     }
 
