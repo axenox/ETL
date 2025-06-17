@@ -47,9 +47,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
     // TODO: move all OpenApiFacadeInterface methods to OpenAPI3 schema class
 
 	const REQUEST_ATTRIBUTE_NAME_ROUTE = 'route';
-    private $openApiCache = [];
-    private $openApiStrings = [];
-    private string $allowedHttpMethods = '';
+	private $openApiCache = [];
     private RequestLoggingMiddleware $loggingMiddleware;
     private $verbose = null;
     private $routePath = null;
@@ -60,10 +58,10 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	 */
 	protected function createResponse(ServerRequestInterface $request): ResponseInterface
 	{
-        $headers = $this->buildHeadersCommon();
+	    $headers = $this->buildHeadersCommon();
         $response = null;
 
-        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
+        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);;
 
         if ((bool)$routeModel['enabled'] === false) {
             // return Service Unavailable if related data flow is not running
@@ -79,10 +77,10 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $this->loggingMiddleware->logRequestProcessing($request, $routeUID, $flowRunUID);
 	    $flowResult = $this->runFlow($flowAlias, $request); // flow data update
 		$flowOutput = $flowResult->getMessage();
-        $requestWithBody = $this->loadRequestDataWithBody($request);
-				
-		if ($requestWithBody->countRows() == 1) {
-			$body = $this->createRequestResponseBody($requestWithBody, $request, $headers, $routeModel, $routePath);
+
+        $responseData = $this->loadResponseData($request);
+        if ($responseData->countRows() === 1) {
+			$body = $this->createRequestResponseBody($responseData, $request, $headers, $routeModel, $routePath);
 			$response = new Response(200, $headers, $body);
 		}
 
@@ -130,34 +128,33 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
     /**
      *
      * /**
-     * @param DataSheetInterface $requestLogData
+     * @param DataSheetInterface     $responseData
      * @param ServerRequestInterface $request
-     * @param array $headers
-     * @param array $routeModel
-     * @param string $routePath
+     * @param array                  $headers
+     * @param array                  $routeModel
+     * @param string                 $routePath
      * @return string|null
      * @throws JSONPathException
      */
 	private function createRequestResponseBody(
-		DataSheetInterface $requestLogData,
+		DataSheetInterface     $responseData,
 		ServerRequestInterface $request,
-		array &$headers,
-		array $routeModel,
-		string $routePath) : ?string
+		array                  &$headers,
+		array                  $routeModel,
+		string                 $routePath) : ?string
 	{
         // body already created in step
-        $responseHeader = $requestLogData->getRow()['response_header'];
+        $responseHeader = $responseData->getRow()['response_header'];
         if ($responseHeader  !== null) {
             $headers['Content-Type'] = $responseHeader;
-            return $requestLogData->getRow()['response_body'];
+            return $responseData->getRow()['response_body'];
         }
 
         $flowResponse = null;
-        $body = $requestLogData->getRow()['response_body'];
+        $body = $responseData->getRow()['response_body'];
         if ($body !== null) {
 		    $flowResponse = json_decode($body, true);
         }
-        $responseModel = null;
 		
 		// load response model from swagger
 		$methodType = strtolower($request->getMethod());
@@ -247,8 +244,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 		$middleware[] = new RouteAuthenticationMiddleware($this, [], true);
 		$middleware[] = $loggingMiddleware;
         $middleware[] = new OpenApiValidationMiddleware($this, $excludePattern);
-		$middleware[] = new OpenApiMiddleware($this, '/.*openapi\\.json$/');
-		$middleware[] = new SwaggerUiMiddleware($this, '/.*swaggerui$/', 'openapi.json');
+		$middleware[] = new OpenApiMiddleware($this, $this->buildHeadersCommon(), '/.*openapi\\.json$/');
+		$middleware[] = new SwaggerUiMiddleware($this, $this->buildHeadersCommon(), '/.*swaggerui$/', 'openapi.json');
 		
 		return $middleware;
 	}
@@ -260,7 +257,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	protected function createResponseFromError(\Throwable $exception, ServerRequestInterface $request = null): ResponseInterface
 	{
 		$code = $exception->getStatusCode();
-        $headers = $this->buildHeadersCommon();
+		$headers = $this->buildHeadersCommon();
 
         /*
 		if ($this->getWorkbench()
@@ -289,17 +286,18 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         return $response;
 	}
 
-	/**
-	 * @param DataSheetInterface $requestLogData
-	 */
-	private function loadRequestDataWithBody(ServerRequestInterface $request) : DataSheetInterface
+    /**
+     * @param ServerRequestInterface $request
+     * @return DataSheetInterface
+     */
+	private function loadResponseData(ServerRequestInterface $request) : DataSheetInterface
 	{
-        $requestLogData = $this->loggingMiddleware->getLogData($request);
-		$requestLogData->getFilters()->addConditionFromColumnValues($requestLogData->getUidColumn());
-		//$requestLogData->getColumns()->addFromExpression('response_body');
-        //$requestLogData->getColumns()->addFromExpression('response_header');
-		$requestLogData->dataRead();
-        return $requestLogData;
+        $responseData = $this->loggingMiddleware->getLogDataResponse($request);
+		
+        $responseData->getFilters()->addConditionFromColumnValues($responseData->getUidColumn());
+		$responseData->dataRead();
+        
+        return $responseData;
 	}
 
 	/**
@@ -307,45 +305,14 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	 * {@inheritDoc}
 	 * @see \exface\Core\Facades\AbstractHttpFacade\AbstractHttpFacade::buildHeadersCommon()
 	 */
-	public function buildHeadersCommon(): array
+	protected function buildHeadersCommon(): array
 	{
 		$facadeHeaders = array_filter($this->getConfig()
 			->getOption('FACADE.HEADERS.COMMON')
 			->toArray());
 		$commonHeaders = parent::buildHeadersCommon();
-		$retVal = array_merge($commonHeaders, $facadeHeaders);
-        if ($this->allowedHttpMethods !== '')
-        {
-            $retVal = array_merge($retVal, ['Access-Control-Allow-Methods' => $this->allowedHttpMethods]);
-        }
-        return $retVal;
+		return array_merge($commonHeaders, $facadeHeaders);
 	}
-
-    /**
-     * Extracts HTTP header entry for allowed HTTP methods from OpenAPI definition
-     * TODO jsc 240917 move to OpenAPI specific Implementation
-     * @param array $swaggerArray OpenAPI definition
-     * @return string the HTTP methods extracted by OpenAPI definition
-     */
-    private function extractHttpMethods(array $swaggerArray) : string
-    {
-        $methodArray = [];
-        $swaggerPaths = $swaggerArray['paths'];
-        // iterate all paths
-        foreach ($swaggerPaths as $path)
-        {
-            // iterate all HTTP methods
-            foreach ($path as $method => $values)
-            {
-                // check if method is already in return value
-                if(!array_search($method, $methodArray))
-                {
-                    $methodArray[] = strtoupper($method);
-                }
-            }
-        }
-        return implode(", ", $methodArray);
-    }
 	
 	/**
 	 * @deprecated move to OpenAPI3 schema class
@@ -373,9 +340,9 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $basePath .= '/' . ltrim($webserviceBase, "/");
 
         $json = $schema->publish($basePath);
-        $openApiJson = json_decode($json, true);
-        $this->openApiCache[$path] = $openApiJson;
-        return $openApiJson;
+		$openApiJson = json_decode($json, true);
+		$this->openApiCache[$path] = $openApiJson;
+		return $openApiJson;
 	}
 
     /**

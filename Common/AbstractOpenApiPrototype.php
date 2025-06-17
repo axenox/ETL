@@ -149,9 +149,26 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
 
         return $requestLogData;
     }
+    
+    protected function loadResponseData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheet|DataSheetInterface
+    {
+        $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $requestLogData->getColumns()->addFromSystemAttributes();
+        $requestLogData->getColumns()->addMultiple($requestedColumns);
+        $requestLogData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
+        $requestLogData->getFilters()->ad;
+        $requestLogData->dataRead();
+
+        if ($requestLogData->countRows() > 1) {
+            throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+
+        return $requestLogData;
+    }
 
     /**
-     * Adds additional data provided by the ´additional_rows´ config within the step to given row into the given datasheet.
+     * Adds additional data provided by the ´additional_rows´ config within the step to given row into the given
+     * datasheet.
      *
      * @param DataSheetInterface $dataSheet
      * @param array $placeholder

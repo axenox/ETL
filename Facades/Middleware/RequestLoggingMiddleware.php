@@ -24,7 +24,8 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
     private $excludePatterns = [];
     private $finished = false;
 
-    private DataSheetInterface|null $logData = null;
+    private DataSheetInterface|null $logDataRequest = null;
+    private DataSheetInterface|null $logDataResponse = null;
 
     private DataSheetInterface|null $taskData = null;
 
@@ -77,6 +78,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         $logData = DataSheetFactory::createFromObjectIdOrAlias(
             $this->facade->getWorkbench(),
             'axenox.ETL.webservice_request');
+        
         $logData->addRow([
             'status' => WebRequestStatusDataType::RECEIVED,
             'url' => $request->getUri()->__toString(),
@@ -90,7 +92,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
             'http_content_type' => implode(';', $request->getHeader('Content-Type'))]);
 
         $logData->dataCreate(false);
-        $this->logData = $logData;
+        $this->logDataRequest = $logData;
     }
 
     /**
@@ -105,17 +107,19 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         string $flowRunUID): void
     {
         // create request log if missing
-        if ($this->logData === null) {
+        if ($this->logDataRequest === null) {
             $this->logRequestReceived($request);
         }
 
-        $taskData = $this->logData->extractSystemColumns();
+        $taskData = $this->logDataRequest->extractSystemColumns();
+        
         $taskData->setCellValue('route', 0, $routeUID);
         $taskData->setCellValue('status', 0, WebRequestStatusDataType::PROCESSING);
         $taskData->setCellValue('flow_run', 0, $flowRunUID);
+        
         $taskData->dataUpdate(false);
         $this->taskData = $taskData;
-        $this->logData->merge($taskData);
+        $this->logDataRequest->merge($taskData);
     }
 
     /**
@@ -130,36 +134,27 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         ResponseInterface $response = null): void
     {
         // do not log errors in request log prior to a valid request
-        if ($this->logData === null) {
+        if ($this->logDataRequest === null) {
             return;
         }
-        $logData = $this->logData->extractSystemColumns();
-        // create new response
-        $logResponseData = DataSheetFactory::createFromObjectIdOrAlias(
-            $this->facade->getWorkbench(),
-            'axenox.ETL.webservice_response');
-        $logResponseData->addRow([
-            'webservice_request' => $logData->getCellValue('UID', 0),
-            'http_response_code' => $response->getStatusCode(),
-            'http_content_type' => implode(';', $response->getHeader('Content-Type')),
-            'status' => WebRequestStatusDataType::DONE,
-            'response_body' => $response->getBody()->__toString(),
-            'response_header' => json_encode($response->getHeaders())]);
-        if($e !== null) {
-            $logResponseData->setCellValue('error_message',0,$e->getMessage());
-            $logResponseData->setCellValue('error_code',0,$e->getCode());
+
+        if ($response !== null) {
+            $this->logResponse($response);
         }
-        $logResponseData->dataCreate(false);
-        // update request
+        
+        $logData = $this->logDataRequest->extractSystemColumns();
         $logData->setCellValue('status', 0, WebRequestStatusDataType::ERROR);
+
         if ($e !== null) {
             $logData->setCellValue('error_message', 0, $e->getMessage());
             $logData->setCellValue('error_logid', 0, $e->getId());
+            $logData->setCellValue('http_response_code', 0, $e->getStatusCode());
         }
+
         try {
             $this->finished = true;
             $logData->dataUpdate(false);
-            $this->logData->merge($logData);
+            $this->logDataRequest->merge($logData);
         } catch (\Throwable $eUpdate) {
             // Do not throw an error if the logging fails, just log it to the main log.
             // The web service should still output the regular error result even if
@@ -179,34 +174,54 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         string $output,
         ResponseInterface $response): void
     {
-        $logData = $this->logData->extractSystemColumns();
-        // create new response
-        $logResponseData = DataSheetFactory::createFromObjectIdOrAlias(
-            $this->facade->getWorkbench(),
-            'axenox.ETL.webservice_response');
-        $logResponseData->addRow([
-            'webservice_request' => $logData->getCellValue('UID', 0),
-            'http_response_code' => $response->getStatusCode(),
-            'http_content_type' => implode(';', $response->getHeader('Content-Type')),
-            'status' => WebRequestStatusDataType::DONE,
-            'result_text' => $output,
-            'response_body' => $response->getBody()->__toString(),
-            'response_header' => json_encode($response->getHeaders())]);
-        $logResponseData->dataCreate(false);
-        // update request
+        $this->logResponse($response);
+        
+        $logData = $this->logDataRequest->extractSystemColumns();
+        
         $logData->setCellValue('status', 0, WebRequestStatusDataType::DONE);
+        $logData->setCellValue('result_text', 0, $output);
+        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
+        
         $logData->dataUpdate(false);
-        $this->logData->merge($logData);
+        $this->logDataRequest->merge($logData);
         $this->finished = true;
     }
 
     /**
+     * @param ResponseInterface $response
+     * @return void
+     */
+    protected function logResponse(ResponseInterface $response) : void
+    {
+        $logData = $this->logDataResponse->extractSystemColumns();
+        
+        $logData->setCellValue('webservice_request_oid', 0, $this->logDataRequest['oid']);
+        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
+        $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
+        $logData->setCellValue('response_body', 0, $response->getBody()->__toString());
+
+        $logData->dataUpdate();
+        $this->logDataResponse->merge($logData);
+    }
+    
+    /**
      * @param ServerRequestInterface $request
      * @return DataSheetInterface|null
      */
-    public function getLogData(ServerRequestInterface $request) : ?DataSheetInterface
+    public function getLogDataRequest(ServerRequestInterface $request) : ?DataSheetInterface
     {
-        return $this->logData;
+        return $this->logDataRequest;
+    }
+    
+    public function getLogDataResponse(ServerRequestInterface $request) : ?DataSheetInterface
+    {
+        if($this->logDataResponse === null) {
+            $this->logDataResponse = DataSheetFactory::createFromObjectIdOrAlias(
+                $this->facade->getWorkbench(),
+                'axenox.ETL.webservice_response');
+        }
+        
+        return $this->logDataResponse;
     }
 
     /**
