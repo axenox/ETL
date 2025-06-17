@@ -6,6 +6,8 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -438,5 +440,46 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         }
         
         return $this->logBooks[0]->createDebugWidget($debug_widget);
+    }
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @param array $requestedColumns
+     * @return DataSheetInterface
+     */
+    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheetInterface
+    {
+        $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $requestLogData->getColumns()->addFromSystemAttributes();
+        $requestLogData->getColumns()->addMultiple($requestedColumns);
+        $requestLogData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
+        $requestLogData->dataRead();
+
+        if ($requestLogData->countRows() > 1) {
+            throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+
+        return $requestLogData;
+    }
+
+    /**
+     * @param string $requestUid
+     * @param array  $requestedColumns
+     * @return DataSheetInterface
+     */
+    protected function loadResponseData(string $requestUid, array $requestedColumns): DataSheetInterface
+    {
+        $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $responseData->getColumns()->addFromSystemAttributes();
+        $responseData->getColumns()->addMultiple($requestedColumns);
+        $responseData->getColumns()->addFromExpression('webservice_request_oid');
+        $responseData->getFilters()->addConditionFromString('webservice_request_oid', $requestUid);
+        $responseData->dataRead();
+
+        if ($responseData->countRows() > 1) {
+            throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+
+        return $responseData;
     }
 }
