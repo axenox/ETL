@@ -3,8 +3,6 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
-use exface\Core\CommonLogic\Model\Attribute;
-use exface\Core\CommonLogic\Model\CustomAttribute;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\BinaryDataType;
@@ -13,6 +11,7 @@ use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\DateDataType;
 use exface\Core\DataTypes\DateTimeDataType;
 use exface\Core\DataTypes\IntegerDataType;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\NumberDataType;
 use exface\Core\DataTypes\StringEnumDataType;
 use exface\Core\DataTypes\TimeDataType;
@@ -23,6 +22,7 @@ use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Factories\SelectorFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataTypes\EnumDataTypeInterface;
 use exface\Core\Interfaces\Model\Behaviors\FileBehaviorInterface;
@@ -249,6 +249,9 @@ class OpenApiExcelToDataSheet extends AbstractOpenApiPrototype
 
             case 'array':
                 return DataTypeFactory::createFromString($this->getWorkbench(), ArrayDataType::class);
+
+            case 'object':
+                return DataTypeFactory::createFromString($this->getWorkbench(), JsonDataType::class);
 
             case 'string':
                 if ($format === 'datetime' || $format === 'date') {
