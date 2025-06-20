@@ -255,6 +255,7 @@ class OpenAPI3 implements APISchemaInterface
                 || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
                 || $name === OpenAPI3Property::X_LOOKUP
                 || $name === OpenAPI3Property::X_PROPERTIES_FROM_DATA
+                || $name === OpenAPI3Property::X_CALCULATION
             ) {
                 continue;
             }
