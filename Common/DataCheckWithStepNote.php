@@ -67,7 +67,7 @@ class DataCheckWithStepNote extends DataCheck
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
         ETLStepDataInterface $stepData = null
-    ): DataSheetInterface
+    ) : string
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
         
@@ -85,10 +85,9 @@ class DataCheckWithStepNote extends DataCheck
         $checkSheet = $sheet->copy();
         $errors = null;
         $rowsToRemove = [];
-        $conditionString = $this->getConditionGroup($checkSheet->getMetaObject())->__toString();
         $conditionJson = $this->getConditionGroupUxon()->toJson();
         
-        foreach ($sheet->getRows() as $rowNr => $row) {
+        foreach ($sheet->getRows() as $rowIdx => $row) {
             $checkSheet->removeRows();
             $checkSheet->addRow($row);
 
@@ -105,39 +104,31 @@ class DataCheckWithStepNote extends DataCheck
             }
             
             try {
-                parent::check($checkSheet);
+                $result = parent::check($checkSheet, $logBook);
             } catch (DataCheckFailedError $e) {
-                $placeHolderInfo = '';
-                if(!empty($placeHoldersToValues)) {
-                    $last = array_key_last($placeHoldersToValues);
-                    foreach ($placeHoldersToValues as $key => $value) {
-                        $placeHolderInfo .= '[#' . $key . '#]: ' . $value . ($key !== $last ? ', ' : '');
-                    }
-                    $placeHolderInfo = ' with placeholders `' . $placeHolderInfo . '`';
-                }
-                $logLine = 'Found ' . $e->getBadData()->countRows() . ' matches for check `' . $conditionString . '`' . $placeHolderInfo . '.';
-                
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 
                 if($removeInvalidRows) {
-                    $rowsToRemove[] = $rowNr;
-                    $logBook->addLine($logLine . ' REMOVED matching lines from processing.');
+                    $rowsToRemove[] = $rowIdx;
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
                 } else if(!empty($isValidAlias)) {
-                    $sheet->setCellValue($isValidAlias, $rowNr, $isInValidValue);
-                    $logBook->addLine($logLine . ' Marked matching lines as INVALID.');
+                    $rowsToMark[] = $rowIdx;
+                    $sheet->setCellValue($isValidAlias, $rowIdx, $isInValidValue);
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
-                } else {
-                    $logBook->addLine($logLine);
                 }
                 
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
-                $errors->appendError($e, $rowNr + 1);
+                $errors->appendError($e, $rowIdx + 1);
             }
         }
-        
-        if(!empty($rowsToRemove)) {
+
+        if(! empty($rowsToRemove)) {
+            $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $rowsToRemove) . '`');
             $sheet->removeRows($rowsToRemove);
+        }
+
+        if(! empty($rowsToMark)) {
+            $logBook->addLine('Added invalid-mark on row(s) with index: `' . implode('`, `', $rowsToMark) . '`');
         }
         
         if($errors) {
@@ -155,7 +146,7 @@ class DataCheckWithStepNote extends DataCheck
             $noteOnSuccess->takeNote();
         }
         
-        return $sheet;
+        return $result ?? ($logLine ?? '');
     }
 
     /**
