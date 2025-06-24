@@ -1,13 +1,13 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\NoteTaker;
-use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
+use exface\Core\DataTypes\SemanticVersionDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
@@ -89,6 +89,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $placeholders = $this->getPlaceholders($stepData);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
+        $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
         $fileData = $this->getUploadData($stepData);
@@ -98,16 +99,18 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
         if ($uploadUid === null) {
-            yield 'No file found in step input' . PHP_EOL;
+            $logBook->addLine($msg = 'No file found in step input');
+            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
 
         // Create a FileInfo object for the Excel file
+        $logBook->addSection('Reading from-sheet');
         $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileData->getMetaObject(), $uploadUid);
-        yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
+        $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
+        yield $msg . PHP_EOL;
 
         $toObject = $this->getToObject();
-        $this->getCrudCounter()->start([$toObject]);
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
@@ -119,49 +122,65 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-        $logBook->addDataSheet('Excel data', $fromSheet);
+        $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
+        $logBook->addDataSheet('Excel data', $fromSheet->copy());
+        $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         // Validate data in the from-sheet against the JSON schema
+        $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
+            $logBook->addIndent(1);
             foreach ($fromSheet->getRows() as $i => $row) {
                 $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
                 } catch (JsonSchemaValidationError $e) {
-                    $rowErrors[$i+1] = $e->getMessage();
+                    $msg = $e->getMessage();
+                    $logBook->addLine($msg);
+                    $rowErrors[$i+1] = $msg;
                 }
             }
+            $logBook->addIndent(-1);
             if (count($rowErrors) > 0) {
                 throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
             }
         }
 
-        // Apply the mapper
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $logBook->addSection('Filling data sheet');
+        // Perform 'from_data_checks'.
+        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
+        $logBook->addDataSheet('From-Sheet', $fromSheet);
+        if($fromSheet->countRows() === 0) {
+            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
+            yield $msg . PHP_EOL;
+            $logBook->addLine($msg);
 
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            return $result->setProcessedRowsCounter(0);
+        }
+
+        // Apply the mapper
+        $logBook->addSection('Filling data sheet');
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
 
         if($toSheet->countRows() === 0) {
-            $this->getCrudCounter()->stop();
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
+            yield $msg . PHP_EOL;
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-
-            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
+        $logBook->addDataSheet('To-data', $toSheet);
 
-        // Saving relations is very complex and not yet supported for OpenApi Imports
-        $this->removeRelationColumns($toSheet);
-
+        $logBook->addSection('Saving data');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
-        $logBook->addDataSheet('To-data', $toSheet);
         yield $msg;
 
+        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
+        
         $writer = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
@@ -170,16 +189,15 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $this->isSkipInvalidRows()
         );
 
-        $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
+        
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
         }
 
         $this->getCrudCounter()->stop();
-
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
@@ -263,7 +281,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
         $ds->getColumns()->addMultiple([
-            'UID', 
+            'UID',
+            'version',
             'swagger_json', 
             'type__schema_class',
             'enabled'
@@ -276,9 +295,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
         $ds->dataRead();        
 
-        $webservice = $ds->getSingleRow();
-        $schemaClass = $webservice['type__schema_class'];
-        $schema = new $schemaClass($this->getWorkbench(), $webservice['swagger_json']);
+        switch ($ds->countRows()) {
+            case 0:
+                throw new RuntimeException('Cannot find webservice for flow step "' . $this->getName() . '" using filter `' . $ds->getFilters()->__toString() . '`');
+            case 1:
+                $row = $ds->getRow(0);
+                break;
+            default:
+                $versionCol = $ds->getColumns()->get('version');
+                $bestFit = SemanticVersionDataType::findVersionBest('*', $versionCol->getValues());
+                $row = $ds->getRow($versionCol->findRowByValue($bestFit));
+                break;
+        }
+        $schemaClass = $row['type__schema_class'];
+        $schema = new $schemaClass($this->getWorkbench(), $row['swagger_json']);
         return $schema;
     }
 

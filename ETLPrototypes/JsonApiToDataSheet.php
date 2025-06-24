@@ -3,7 +3,6 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\NoteTaker;
-use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
@@ -203,6 +202,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     	$result = new UxonEtlStepResult($stepData->getStepRunUid());
         $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
+        $this->getCrudCounter()->reset();
 
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
@@ -214,11 +214,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $requestBody = $requestLogData['http_body'];
 
         if ($requestLogData['http_content_type'] !== 'application/json' || $requestBody === null) {
-            $logBook->addLine($msg = 'No HTTP content found to process');
+            $logBook->addLine($msg = 'No HTTP content found to process.');
+            yield $msg . PHP_EOL;
             
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            
-            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
 
@@ -231,40 +230,33 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
             $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
-        
+
+        $logBook->addSection('Reading from-sheet');
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
-        $logBook->addDataSheet('JSON data', $fromSheet);
+        $logBook->addLine("Read {$fromSheet->countRows()} rows from JSON into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
+        $logBook->addDataSheet('JSON data', $fromSheet->copy());
+        $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
-        $logBook->addLine('Extracted JSON data to `From-Sheet`.');
-        $logBook->addDataSheet('From-Sheet', $fromSheet->copy());
-        
-        $this->getCrudCounter()->start([$fromSheet->getMetaObject()]);
-
         // Perform 'from_data_checks'.
-        if (null !== $checksUxon = $this->getFromDataChecksUxon()) {
-            $this->performDataChecks($fromSheet, $checksUxon, 'Data Checks: From-Sheet', $stepData, $logBook);
-            
-            if($fromSheet->countRows() === 0) {
-                $this->getCrudCounter()->stop();
-                $logBook->addLine($msg = 'All input rows removed by failed data checks.');
+        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
+        $logBook->addDataSheet('From-Sheet', $fromSheet);
+        if($fromSheet->countRows() === 0) {
+            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
+            yield $msg . PHP_EOL;
+            $logBook->addLine($msg);
 
-                $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-                
-                yield $msg . PHP_EOL;
-                return $result->setProcessedRowsCounter(0);
-            }
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            return $result->setProcessedRowsCounter(0);
         }
         
-        $logBook->addSection('Filling data sheet');
+        $logBook->addSection('Filling to-sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
         
         if($toSheet->countRows() === 0) {
-            $this->getCrudCounter()->stop();
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
+            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
 
@@ -273,17 +265,18 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
-
-        $logBook->addLine('Mapped `From-Sheet` according to schema "' . get_class($toObjectSchema) . '" resulting in `To-Sheet`.');
-        $logBook->addDataSheet('To-data', $toSheet);
+        $logBook->addDataSheet('To-Sheet', $toSheet);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
         // $toSheet = $this->removeRelationColumns($toSheet);
-        
+
+        $logBook->addSection('Saving data');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
+
+        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
         $writer = $this->writeData(
             $toSheet, 
@@ -293,7 +286,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $this->isSkipInvalidRows()
         );
         
-        $logBook->addSection('Saving data');
         yield from $writer;
         $resultSheet = $writer->getReturn();
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
@@ -391,7 +383,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow = false) : \Generator
     {
         $crudCounter->addObject($toSheet->getMetaObject());
-        $resultSheet = null;
 
         if ($rowByRow === true) {
             $saveSheet = $toSheet;
@@ -454,7 +445,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
             // writes for each row, so it will end up here anyway
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, 'Data Checks: To-Sheet', $stepData, $logBook);
+                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
 
                 if($toSheet->countRows() === 0) {
                     $logBook->addLine('All input rows removed by failed data checks.');

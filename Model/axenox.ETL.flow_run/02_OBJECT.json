@@ -87,9 +87,9 @@
         {
             "_EXPORT_SUMMARY": "Flow run [axenox.ETL.flow_run]",
             "CREATED_ON": "2021-03-04 20:31:23",
-            "MODIFIED_ON": "2025-04-30 14:45:07",
+            "MODIFIED_ON": "2025-05-23 10:09:34",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ebbb7534237cb0bb75025041000001",
             "READABLE_FLAG": 1,
             "WRITABLE_FLAG": 0,
@@ -161,15 +161,15 @@
                                                 "attribute_alias": "step_run__status"
                                             },
                                             {
-                                                "attribute_alias": "log_level"
+                                                "attribute_alias": "message_type"
                                             }
                                         ],
                                         "columns": [
                                             {
-                                                "attribute_alias": "message"
+                                                "attribute_alias": "message_type"
                                             },
                                             {
-                                                "attribute_alias": "log_level"
+                                                "attribute_alias": "message"
                                             },
                                             {
                                                 "attribute_alias": "step_run__step__name"

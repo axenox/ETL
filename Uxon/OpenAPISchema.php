@@ -188,7 +188,7 @@ class OpenAPISchema extends UxonSchema
                 $ds = parent::loadPropertiesSheet($schmaClass, $aliasOfAnnotationObject);
                 break;
             // If it is schema class, that has a cebe-class mapping, remember to load the cebe-class
-            case null !== $openApiClass = self::CLASS_MAP[$prototypeClass] ?? null:
+            case null !== $openApiClass = (self::CLASS_MAP[$prototypeClass] ?? null):
                 $ds = parent::loadPropertiesSheet($prototypeClass, $aliasOfAnnotationObject);
                 break;
             default:

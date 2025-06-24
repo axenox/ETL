@@ -4,6 +4,8 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
+use exface\Core\DataTypes\LogLevelDataType;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
@@ -124,14 +126,19 @@ class NoteTaker implements NoteTakerInterface
      * 
      * @param \exface\Core\Interfaces\WorkbenchInterface $workbench
      * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
-     * @param \exface\Core\Interfaces\Exceptions\ExceptionInterface $exception
+     * @param \Throwable $exception
      * @param string|null $preamble
      * @return StepNote
      */
-    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, ExceptionInterface $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
+    public static function createNoteFromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, \Throwable $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
     {
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
+            if (LogLevelDataType::compareLogLevels($logLevel, LoggerInterface::ERROR) < 0) {
+                $msgType = MessageTypeDataType::WARNING;
+            } else {
+                $msgType = MessageTypeDataType::ERROR;
+            }
             if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
                 $text = $exception->getMessageTitleWithoutLocation();
             } else {
@@ -139,7 +146,7 @@ class NoteTaker implements NoteTakerInterface
             }
             $code = $exception->getAlias();
         } else {
-            $logLevel = LoggerInterface::CRITICAL;
+            $msgType = MessageTypeDataType::ERROR;
             $text = $exception->getMessage();
             $code = null;
         }
@@ -153,7 +160,7 @@ class NoteTaker implements NoteTakerInterface
             $stepData,
             $text,
             $exception,
-            $logLevel
+            $msgType
         );
         $note->setMessageCode($code);
 

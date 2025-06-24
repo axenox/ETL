@@ -499,8 +499,9 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
      * {@inheritDoc}
      * @see \exface\Core\Interfaces\iCanGenerateDebugWidgets::createDebugWidget()
      */
-    public function createDebugWidget(DebugMessage $debug_widget)
+    public function createDebugWidget(DebugMessage $debug_widget, ?ETLStepDataInterface $stepData = null)
     {
+        $debug_widget = parent::createDebugWidget($debug_widget, $stepData);
         if ($this->baseSheet !== null) {
             $debug_widget = $this->baseSheet->createDebugWidget($debug_widget);
         }

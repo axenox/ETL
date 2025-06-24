@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2024-09-09 09:21:59",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2025-05-15 10:37:52",
+    "modified_on": "2025-05-23 09:50:31",
     "contents": {
         "object_alias": "axenox.ETL.file_flow",
         "widget_type": "SplitHorizontal",
@@ -181,7 +181,7 @@
                                         ],
                                         "columns": [
                                             {
-                                                "attribute_alias": "log_level"
+                                                "attribute_alias": "message_type"
                                             },
                                             {
                                                 "attribute_alias": "message"
