@@ -289,24 +289,24 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface   $dataSheet
      * @param UxonObject|null      $uxon
-     * @param string               $sectionTitle
+     * @param string               $logbookIntro
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @return void
      */
     protected function performDataChecks(
-        DataSheetInterface $dataSheet, 
-        ?UxonObject $uxon,
-        string $sectionTitle,
+        DataSheetInterface   $dataSheet,
+        ?UxonObject          $uxon,
+        string               $uxonProperty,
         ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook) : void
+        FlowStepLogBook      $logBook) : void
     {
-        if($uxon === null) {
-            $logBook->addLine('No checks to perform.');
+        if($uxon === null || $uxon->isEmpty()) {
+            $logBook->addLine('No data checks defined in `' . $uxonProperty . '`');
             return;
         }
         
-        $logBook->addSection($sectionTitle);
+        $logBook->addLine('Applying ' . $uxon->countProperties() . ' data checks from `' . $uxonProperty . '`');
         $logBook->addIndent(1);
         
         $errors = null;
@@ -336,7 +336,6 @@ abstract class AbstractETLPrototype implements ETLStepInterface
 
         if($errors === null) {
             $logBook->addLine('Data PASSED all checks.');
-            $logBook->addIndent(-1);
         } else if ($stopOnError) {
             $logBook->addIndent(-1);
             $logBook->addLine('Terminating step, because one or more data checks FAILED.');
@@ -345,6 +344,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             
             throw $errors;
         }
+        $logBook->addIndent(-1);
     }
 
     /**
@@ -433,13 +433,15 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @inheritdoc 
      * @see iCanGenerateDebugWidgets::createDebugWidget()
      */
-    public function createDebugWidget(DebugMessage $debug_widget)
+    public function createDebugWidget(DebugMessage $debug_widget, ?ETLStepDataInterface $stepData = null)
     {
         if(empty($this->logBooks)) {
             return $debug_widget;
         }
-        
-        return $this->logBooks[0]->createDebugWidget($debug_widget);
+        if ($stepData === null) {
+            return $this->logBooks[0]->createDebugWidget($debug_widget);
+        }
+        return $this->getLogBook($stepData)->createDebugWidget($debug_widget);
     }
 
     /**

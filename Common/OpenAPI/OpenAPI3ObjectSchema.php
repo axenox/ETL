@@ -89,7 +89,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function getMetaObject() : ?MetaObjectInterface
     {
         if ($this->object === null) {
-            if (null !== $alias = $this->jsonSchema[self::X_OBJECT_ALIAS] ?? null) {
+            if (null !== $alias = ($this->jsonSchema[self::X_OBJECT_ALIAS] ?? null)) {
                 $this->object = MetaObjectFactory::createFromString($this->getAPI()->getWorkbench(), $alias);
             }
         }
