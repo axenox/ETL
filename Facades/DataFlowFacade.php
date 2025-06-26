@@ -305,7 +305,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	 * {@inheritDoc}
 	 * @see \exface\Core\Facades\AbstractHttpFacade\AbstractHttpFacade::buildHeadersCommon()
 	 */
-	protected function buildHeadersCommon(): array
+	public function buildHeadersCommon(): array
 	{
 		$facadeHeaders = array_filter($this->getConfig()
 			->getOption('FACADE.HEADERS.COMMON')

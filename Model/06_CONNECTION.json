@@ -67,11 +67,24 @@
             "TIME_ZONE": null,
             "LABEL": "DataFlow upload storage (local)",
             "CONNECTOR": "exface/Core/DataConnectors/LocalFileConnector.php",
-            "CONFIG": {
-                "base_path": "data/axenox/ETL/Uploads"
-            },
+            "CONFIG": "$$~~AHEUmZUeoziWMEz0k4FgIrjWEchOBKaRA8nP4f+fk57iHVyFk3rq55pqsAYl/SbO7z7z9X+3tbDZAIcHsngUMy+7WNRW0rPwKCrOdt9F098nSQ==",
             "READONLY": 0,
             "ALIAS": "dataflow_upload_storage_local"
+        },
+        {
+            "_EXPORT_SUMMARY": "Webservice Request Storage (local)",
+            "CREATED_ON": "2025-06-25 17:51:26",
+            "MODIFIED_ON": "2025-06-25 17:51:26",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f09f5c40be1f6c9f5c87a0416b0174",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "TIME_ZONE": null,
+            "LABEL": "Webservice Request Storage (local)",
+            "CONNECTOR": "exface/Core/DataConnectors/LocalFileConnector.php",
+            "CONFIG": "$$~~P/ZM2W1co5LQhTGSwgMz439md6W6GXCRIUAsmjn1JGBkeWwa4TfbDXfHl20UTtzHd8rXZwdQBJy948aLaOBuVetirYYKnVAkuGV6I788twj9jFXwQdvz5vPNsfvM",
+            "READONLY": 0,
+            "ALIAS": "webservice_request_storage_local"
         }
     ],
     "totals_rows": [],

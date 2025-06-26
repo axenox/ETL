@@ -177,6 +177,7 @@
     ],
     "rows": [
         {
+            "_EXPORT_SUMMARY": "Error message [error_message]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -223,6 +224,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Headers [response_header]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -269,6 +271,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Result text [result_text]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -315,6 +318,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Error logid [error_logid]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -361,6 +365,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Request [webservice_request]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:19:38",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -407,6 +412,7 @@
             "CUSTOM_DATA_TYPE": null
         },
         {
+            "_EXPORT_SUMMARY": "Body [response_body]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -453,6 +459,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Content type [http_content_type]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -499,6 +506,7 @@
             }
         },
         {
+            "_EXPORT_SUMMARY": "Status [status]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
@@ -543,6 +551,7 @@
             "CUSTOM_DATA_TYPE": null
         },
         {
+            "_EXPORT_SUMMARY": "Response code [http_response_code]",
             "CREATED_ON": "2024-10-30 12:00:19",
             "MODIFIED_ON": "2024-10-30 12:05:11",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
