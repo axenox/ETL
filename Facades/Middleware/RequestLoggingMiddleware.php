@@ -174,13 +174,11 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         string $output,
         ResponseInterface $response): void
     {
-        $this->logResponse($response);
+        $this->logResponse($response, $output);
         
         $logData = $this->logDataRequest->extractSystemColumns();
         
         $logData->setCellValue('status', 0, WebRequestStatusDataType::DONE);
-        $logData->setCellValue('result_text', 0, $output);
-        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
         
         $logData->dataUpdate(false);
         $this->logDataRequest->merge($logData);
@@ -189,16 +187,19 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
 
     /**
      * @param ResponseInterface $response
+     * @param string            $output
      * @return void
      */
-    protected function logResponse(ResponseInterface $response) : void
+    protected function logResponse(ResponseInterface $response, string $output) : void
     {
         $logData = $this->logDataResponse->extractSystemColumns();
         
-        $logData->setCellValue('webservice_request', 0, $this->logDataRequest[$this->logDataRequest->getUidColumnName()]);
+        $logData->setCellValue('webservice_request', 0, $this->logDataRequest->getRow()[$this->logDataRequest->getUidColumnName()]);
         $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
         $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
         $logData->setCellValue('body_file', 0, $response->getBody()->__toString());
+        $logData->setCellValue('result_text', 0, $output);
+        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
 
         $logData->dataUpdate();
         $this->logDataResponse->merge($logData);
@@ -216,9 +217,22 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
     public function getLogDataResponse(ServerRequestInterface $request) : ?DataSheetInterface
     {
         if($this->logDataResponse === null) {
-            $this->logDataResponse = DataSheetFactory::createFromObjectIdOrAlias(
+            $dataSheet = DataSheetFactory::createFromObjectIdOrAlias(
                 $this->facade->getWorkbench(),
                 'axenox.ETL.webservice_response');
+            
+            $dataSheet->getColumns()->addFromSystemAttributes();
+            $dataSheet->getColumns()->addFromExpression('webservice_request');
+            
+            if($this->getLogDataRequest($request)) {
+                $dataSheet->getFilters()->addConditionFromValueArray(
+                    'webservice_request',
+                    $this->getLogDataRequest($request)->getUidColumn()->getValues()
+                );
+                $dataSheet->dataRead();
+            } 
+            
+            $this->logDataResponse = $dataSheet;
         }
         
         
