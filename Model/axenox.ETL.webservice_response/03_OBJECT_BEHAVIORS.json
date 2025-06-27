@@ -62,11 +62,11 @@
     "rows": [
         {
             "_EXPORT_SUMMARY": "Store body as file",
-            "CREATED_ON": "2025-06-25 18:02:39",
-            "MODIFIED_ON": "2025-06-27 10:48:12",
+            "CREATED_ON": "2025-06-27 10:50:18",
+            "MODIFIED_ON": "2025-06-27 10:50:18",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-            "UID": "0x11f0b666d1c5e1e2b66665d3601edf0f",
+            "UID": "0x11f0a985c07c17e2a985dfdfdd0a7e82",
             "BEHAVIOR": "exface/core/Behaviors/FileAttachmentBehavior.php",
             "CONFIG_UXON": {
                 "file_relation": "body_file",
@@ -78,7 +78,7 @@
                     "time_modified_attribute": "MODIFIED_ON"
                 }
             },
-            "OBJECT": "0x11eeae4695964d78ae46025041000001",
+            "OBJECT": "0x11ef9886273d9b929886025041000001",
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "NAME": "Store body as file",
             "DESCRIPTION": "",

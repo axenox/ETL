@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "Web request [axenox.ETL.webservice_request]",
             "CREATED_ON": "2023-10-18 16:06:50",
-            "MODIFIED_ON": "2025-06-10 13:36:32",
+            "MODIFIED_ON": "2025-06-27 11:26:03",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11eeae4695964d78ae46025041000001",
@@ -210,7 +210,7 @@
                                 "caption": "Request body",
                                 "widgets": [
                                     {
-                                        "attribute_alias": "http_body",
+                                        "attribute_alias": "body_file__CONTENTS",
                                         "widget_type": "InputJson",
                                         "disabled": true,
                                         "height": "100%",
@@ -223,7 +223,7 @@
                                 "caption": "Response body",
                                 "widgets": [
                                     {
-                                        "attribute_alias": "webservice_response__response_body",
+                                        "attribute_alias": "webservice_response__body_file__CONTENTS",
                                         "widget_type": "InputJson",
                                         "disabled": true,
                                         "height": "100%",

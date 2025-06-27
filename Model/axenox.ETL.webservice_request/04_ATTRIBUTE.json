@@ -881,9 +881,9 @@
             }
         },
         {
-            "_EXPORT_SUMMARY": "Request body file [request_body_file]",
+            "_EXPORT_SUMMARY": "Body File [body_file]",
             "CREATED_ON": "2025-06-25 17:46:08",
-            "MODIFIED_ON": "2025-06-25 17:57:00",
+            "MODIFIED_ON": "2025-06-27 10:43:07",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0814a8336c692814a5f4b8af22bef",
@@ -900,11 +900,11 @@
             "DELETE_WITH_RELATED_OBJECT": 1,
             "DEFAULT_DISPLAY_UXON": null,
             "COMMENTS": "",
-            "NAME": "Request body file",
+            "NAME": "Body File",
             "RELATION_CARDINALITY": "",
             "TYPE": "D",
             "COPYABLEFLAG": 0,
-            "ALIAS": "request_body_file",
+            "ALIAS": "body_file",
             "DATATYPE": "0x11ea01502d3497c5b7580205857feb80",
             "DATA_ADDRESS": [
                 "// Multiline text delimited by `\n`",
