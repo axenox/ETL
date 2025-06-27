@@ -91,6 +91,22 @@
             "BASE_OBJECT": null,
             "LABEL": "DataFlow uploaded Spreadsheets",
             "ALIAS": "dataflow_uploaded_spreadsheets"
+        },
+        {
+            "_EXPORT_SUMMARY": "Webservice Request Storage",
+            "CREATED_ON": "2025-06-27 18:35:57",
+            "MODIFIED_ON": "2025-06-27 18:35:57",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f09e7ecd36b5be9e7e67163d61f7ed",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "DEFAULT_CONNECTION": "0x11f0b106ba38ca56b106b3fb9aa82be5",
+            "DEFAULT_QUERY_BUILDER": "exface/Core/QueryBuilders/FileBuilder.php",
+            "READABLE_FLAG": 1,
+            "WRITABLE_FLAG": 1,
+            "BASE_OBJECT": "0x11e6afd8efb4743f8943e4b318306b9a",
+            "LABEL": "Webservice Request Storage",
+            "ALIAS": "webservice_request_storage"
         }
     ],
     "totals_rows": [],
