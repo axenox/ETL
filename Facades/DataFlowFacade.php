@@ -61,7 +61,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	    $headers = $this->buildHeadersCommon();
         $response = null;
 
-        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);;
+        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
 
         if ((bool)$routeModel['enabled'] === false) {
             // return Service Unavailable if related data flow is not running
@@ -305,7 +305,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	 * {@inheritDoc}
 	 * @see \exface\Core\Facades\AbstractHttpFacade\AbstractHttpFacade::buildHeadersCommon()
 	 */
-	public function buildHeadersCommon(): array
+	protected function buildHeadersCommon(): array
 	{
 		$facadeHeaders = array_filter($this->getConfig()
 			->getOption('FACADE.HEADERS.COMMON')

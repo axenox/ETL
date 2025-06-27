@@ -21,11 +21,14 @@ final class OpenApiMiddleware implements MiddlewareInterface
 {
     private $facade = null;
 
+    private array $headers;
+    
     private $routePattern;
     
-    public function __construct(OpenApiFacadeInterface $facade, string $routePattern)
+    public function __construct(OpenApiFacadeInterface $facade, array $headers, string $routePattern)
     {
     	$this->facade = $facade;
+        $this->headers = $headers;
         $this->routePattern = $routePattern;
     }
     
@@ -51,7 +54,7 @@ final class OpenApiMiddleware implements MiddlewareInterface
         // building functional OpenApi
         $openApiJson = $this->autogenerateMetamodelSchemas($openApiJson);
         $openApiJson = json_encode($openApiJson, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $headers = array_merge($this->facade->buildHeadersCommon(), ['Content-Type' => 'application/json']);
+        $headers = array_merge($this->headers, ['Content-Type' => 'application/json']);
         return new Response(200, $headers, $openApiJson);
     }
 
