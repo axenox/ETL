@@ -147,11 +147,11 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $responseHeader = $responseData->getRow()['response_header'];
         if ($responseHeader  !== null) {
             $headers['Content-Type'] = $responseHeader;
-            return $responseData->getRow()['response_body'];
+            return $responseData->getRow()['body_file'];
         }
 
         $flowResponse = null;
-        $body = $responseData->getRow()['response_body'];
+        $body = $responseData->getRow()['body_file'];
         if ($body !== null) {
 		    $flowResponse = json_decode($body, true);
         }

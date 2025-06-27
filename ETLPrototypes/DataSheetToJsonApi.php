@@ -184,8 +184,11 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             }
         }
 
-        $requestData = $this->loadRequestData($stepData, []);
-        $responseData = $this->loadResponseData($requestData->getRow()['oid'], ['response_body', 'response_header']);
+        $responseData = $this->loadResponseData(
+            $this->loadRequestData($stepData)->getRow()['UID'], 
+            ['body_file', 'response_header']
+        );
+        
         $this->updateRequestData($responseData, $fromObjectSchema, $content, $placeholders);
 
         return $result->setProcessedRowsCounter(count($content));
@@ -291,11 +294,11 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
         array                    $placeholders): void
     {
         $responseSchema = $objectSchema->getJsonSchema();
-        $currentBody = json_decode($responseData->getCellValue('response_body', 0), true);
+        $currentBody = json_decode($responseData->getCellValue('body_file', 0), true);
         $newBody = $this->createBodyFromSchema($responseSchema, $rows, $objectSchema->getMetaObject()->getAliasWithNamespace(), $placeholders);
         $newBody = $currentBody === null ? $newBody : $this->deepMerge($currentBody, $newBody);
         $responseData->setCellValue('response_header', 0, 'application/json');
-        $responseData->setCellValue('response_body', 0, json_encode($newBody));
+        $responseData->setCellValue('body_file', 0, json_encode($newBody));
         $responseData->dataUpdate();
     }
 

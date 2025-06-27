@@ -88,7 +88,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
                 $request->getUri()->getPath()),
             'http_method' => $request->getMethod(),
             'http_headers' => JsonDataType::encodeJson($request->getHeaders()),
-            'http_body' => $request->getBody()->__toString(),
+            'body_file' => $request->getBody()->__toString(),
             'http_content_type' => implode(';', $request->getHeader('Content-Type'))]);
 
         $logData->dataCreate(false);
@@ -195,10 +195,10 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
     {
         $logData = $this->logDataResponse->extractSystemColumns();
         
-        $logData->setCellValue('webservice_request_oid', 0, $this->logDataRequest['oid']);
+        $logData->setCellValue('webservice_request', 0, $this->logDataRequest[$this->logDataRequest->getUidColumnName()]);
         $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
         $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
-        $logData->setCellValue('response_body', 0, $response->getBody()->__toString());
+        $logData->setCellValue('body_file', 0, $response->getBody()->__toString());
 
         $logData->dataUpdate();
         $this->logDataResponse->merge($logData);
@@ -220,6 +220,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
                 $this->facade->getWorkbench(),
                 'axenox.ETL.webservice_response');
         }
+        
         
         return $this->logDataResponse;
     }

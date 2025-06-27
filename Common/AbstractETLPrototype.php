@@ -449,19 +449,19 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param array $requestedColumns
      * @return DataSheetInterface
      */
-    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheetInterface
+    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns = []): DataSheetInterface
     {
-        $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
-        $requestLogData->getColumns()->addFromSystemAttributes();
-        $requestLogData->getColumns()->addMultiple($requestedColumns);
-        $requestLogData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
-        $requestLogData->dataRead();
+        $requestData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $requestData->getColumns()->addFromSystemAttributes();
+        $requestData->getColumns()->addMultiple($requestedColumns);
+        $requestData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
+        $requestData->dataRead();
 
-        if ($requestLogData->countRows() > 1) {
+        if ($requestData->countRows() > 1) {
             throw new InvalidArgumentException('Ambiguous web requests!');
         }
 
-        return $requestLogData;
+        return $requestData;
     }
 
     /**
@@ -469,17 +469,24 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param array  $requestedColumns
      * @return DataSheetInterface
      */
-    protected function loadResponseData(string $requestUid, array $requestedColumns): DataSheetInterface
+    protected function loadResponseData(string $requestUid, array $requestedColumns = []): DataSheetInterface
     {
-        $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_response');
         $responseData->getColumns()->addFromSystemAttributes();
         $responseData->getColumns()->addMultiple($requestedColumns);
-        $responseData->getColumns()->addFromExpression('webservice_request_oid');
-        $responseData->getFilters()->addConditionFromString('webservice_request_oid', $requestUid);
+        $responseData->getColumns()->addFromExpression('webservice_request');
+        $responseData->getFilters()->addConditionFromString('webservice_request', $requestUid);
         $responseData->dataRead();
 
         if ($responseData->countRows() > 1) {
             throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+        
+        if($responseData->countRows() === 0) {
+            $responseData->addRow([
+                'webservice_request' => $requestUid,
+                'http_response_code' => 200
+            ]);
         }
 
         return $responseData;

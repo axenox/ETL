@@ -210,8 +210,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
 
-        $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
-        $requestBody = $requestLogData['http_body'];
+        $requestLogData = $this->loadRequestData($stepData, ['body_file', 'http_content_type'])->getRow(0);
+        $requestBody = $requestLogData['body_file'];
 
         if ($requestLogData['http_content_type'] !== 'application/json' || $requestBody === null) {
             $logBook->addLine($msg = 'No HTTP content found to process.');
