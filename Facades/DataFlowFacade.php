@@ -77,8 +77,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $this->loggingMiddleware->logRequestProcessing($request, $routeUID, $flowRunUID);
 	    $flowResult = $this->runFlow($flowAlias, $request); // flow data update
 		$flowOutput = $flowResult->getMessage();
-
         $responseData = $this->loadResponseData($request);
+
         if ($responseData->countRows() === 1) {
 			$body = $this->createRequestResponseBody($responseData, $request, $headers, $routeModel, $routePath);
 			$response = new Response(200, $headers, $body);
