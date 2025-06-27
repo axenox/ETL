@@ -22,8 +22,8 @@ ALTER TABLE `etl_webservice_response` ADD `response_body` LONGTEXT;
 
 /*
 @plugin.WriteFilesToSqlRows(
-    'SELECT body_file, CONCAT('0x', LOWER(HEX(`oid`))) as oid FROM etl_webservice_response WHERE body_file IS NOT NULL;',
-    'UPDATE etl_webservice_response SET response_body = [#content#] WHERE CONCAT('0x', LOWER(HEX(`oid`))) = [#key#];',
+    "SELECT body_file, CONCAT('0x', LOWER(HEX(`oid`))) as oid FROM etl_webservice_response WHERE body_file IS NOT NULL;",
+    "UPDATE etl_webservice_response SET response_body = [#content#] WHERE CONCAT('0x', LOWER(HEX(`oid`))) = [#key#];",
     'body_file',
 	'oid',
 	'axenox.ETL.webservice_request_storage'

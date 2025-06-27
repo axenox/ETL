@@ -22,8 +22,8 @@ ALTER TABLE etl_webservice_response ADD response_body NVARCHAR(MAX);
 
 /*
 @plugin.WriteFilesToSqlRows(
-    'SELECT body_file, LOWER(CONVERT(VARCHAR(MAX),oid,1)) as oid FROM etl_webservice_response WHERE body_file IS NOT NULL;',
-    'UPDATE etl_webservice_response SET response_body = [#content#] WHERE LOWER(CONVERT(VARCHAR(MAX),oid,1))) = [#key#];',
+    "SELECT body_file, LOWER(CONVERT(VARCHAR(MAX),oid,1)) as oid FROM etl_webservice_response WHERE body_file IS NOT NULL;",
+    "UPDATE etl_webservice_response SET response_body = [#content#] WHERE LOWER(CONVERT(VARCHAR(MAX),oid,1))) = [#key#];",
     'body_file',
 	'oid',
 	'axenox.ETL.webservice_request_storage'
