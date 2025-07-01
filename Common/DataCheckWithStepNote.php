@@ -61,7 +61,8 @@ class DataCheckWithStepNote extends DataCheck
      * @param DataSheetInterface        $sheet
      * @param LogBookInterface|null     $logBook
      * @param ETLStepDataInterface|null $stepData
-     * @return DataSheetInterface
+     * @param array|null                $outRemovedRows
+     * @return string
      */
     public function check(
         DataSheetInterface $sheet, 

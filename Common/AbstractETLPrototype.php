@@ -287,7 +287,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface   $dataSheet
      * @param UxonObject|null      $uxon
-     * @param string               $logbookIntro
+     * @param string               $uxonProperty
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @return void
