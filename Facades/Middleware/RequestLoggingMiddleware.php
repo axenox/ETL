@@ -139,7 +139,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         }
 
         if ($response !== null) {
-            $this->logResponse($response);
+            $this->logResponse($response, $e->getMessage());
         }
         
         $logData = $this->logDataRequest->extractSystemColumns();
