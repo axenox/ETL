@@ -467,10 +467,18 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * @param string $requestUid
      * @param array  $requestedColumns
+     * @param bool   $createIfNotFound
      * @return DataSheetInterface
      */
-    protected function loadResponseData(string $requestUid, array $requestedColumns = []): DataSheetInterface
+    protected function loadResponseData(
+        string $requestUid, 
+        array $requestedColumns = [], 
+        bool $createIfNotFound = true): DataSheetInterface
     {
+        if(empty($requestUid)) {
+            throw new InvalidArgumentException('Cannot load response: Missing request UID!');
+        }
+        
         $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_response');
         $responseData->getColumns()->addFromSystemAttributes();
         $responseData->getColumns()->addMultiple($requestedColumns);
@@ -479,14 +487,16 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $responseData->dataRead();
 
         if ($responseData->countRows() > 1) {
-            throw new InvalidArgumentException('Ambiguous web requests!');
+            throw new InvalidArgumentException('Cannot load response: Ambiguous web requests!');
         }
         
-        if($responseData->countRows() === 0) {
+        if($createIfNotFound && $responseData->countRows() === 0) {
             $responseData->addRow([
                 'webservice_request' => $requestUid,
-                'http_response_code' => 200
+                'http_response_code' => 200,
             ]);
+            $responseData->dataCreate();
+            $responseData->dataRead();
         }
 
         return $responseData;

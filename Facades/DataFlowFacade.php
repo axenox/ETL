@@ -147,11 +147,11 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $responseHeader = $responseData->getRow()['response_header'];
         if ($responseHeader  !== null) {
             $headers['Content-Type'] = $responseHeader;
-            return $responseData->getRow()['body_file'];
+            return $responseData->getRow()['body_file__CONTENTS'];
         }
 
         $flowResponse = null;
-        $body = $responseData->getRow()['body_file'];
+        $body = $responseData->getRow()['body_file__CONTENTS'];
         if ($body !== null) {
 		    $flowResponse = json_decode($body, true);
         }
@@ -294,6 +294,10 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	{
         $responseData = $this->loggingMiddleware->getLogDataResponse($request);
 		
+        $responseData->getColumns()->addMultiple([
+            'response_headers',
+            'body_file__CONTENTS'
+        ]);
         $responseData->getFilters()->addConditionFromColumnValues($responseData->getUidColumn());
 		$responseData->dataRead();
         

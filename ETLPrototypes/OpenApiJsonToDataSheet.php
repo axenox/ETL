@@ -111,8 +111,8 @@ class OpenApiJsonToDataSheet extends AbstractOpenApiPrototype
         $this->baseSheet = $baseSheet;
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this));
 
-        $requestLogData = $this->loadRequestData($stepData, ['body_file', 'http_content_type'])->getRow();
-        $requestBody = json_decode($requestLogData['body_file'], true);
+        $requestLogData = $this->loadRequestData($stepData, ['body_file__CONTENTS', 'http_content_type'])->getRow();
+        $requestBody = json_decode($requestLogData['body_file__CONTENTS'], true);
 
         if ($requestLogData['http_content_type'] !== 'application/json' || $requestBody === null) {
             yield 'No HTTP content found to process' . PHP_EOL;
