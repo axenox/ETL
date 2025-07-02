@@ -61,7 +61,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	    $headers = $this->buildHeadersCommon();
         $response = null;
 
-        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);;
+        $routeModel = $request->getAttribute(self::REQUEST_ATTRIBUTE_NAME_ROUTE);
 
         if ((bool)$routeModel['enabled'] === false) {
             // return Service Unavailable if related data flow is not running
@@ -77,10 +77,10 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $this->loggingMiddleware->logRequestProcessing($request, $routeUID, $flowRunUID);
 	    $flowResult = $this->runFlow($flowAlias, $request); // flow data update
 		$flowOutput = $flowResult->getMessage();
-        $requestWithBody = $this->loadRequestDataWithBody($request);
-				
-		if ($requestWithBody->countRows() == 1) {
-			$body = $this->createRequestResponseBody($requestWithBody, $request, $headers, $routeModel, $routePath);
+        $responseData = $this->loadResponseData($request);
+
+        if ($responseData->countRows() === 1) {
+			$body = $this->createRequestResponseBody($responseData, $request, $headers, $routeModel, $routePath);
 			$response = new Response(200, $headers, $body);
 		}
 
@@ -128,34 +128,33 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
     /**
      *
      * /**
-     * @param DataSheetInterface $requestLogData
+     * @param DataSheetInterface     $responseData
      * @param ServerRequestInterface $request
-     * @param array $headers
-     * @param array $routeModel
-     * @param string $routePath
+     * @param array                  $headers
+     * @param array                  $routeModel
+     * @param string                 $routePath
      * @return string|null
      * @throws JSONPathException
      */
 	private function createRequestResponseBody(
-		DataSheetInterface $requestLogData,
+		DataSheetInterface     $responseData,
 		ServerRequestInterface $request,
-		array &$headers,
-		array $routeModel,
-		string $routePath) : ?string
+		array                  &$headers,
+		array                  $routeModel,
+		string                 $routePath) : ?string
 	{
         // body already created in step
-        $responseHeader = $requestLogData->getRow()['response_header'];
+        $responseHeader = $responseData->getRow()['response_header'];
         if ($responseHeader  !== null) {
-            $headers['Content-Type'] = $responseHeader;
-            return $requestLogData->getRow()['response_body'];
+            $headers = array_merge($headers, json_decode($responseHeader, true));
+            return $responseData->getRow()['body_file__CONTENTS'];
         }
 
         $flowResponse = null;
-        $body = $requestLogData->getRow()['response_body'];
+        $body = $responseData->getRow()['body_file__CONTENTS'];
         if ($body !== null) {
 		    $flowResponse = json_decode($body, true);
         }
-        $responseModel = null;
 		
 		// load response model from swagger
 		$methodType = strtolower($request->getMethod());
@@ -287,17 +286,22 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         return $response;
 	}
 
-	/**
-	 * @param DataSheetInterface $requestLogData
-	 */
-	private function loadRequestDataWithBody(ServerRequestInterface $request) : DataSheetInterface
+    /**
+     * @param ServerRequestInterface $request
+     * @return DataSheetInterface
+     */
+	private function loadResponseData(ServerRequestInterface $request) : DataSheetInterface
 	{
-        $requestLogData = $this->loggingMiddleware->getLogData($request);
-		$requestLogData->getFilters()->addConditionFromColumnValues($requestLogData->getUidColumn());
-		$requestLogData->getColumns()->addFromExpression('response_body');
-        $requestLogData->getColumns()->addFromExpression('response_header');
-		$requestLogData->dataRead();
-        return $requestLogData;
+        $responseData = $this->loggingMiddleware->getLogDataResponse($request);
+		
+        $responseData->getColumns()->addMultiple([
+            'response_header',
+            'body_file__CONTENTS'
+        ]);
+        $responseData->getFilters()->addConditionFromColumnValues($responseData->getUidColumn());
+		$responseData->dataRead();
+        
+        return $responseData;
 	}
 
 	/**

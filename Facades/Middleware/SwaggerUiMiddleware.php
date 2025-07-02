@@ -10,7 +10,7 @@ use exface\Core\Interfaces\WorkbenchInterface;
 use GuzzleHttp\Psr7\Response;
 
 /**
- * This middleware creates a SwaggerUi html as an test enviornment.
+ * This middleware creates a SwaggerUi html as a test environment.
  * 
  * @author miriam.seitz
  *
@@ -18,7 +18,7 @@ use GuzzleHttp\Psr7\Response;
 final class SwaggerUiMiddleware implements MiddlewareInterface
 {
     private $facade = null;
-    private $headers;
+    private array $headers;
     private $routePattern;
     private $openApiRouteName;
     

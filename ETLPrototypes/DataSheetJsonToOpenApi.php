@@ -199,9 +199,13 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
             $index = 0;
         }
 
-        $requestLogData = $this->loadRequestData($stepData, ['response_body', 'response_header']);
+        $responseData = $this->loadResponseData(
+            $this->loadRequestData($stepData)->getRow()['UID'], 
+            ['body_file__CONTENTS', 'response_header']
+        );
+        
         $request = $stepTask->getHttpRequest();
-        $this->updateRequestData($requestLogData, $request, $openApiJson, $content, $fromObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS], $placeholders);
+        $this->updateRequestData($responseData, $request, $openApiJson, $content, $fromObjectSchema[self::OPEN_API_ATTRIBUTE_TO_OBJECT_ALIAS], $placeholders);
 
         return $result->setProcessedRowsCounter(count($content));
     }
@@ -310,24 +314,24 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
     }
 
     /**
-     * @param DataSheetInterface $requestLogData
+     * @param DataSheetInterface     $responseData
      * @param ServerRequestInterface $request
-     * @param string|null $openApiJson
-     * @param array $rows
-     * @param string $objectAlias
-     * @param array $placeholders
+     * @param string|null            $openApiJson
+     * @param array                  $rows
+     * @param string                 $objectAlias
+     * @param array                  $placeholders
      * @return void
      * @throws JSONPathException
      */
     protected function updateRequestData(
-        DataSheetInterface $requestLogData,
+        DataSheetInterface     $responseData,
         ServerRequestInterface $request,
-        ?string $openApiJson,
-        array $rows,
-        string $objectAlias,
-        array $placeholders): void
+        ?string                $openApiJson,
+        array                  $rows,
+        string                 $objectAlias,
+        array                  $placeholders): void
     {
-        $currentBody = json_decode($requestLogData->getCellValue('response_body', 0), true);
+        $currentBody = json_decode($responseData->getCellValue('body_file__CONTENTS', 0), true);
         $jsonPath = '$.paths.[#routePath#].[#methodType#].responses.200.content.[#ContentType#].schema';
         $responseSchema = $this->getSchema($request, $openApiJson, $jsonPath);
 
@@ -339,9 +343,9 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
 
         $newBody = $this->createBodyFromSchema($responseSchema, $rows, $objectAlias, $placeholders);
         $newBody = $currentBody === null ? $newBody : $this->deepMerge($currentBody, $newBody);
-        $requestLogData->setCellValue('response_header', 0, 'application/json');
-        $requestLogData->setCellValue('response_body', 0, json_encode($newBody));
-        $requestLogData->dataUpdate();
+        $responseData->setCellValue('response_header', 0, json_encode(['Content-Type' => 'application/json']));
+        $responseData->setCellValue('body_file__CONTENTS', 0, json_encode($newBody));
+        $responseData->dataUpdate(true);
     }
 
     /**

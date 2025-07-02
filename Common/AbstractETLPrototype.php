@@ -6,6 +6,8 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -440,5 +442,63 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             return $this->logBooks[0]->createDebugWidget($debug_widget);
         }
         return $this->getLogBook($stepData)->createDebugWidget($debug_widget);
+    }
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @param array $requestedColumns
+     * @return DataSheetInterface
+     */
+    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns = []): DataSheetInterface
+    {
+        $requestData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $requestData->getColumns()->addFromSystemAttributes();
+        $requestData->getColumns()->addMultiple($requestedColumns);
+        $requestData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
+        $requestData->dataRead();
+
+        if ($requestData->countRows() > 1) {
+            throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+
+        return $requestData;
+    }
+
+    /**
+     * @param string $requestUid
+     * @param array  $requestedColumns
+     * @param bool   $createIfNotFound
+     * @return DataSheetInterface
+     */
+    protected function loadResponseData(
+        string $requestUid, 
+        array $requestedColumns = [], 
+        bool $createIfNotFound = true): DataSheetInterface
+    {
+        if(empty($requestUid)) {
+            throw new InvalidArgumentException('Cannot load response: Missing request UID!');
+        }
+        
+        $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_response');
+        $responseData->getColumns()->addFromSystemAttributes();
+        $responseData->getColumns()->addMultiple($requestedColumns);
+        $responseData->getColumns()->addFromExpression('webservice_request');
+        $responseData->getFilters()->addConditionFromString('webservice_request', $requestUid);
+        $responseData->dataRead();
+
+        if ($responseData->countRows() > 1) {
+            throw new InvalidArgumentException('Cannot load response: Ambiguous web requests!');
+        }
+        
+        if($createIfNotFound && $responseData->countRows() === 0) {
+            $responseData->addRow([
+                'webservice_request' => $requestUid,
+                'http_response_code' => 200,
+            ]);
+            $responseData->dataCreate();
+            $responseData->dataRead();
+        }
+
+        return $responseData;
     }
 }

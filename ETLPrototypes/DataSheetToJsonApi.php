@@ -184,8 +184,12 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             }
         }
 
-        $requestLogData = $this->loadRequestData($stepData, ['response_body', 'response_header']);
-        $this->updateRequestData($requestLogData, $fromObjectSchema, $content, $placeholders);
+        $responseData = $this->loadResponseData(
+            $this->loadRequestData($stepData)->getRow()['UID'], 
+            ['body_file__CONTENTS', 'response_header']
+        );
+        
+        $this->updateResponseData($responseData, $fromObjectSchema, $content, $placeholders);
 
         return $result->setProcessedRowsCounter(count($content));
     }
@@ -277,28 +281,25 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
     }
 
     /**
-     * @param DataSheetInterface $requestLogData
-     * @param ServerRequestInterface $request
-     * @param string|null $openApiJson
-     * @param array $rows
-     * @param string $objectAlias
-     * @param array $placeholders
+     * @param DataSheetInterface       $responseData
+     * @param APIObjectSchemaInterface $objectSchema
+     * @param array                    $rows
+     * @param array                    $placeholders
      * @return void
-     * @throws JSONPathException
      */
-    protected function updateRequestData(
-        DataSheetInterface $requestLogData,
+    protected function updateResponseData(
+        DataSheetInterface       $responseData,
         APIObjectSchemaInterface $objectSchema,
-        array $rows,
-        array $placeholders): void
+        array                    $rows,
+        array                    $placeholders): void
     {
         $responseSchema = $objectSchema->getJsonSchema();
-        $currentBody = json_decode($requestLogData->getCellValue('response_body', 0), true);
+        $currentBody = json_decode($responseData->getCellValue('body_file__CONTENTS', 0), true);
         $newBody = $this->createBodyFromSchema($responseSchema, $rows, $objectSchema->getMetaObject()->getAliasWithNamespace(), $placeholders);
         $newBody = $currentBody === null ? $newBody : $this->deepMerge($currentBody, $newBody);
-        $requestLogData->setCellValue('response_header', 0, 'application/json');
-        $requestLogData->setCellValue('response_body', 0, json_encode($newBody));
-        $requestLogData->dataUpdate();
+        $responseData->setCellValue('response_header', 0, json_encode(['Content-Type' => 'application/json']));
+        $responseData->setCellValue('body_file__CONTENTS', 0, json_encode($newBody));
+        $responseData->dataUpdate();
     }
 
     /**
