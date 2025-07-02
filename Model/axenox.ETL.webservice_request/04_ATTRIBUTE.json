@@ -883,7 +883,7 @@
         {
             "_EXPORT_SUMMARY": "Body File [body_file]",
             "CREATED_ON": "2025-06-25 17:46:08",
-            "MODIFIED_ON": "2025-06-27 10:43:07",
+            "MODIFIED_ON": "2025-07-02 16:10:38",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0814a8336c692814a5f4b8af22bef",
@@ -909,9 +909,10 @@
             "DATA_ADDRESS": [
                 "// Multiline text delimited by `\n`",
                 "CONCAT(",
-                "  \"requests/\", ",
+                "  DATE([#CREATED_ON#]),",
+                "  \"/\", ",
                 "  [#UID#], ",
-                "  \"/body.json\"",
+                "  \"/request.json\"",
                 ")"
             ],
             "OBJECT": "0x11eeae4695964d78ae46025041000001",

@@ -63,7 +63,7 @@
         {
             "_EXPORT_SUMMARY": "Store body as file",
             "CREATED_ON": "2025-06-27 10:50:18",
-            "MODIFIED_ON": "2025-06-27 10:50:18",
+            "MODIFIED_ON": "2025-07-02 16:10:14",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0a985c07c17e2a985dfdfdd0a7e82",
@@ -71,9 +71,7 @@
             "CONFIG_UXON": {
                 "file_relation": "body_file",
                 "override_file_attributes": {
-                    "filename_attribute": "file_name",
-                    "file_size_attribute": "file_size_bytes",
-                    "mime_type_attribute": "file_mimetype",
+                    "mime_type_attribute": "http_content_type",
                     "time_created_attribute": "CREATED_ON",
                     "time_modified_attribute": "MODIFIED_ON"
                 }
