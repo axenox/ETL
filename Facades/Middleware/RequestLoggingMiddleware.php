@@ -150,7 +150,6 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         if ($e !== null) {
             $logData->setCellValue('error_message', 0, $e->getMessage());
             $logData->setCellValue('error_logid', 0, $e->getId());
-            $logData->setCellValue('http_response_code', 0, $e->getStatusCode());
         }
 
         try {
@@ -202,7 +201,6 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
         $logData->setCellValue('body_file__CONTENTS', 0, $response->getBody()->__toString());
         $logData->setCellValue('result_text', 0, $output);
-        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
 
         $this->dataUpdateWithoutTimeStamping($logData, false);
         $this->logDataResponse->merge($logData);
