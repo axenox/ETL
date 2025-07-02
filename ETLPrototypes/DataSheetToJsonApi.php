@@ -297,7 +297,7 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
         $currentBody = json_decode($responseData->getCellValue('body_file__CONTENTS', 0), true);
         $newBody = $this->createBodyFromSchema($responseSchema, $rows, $objectSchema->getMetaObject()->getAliasWithNamespace(), $placeholders);
         $newBody = $currentBody === null ? $newBody : $this->deepMerge($currentBody, $newBody);
-        $responseData->setCellValue('response_header', 0, ['application/json']);
+        $responseData->setCellValue('response_header', 0, json_encode(['Content-Type' => 'application/json']));
         $responseData->setCellValue('body_file__CONTENTS', 0, json_encode($newBody));
         $responseData->dataUpdate();
     }
