@@ -295,7 +295,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         $responseData = $this->loggingMiddleware->getLogDataResponse($request);
 		
         $responseData->getColumns()->addMultiple([
-            'response_headers',
+            'response_header',
             'body_file__CONTENTS'
         ]);
         $responseData->getFilters()->addConditionFromColumnValues($responseData->getUidColumn());

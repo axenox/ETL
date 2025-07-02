@@ -343,7 +343,7 @@ class DataSheetJsonToOpenApi extends AbstractOpenApiPrototype
 
         $newBody = $this->createBodyFromSchema($responseSchema, $rows, $objectAlias, $placeholders);
         $newBody = $currentBody === null ? $newBody : $this->deepMerge($currentBody, $newBody);
-        $responseData->setCellValue('response_header', 0, ['application/json']);
+        $responseData->setCellValue('response_header', 0, 'application/json');
         $responseData->setCellValue('body_file__CONTENTS', 0, json_encode($newBody));
         $responseData->dataUpdate(true);
     }
