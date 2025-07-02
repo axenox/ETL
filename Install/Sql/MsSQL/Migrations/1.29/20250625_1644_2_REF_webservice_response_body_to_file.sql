@@ -1,7 +1,7 @@
 -- UP
 
 ALTER TABLE etl_webservice_response ADD body_file NVARCHAR(200);
-UPDATE etl_webservice_response SET body_file = CONCAT(CONVERT(date,GETDATE()),'/', LOWER(CONVERT(VARCHAR(MAX),oid,1)), '/response.json');
+UPDATE etl_webservice_response SET body_file = CONCAT(CONVERT(date,GETDATE()),'/', LOWER(CONVERT(VARCHAR(MAX),webservice_request_oid,1)), '/response.json');
 
 /* 
 Save contents of the `response_body` as files to the paths found in the column `body_file`.
