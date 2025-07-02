@@ -1,7 +1,7 @@
 -- UP
 
 ALTER TABLE etl_webservice_request ADD body_file NVARCHAR(200);
-UPDATE etl_webservice_request SET body_file = CONCAT('requests/', LOWER(CONVERT(VARCHAR(MAX),oid,1)), '/body.json');
+UPDATE etl_webservice_request SET body_file = CONCAT(GETDATE(),'/', LOWER(CONVERT(VARCHAR(MAX),oid,1)), '/request.json');
 
 /* 
 Save contents of the `http_body` as files to the paths found in the column `body_file`.

@@ -1,7 +1,7 @@
 -- UP
 
 ALTER TABLE `etl_webservice_response` ADD `body_file` NVARCHAR(200);
-UPDATE `etl_webservice_response` SET `body_file` = CONCAT("responses/", CONCAT('0x', LOWER(HEX(`oid`))), "/body.json");
+UPDATE `etl_webservice_response` SET `body_file` = CONCAT(NOW(),"/", CONCAT('0x', LOWER(HEX(`oid`))), "/response.json");
 
 /* 
 Save contents of the `response_body` as files to the paths found in the column `body_file`.
