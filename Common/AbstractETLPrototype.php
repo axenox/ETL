@@ -334,7 +334,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         }
         
         if(!empty($removedRows)) {
-            $logBook->addDataSheet('Removed Rows', $dataSheet->copy()->removeRows()->addRows($removedRows));
+            $logBook->addDataSheet($uxonProperty . ': Removed Rows', $dataSheet->copy()->removeRows()->addRows($removedRows));
         }
 
         if($errors === null) {
