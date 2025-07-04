@@ -287,7 +287,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface   $dataSheet
      * @param UxonObject|null      $uxon
-     * @param string               $logbookIntro
+     * @param string               $uxonProperty
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @return void
@@ -309,6 +309,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         $errors = null;
         $stopOnError = false;
+        $removedRows = [];
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -323,13 +324,17 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, $logBook, $stepData);
+                $check->check($dataSheet, $logBook, $stepData, $removedRows);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
-                
+
                 $stopOnError |= $check->getStopOnCheckFailed();
             }
+        }
+        
+        if(!empty($removedRows)) {
+            $logBook->addDataSheet('Removed Rows', $dataSheet->copy()->removeRows()->addRows($removedRows));
         }
 
         if($errors === null) {
