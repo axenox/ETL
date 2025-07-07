@@ -329,7 +329,7 @@ class StepGroup implements DataFlowStepInterface
             $note = $step->getNoteOnSuccess($stepData) ?? new StepNote(
                 $this->getWorkbench(),
                 $stepData,
-                'Done.',
+                $step->getName() . ': Done.',
                 null,
                 MessageTypeDataType::SUCCESS
             );

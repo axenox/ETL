@@ -21,7 +21,7 @@ trait ITakeStepNotesTrait
      *
      * @uxon-property note_on_success
      * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"info"}
+     * @uxon-template {"message":"", "message_type":"info"}
      *
      * @param UxonObject $uxon
      * @return $this
@@ -56,7 +56,7 @@ trait ITakeStepNotesTrait
      *
      * @uxon-property note_on_failure
      * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"warning"}
+     * @uxon-template {"message":"", "message_type":"warning"}
      *
      * @param UxonObject $uxon
      * @return $this
