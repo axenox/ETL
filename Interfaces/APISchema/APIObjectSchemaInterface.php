@@ -53,6 +53,26 @@ interface APIObjectSchemaInterface
     public function isUpdateIfMatchingAttributes() : bool;
 
     /**
+     * @return bool
+     */
+    public function hasUidProperty() : bool;
+
+    /**
+     * @return string|null
+     */
+    public function getUidPropertyName() : ?string;
+
+    /**
+     * @return bool
+     */
+    public function hasLabelProperty() : bool;
+
+    /**
+     * @return string|null
+     */
+    public function getLabelPropertyName() : ?string;
+
+    /**
      * 
      * @param array $arrayOfRows
      * @return array
