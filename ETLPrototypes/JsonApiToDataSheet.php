@@ -11,6 +11,7 @@ use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\NotImplementedError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -678,7 +679,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             '',
             'exface.Core.METAMODEL_DB'
         );
-
+        
         foreach ($schema->getProperties() as $propSchema) {
             $attrAlias = $propSchema->getPropertyName();
             MetaObjectFactory::addAttributeTemporary(
@@ -688,6 +689,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 '',
                 $propSchema->guessDataType()
             );
+        }
+
+        if (null !== $uidPropName = $schema->getUidPropertyName()) {
+            $result->setUidAttributeAlias($uidPropName);
+        }
+        if (null !== $labelPropName = $schema->getLabelPropertyName()) {
+            $result->setLabelAttributeAlias($labelPropName);
         }
         
         return $result;
