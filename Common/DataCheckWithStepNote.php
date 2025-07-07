@@ -61,14 +61,14 @@ class DataCheckWithStepNote extends DataCheck
      * @param DataSheetInterface        $sheet
      * @param LogBookInterface|null     $logBook
      * @param ETLStepDataInterface|null $stepData
-     * @param array|null                $outRemovedRows
+     * @param DataSheetInterface|null   $badData
      * @return string
      */
     public function check(
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
         ETLStepDataInterface $stepData = null,
-        array &$outRemovedRows = null
+        DataSheetInterface $badData = null
     ) : string
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
@@ -109,6 +109,7 @@ class DataCheckWithStepNote extends DataCheck
                 $result = parent::check($checkSheet, $logBook);
             } catch (DataCheckFailedError $e) {
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
+                $badData?->addRow($row, true);
                 
                 if($removeInvalidRows) {
                     $rowsToRemove[] = $rowIdx;
@@ -125,12 +126,6 @@ class DataCheckWithStepNote extends DataCheck
         }
 
         if(! empty($rowsToRemove)) {
-            if($outRemovedRows !== null) {
-                foreach ($rowsToRemove as $rowNr) {
-                    $outRemovedRows[] = $sheet->getRow($rowNr);
-                }
-            }
-            
             $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $rowsToRemove) . '`');
             $sheet->removeRows($rowsToRemove);
         }
@@ -141,7 +136,6 @@ class DataCheckWithStepNote extends DataCheck
         
         if($errors) {
             if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
-                $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
                 $noteOnFailure->setCountErrors(count($errors->getAllErrors()));
                 $noteOnFailure->takeNote();
             }
@@ -150,7 +144,6 @@ class DataCheckWithStepNote extends DataCheck
         } 
         
         if($noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
-            $noteOnSuccess->importCrudCounter($this->getStep()?->getCrudCounter());
             $noteOnSuccess->takeNote();
         }
         

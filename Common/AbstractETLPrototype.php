@@ -309,7 +309,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         $errors = null;
         $stopOnError = false;
-        $removedRows = [];
+        $badData = $dataSheet->copy()->removeRows();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -324,7 +324,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
 
             try {
-                $check->check($dataSheet, $logBook, $stepData, $removedRows);
+                $check->check($dataSheet, $logBook, $stepData, $badData);
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
@@ -333,8 +333,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
         }
         
-        if(!empty($removedRows)) {
-            $logBook->addDataSheet('Removed Rows', $dataSheet->copy()->removeRows()->addRows($removedRows));
+        if($badData->countRows() > 0) {
+            $logBook->addDataSheet($uxonProperty . ': Bad Data', $badData);
         }
 
         if($errors === null) {
