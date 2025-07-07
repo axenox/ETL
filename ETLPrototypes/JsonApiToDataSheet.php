@@ -10,6 +10,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -418,7 +419,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         }
                     }
                 } catch (\Throwable $e) {
-                    // If anything goes wrong, just continue with the next row
+                    if($e instanceof DataCheckFailedErrorMultiple) {
+                        throw $e;
+                    }
+                    
+                    // If anything goes wrong, just continue with the next row.
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                     $rowNo = $this->getFromDataRowNumber($i);
                     $note = NoteTaker::createNoteFromException(
@@ -434,12 +439,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
             
         } else {
-
             foreach($this->getOutputMappers() as $i => $mapper) {
                 $toSheet = $mapper->map($toSheet, false, $logBook);
-            }
-            if ($toSheet->isEmpty()) {
-                return $toSheet;
             }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
@@ -451,6 +452,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $logBook->addLine('All input rows removed by failed data checks.');
                     return $toSheet;
                 }
+            }
+
+            if ($toSheet->isEmpty()) {
+                return $toSheet;
             }
 
             $transaction = $this->getWorkbench()->data()->startTransaction();
