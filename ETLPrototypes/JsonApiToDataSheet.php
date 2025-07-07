@@ -10,6 +10,7 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\NotImplementedError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -419,7 +420,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         }
                     }
                 } catch (\Throwable $e) {
-                    // If anything goes wrong, just continue with the next row
+                    if($e instanceof DataCheckFailedErrorMultiple) {
+                        throw $e;
+                    }
+                    
+                    // If anything goes wrong, just continue with the next row.
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                     $rowNo = $this->getFromDataRowNumber($i);
                     $note = NoteTaker::createNoteFromException(
@@ -435,12 +440,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
             
         } else {
-
             foreach($this->getOutputMappers() as $i => $mapper) {
                 $toSheet = $mapper->map($toSheet, false, $logBook);
-            }
-            if ($toSheet->isEmpty()) {
-                return $toSheet;
             }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
@@ -452,6 +453,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $logBook->addLine('All input rows removed by failed data checks.');
                     return $toSheet;
                 }
+            }
+
+            if ($toSheet->isEmpty()) {
+                return $toSheet;
             }
 
             $transaction = $this->getWorkbench()->data()->startTransaction();
@@ -794,6 +799,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * 
      * By default, the step will process all rows at once and will not write anything if
      * at least one error happens.
+     * 
+     * NOTE: This setting does not affect data checks! If a row fails a data check that has
+     * `stop_on_check_failed = TRUE`, the entire step will be terminated, even if `skip_invalid_rows = TRUE`.
      * 
      * @uxon-property skip_invalid_rows
      * @uxon-type boolean
