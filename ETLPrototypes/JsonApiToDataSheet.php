@@ -792,6 +792,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * By default, the step will process all rows at once and will not write anything if
      * at least one error happens.
      * 
+     * NOTE: This setting does not affect data checks! If a row fails a data check that has
+     * `stop_on_check_failed = TRUE`, the entire step will be terminated, even if `skip_invalid_rows = TRUE`.
+     * 
      * @uxon-property skip_invalid_rows
      * @uxon-type boolean
      * @uxon-default false
