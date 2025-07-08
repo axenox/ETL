@@ -485,6 +485,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $data;
     }
 
+    /**
+     * @param DataSheetInterface $mappedSheet
+     * @param array              $placeholders
+     * @return DataSheetInterface
+     */
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
     {
         $baseSheet = $this->createBaseDataSheet($placeholders);
