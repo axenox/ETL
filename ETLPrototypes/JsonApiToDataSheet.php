@@ -279,7 +279,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
-        $writer = $this->writeData(
+        $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
@@ -287,8 +287,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $this->isSkipInvalidRows()
         );
         
-        yield from $writer;
-        $resultSheet = $writer->getReturn();
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
@@ -373,7 +371,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param bool                 $rowByRow
-     * @return \Generator
+     * @return DataSheetInterface
      * @throws \Throwable
      */
     protected function writeData(
@@ -381,7 +379,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         CrudCounter        $crudCounter, 
         ETLStepDataInterface $stepData, 
         FlowStepLogBook $logBook,
-        bool $rowByRow = false) : \Generator
+        bool $rowByRow = false) : DataSheetInterface
     {
         $crudCounter->addObject($toSheet->getMetaObject());
 
@@ -397,20 +395,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $logBook->addSection('Saving row index ' . $i);
                 }
                 try {
-                    $writer = $this->writeData(
-                        $saveSheet, 
-                        $crudCounter, 
-                        $stepData, 
-                        $logBook,
-                        false
-                    );
-                    // Write the line
-                    foreach ($writer as $line) {
-                        // Do nothing, just call the writer
-                    }
-                    // Get the resulting data sheet of that single line an add it to the global
+                    // Get the resulting data sheet of that single line and add it to the global
                     // result data
-                    $rowResultSheet = $writer->getReturn();
+                    $rowResultSheet = $this->performWrite($saveSheet, $stepData, $logBook);
                     if ($resultSheet === null) {
                         $resultSheet = $rowResultSheet;
                     } else {
@@ -426,7 +413,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     // If anything goes wrong, just continue with the next row.
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                     $rowNo = $this->getFromDataRowNumber($i);
-                    $note = NoteTaker::createNoteFromException(
+                    $note = StepNote::fromException(
                         $this->getWorkbench(), 
                         $stepData, 
                         $e,
@@ -434,43 +421,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         false
                     );
                     NoteTaker::takeNote($note);
-                    yield $note->getMessage();
                 }
             }
             
         } else {
-            foreach($this->getOutputMappers() as $i => $mapper) {
-                $toSheet = $mapper->map($toSheet, false, $logBook);
-            }
-
-            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
-            // writes for each row, so it will end up here anyway
-            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-
-                if($toSheet->countRows() === 0) {
-                    $logBook->addLine('All input rows removed by failed data checks.');
-                    return $toSheet;
-                }
-            }
-
-            if ($toSheet->isEmpty()) {
-                return $toSheet;
-            }
-
-            $transaction = $this->getWorkbench()->data()->startTransaction();
-
-            try {
-                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-                // that can be used to update known entire
-                $toSheet->dataCreate(false, $transaction);
-            } catch (\Throwable $e) {
-                throw $e;
-            }
-
-            $transaction->commit();
-
-            $resultSheet = $toSheet;
+            $resultSheet = $this->performWrite($toSheet, $stepData, $logBook);
         }
 
         // If no row actually worked, we will not have a result sheet at all. This means, nothing was
@@ -481,6 +436,52 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         return $resultSheet;
+    }
+
+    /**
+     * @param DataSheetInterface   $data
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
+     * @return DataSheetInterface
+     * @throws \Throwable
+     */
+    protected function performWrite(
+        DataSheetInterface   $data,
+        ETLStepDataInterface $stepData,
+        FlowStepLogBook      $logBook
+    ) : DataSheetInterface
+    {
+        foreach($this->getOutputMappers() as $i => $mapper) {
+            $data = $mapper->map($data, false, $logBook);
+        }
+
+        // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+        // writes for each row, so it will end up here anyway
+        if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+            $this->performDataChecks($data, $checksUxon, 'to_data_checks', $stepData, $logBook);
+
+            if($data->countRows() === 0) {
+                $logBook->addLine('All input rows removed by failed data checks.');
+                return $data;
+            }
+        }
+
+        if ($data->isEmpty()) {
+            return $data;
+        }
+
+        $transaction = $this->getWorkbench()->data()->startTransaction();
+
+        try {
+            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+            // that can be used to update known entire
+            $data->dataCreate(false, $transaction);
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+
+        $transaction->commit();
+        return $data;
     }
 
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
