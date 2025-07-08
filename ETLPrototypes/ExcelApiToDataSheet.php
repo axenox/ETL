@@ -181,7 +181,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
-        $writer = $this->writeData(
+        $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
@@ -189,9 +189,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $this->isSkipInvalidRows()
         );
 
-        yield from $writer;
-        $resultSheet = $writer->getReturn();
-        
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
