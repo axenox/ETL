@@ -2,7 +2,6 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
-use axenox\ETL\Common\NoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
@@ -12,7 +11,6 @@ use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
-use exface\Core\Exceptions\NotImplementedError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -322,13 +320,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                NoteTaker::takeNote(
-                    StepNote::fromException(
-                        $this->getWorkbench(), 
-                        $stepData, 
-                        $exception
-                    )
-                );                
+                StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $exception
+                )->takeNote();               
                 throw $exception;
             }
             
@@ -353,14 +349,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                $note = StepNote::fromException(
+                StepNote::fromException(
                     $this->getWorkbench(), 
                     $stepData, 
                     $exception, 
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                     false
-                );
-                NoteTaker::takeNote($note);
+                )->takeNote();
             }
         }
 
@@ -415,14 +410,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     // If anything goes wrong, just continue with the next row.
                     $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
                     $rowNo = $this->getFromDataRowNumber($i);
-                    $note = StepNote::fromException(
+                    StepNote::fromException(
                         $this->getWorkbench(), 
                         $stepData, 
                         $e,
                         $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                         false
-                    );
-                    NoteTaker::takeNote($note);
+                    )->takeNote();
                 }
             }
             
