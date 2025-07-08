@@ -4,17 +4,9 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
-use exface\Core\DataTypes\LogLevelDataType;
-use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\Interfaces\Exceptions\ExceptionInterface;
-use exface\Core\Interfaces\WorkbenchInterface;
-use axenox\ETL\Interfaces\ETLStepDataInterface;
-use exface\Core\Interfaces\Log\LoggerInterface;
-use exface\Core\DataTypes\StringDataType;
 
 /**
  * @inheritdoc 
