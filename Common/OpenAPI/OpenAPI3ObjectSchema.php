@@ -32,6 +32,8 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     const X_OBJECT_ALIAS = 'x-object-alias';
     const X_UPDATE_IF_MATCHING_ATTRIBUTES = 'x-update-if-matching-attributes';
+    const X_OBJECT_UID = 'x-object-uid';
+    const X_OBJECT_LABEL = 'x-object-label';
 
     private $openAPISchema = null;
     private $jsonSchema = null;
@@ -231,6 +233,50 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function isUpdateIfMatchingAttributes() : bool
     {
         return empty($this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? []) === false;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see APIObjectSchemaInterface::getUidPropertyName()
+     */
+    public function getUidPropertyName() : ?string
+    {
+        return $this->jsonSchema[self::X_OBJECT_UID];
+    }
+
+    /**
+     * One or more property names, that form the UID of one instance of this object.
+     *
+     * @uxon-property x-object-uid
+     * @uxon-type string
+     *
+     * @see APIObjectSchemaInterface::hasUidProperty()
+     */
+    public function hasUidProperty() : bool
+    {
+        return '' !== ($this->jsonSchema[self::X_OBJECT_UID] ?? '');
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see APIObjectSchemaInterface::getLabelPropertyName()
+     */
+    public function getLabelPropertyName() : ?string
+    {
+        return $this->jsonSchema[self::X_OBJECT_LABEL];
+    }
+
+    /**
+     * Name of the property, that form the UID of one instance of this object.
+     *
+     * @uxon-property x-object-label
+     * @uxon-type string
+     *
+     * @see APIObjectSchemaInterface::hasLabelProperty()
+     */
+    public function hasLabelProperty() : bool
+    {
+        return '' !== ($this->jsonSchema[self::X_OBJECT_LABEL] ?? '');
     }
 
     /**
