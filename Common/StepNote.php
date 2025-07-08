@@ -9,8 +9,12 @@ use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
@@ -109,6 +113,53 @@ class StepNote implements NoteInterface
         $note = new StepNote($workbench, $stepData);
         $note->setException($exception);
         $note->importUxonObject($uxon);
+        return $note;
+    }
+
+    /**
+     * Instantiates a note from a given exception
+     *
+     * @param WorkbenchInterface   $workbench
+     * @param ETLStepDataInterface $stepData
+     * @param \Throwable           $exception
+     * @param string|null          $preamble
+     * @param bool                 $showRowNumbers
+     * @return StepNote
+     */
+    public static function fromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, \Throwable $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
+    {
+        if ($exception instanceof ExceptionInterface) {
+            $logLevel = $exception->getLogLevel();
+            if (LogLevelDataType::compareLogLevels($logLevel, LoggerInterface::ERROR) < 0) {
+                $msgType = MessageTypeDataType::WARNING;
+            } else {
+                $msgType = MessageTypeDataType::ERROR;
+            }
+            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
+                $text = $exception->getMessageTitleWithoutLocation();
+            } else {
+                $text = $exception->getMessageModel($workbench)->getTitle();
+            }
+            $code = $exception->getAlias();
+        } else {
+            $msgType = MessageTypeDataType::ERROR;
+            $text = $exception->getMessage();
+            $code = null;
+        }
+
+        if ($preamble !== null) {
+            $text = StringDataType::endSentence($preamble) . ' ' . $text;
+        }
+
+        $note = new StepNote(
+            $workbench,
+            $stepData,
+            $text,
+            $exception,
+            $msgType
+        );
+        $note->setMessageCode($code);
+
         return $note;
     }
 

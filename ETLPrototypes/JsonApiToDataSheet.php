@@ -3,6 +3,7 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
@@ -322,7 +323,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
                 NoteTaker::takeNote(
-                    NoteTaker::createNoteFromException(
+                    StepNote::fromException(
                         $this->getWorkbench(), 
                         $stepData, 
                         $exception
@@ -352,7 +353,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                $note = NoteTaker::createNoteFromException(
+                $note = StepNote::fromException(
                     $this->getWorkbench(), 
                     $stepData, 
                     $exception, 
