@@ -377,6 +377,13 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             );
         }
 
+        if (null !== $uidPropName = $toObjectSchema->getUidPropertyName()) {
+            $fakeObj->setUidAttributeAlias($uidPropName);
+        }
+        if (null !== $labelPropName = $toObjectSchema->getLabelPropertyName()) {
+            $fakeObj->setLabelAttributeAlias($labelPropName);
+        }
+
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
         $fakeSheet->dataRead();
