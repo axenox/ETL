@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Instructions [StepNoteInstructionsDialog]",
             "CREATED_ON": "2025-05-15 08:51:04",
-            "MODIFIED_ON": "2025-07-09 16:26:06",
+            "MODIFIED_ON": "2025-07-09 18:11:23",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f08b6df8b397b88b6d025041000001",
@@ -115,7 +115,8 @@
                                         {
                                             "attribute_alias": "message",
                                             "widget_type": "Text",
-                                            "style": "bold"
+                                            "style": "bold",
+                                            "hide_caption": true
                                         },
                                         {
                                             "attribute_alias": "message_code__HINT",
