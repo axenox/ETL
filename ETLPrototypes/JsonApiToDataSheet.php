@@ -2,7 +2,7 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
-use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
@@ -10,8 +10,9 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
-use exface\Core\Exceptions\NotImplementedError;
+use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -280,7 +281,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
-        $writer = $this->writeData(
+        $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
@@ -288,8 +289,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $this->isSkipInvalidRows()
         );
         
-        yield from $writer;
-        $resultSheet = $writer->getReturn();
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
@@ -318,18 +317,38 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     ) : DataSheetInterface
     {
         $translator = $this->getTranslator();
+        $affectedRows = [];
+        $affectedRowNrs = [];
+        
         if(!$this->isSkipInvalidRows()) {
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                NoteTaker::takeNote(
-                    NoteTaker::createNoteFromException(
-                        $this->getWorkbench(), 
-                        $stepData, 
-                        $exception
-                    )
-                );                
+
+                $prev = $exception->getPrevious();
+                if($prev instanceof DataSheetInvalidValueError) {
+                    foreach ($prev->getRowIndexes() as $rowNumber) {
+                        if($rowNumber <= 10) {
+                            $affectedRows[] = $fromSheet->getRow($rowNumber);
+                        }
+                        $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
+                    }
+                }
+
+                $note = StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $exception,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
+                );
+
+                if(!empty($affectedRowNrs)) {
+                    $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+                }
+                
+                $note->takeNote();
+                
                 throw $exception;
             }
             
@@ -339,7 +358,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $toSheet = null;
         $rowSheet = $fromSheet->copy();
         // TODO We should think of a way to not do this row by row.
-        // TODO Also, this fails on the first failed mapper, making the error less insightful.
         foreach ($fromSheet->getRows() as $i => $row) {
             $rowSheet->removeRows();
             $rowSheet->addRow($row);
@@ -354,15 +372,33 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
-                $note = NoteTaker::createNoteFromException(
+                
+                if(count($affectedRows) <= 10) {
+                    $affectedRows[] = $row;
+                }
+                $affectedRowNrs[] = $rowNo;
+                
+                StepNote::fromException(
                     $this->getWorkbench(), 
                     $stepData, 
                     $exception, 
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                     false
-                );
-                NoteTaker::takeNote($note);
+                )->takeNote();
             }
+        }
+
+        if(!empty($affectedRowNrs)) {
+            $note = new StepNote(
+                $this->getWorkbench(),
+                $stepData,
+                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs)),
+                null,
+                MessageTypeDataType::WARNING
+            );
+            
+            $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+            $note->takeNote();
         }
 
         return $toSheet ?? DataSheetFactory::createFromObject($this->getToObject());
@@ -374,7 +410,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param bool                 $rowByRow
-     * @return \Generator
+     * @return DataSheetInterface
      * @throws \Throwable
      */
     protected function writeData(
@@ -382,67 +418,40 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         CrudCounter        $crudCounter, 
         ETLStepDataInterface $stepData, 
         FlowStepLogBook $logBook,
-        bool $rowByRow = false) : \Generator
+        bool $rowByRow = false) : DataSheetInterface
     {
         $crudCounter->addObject($toSheet->getMetaObject());
 
         if ($rowByRow === true) {
-            $saveSheet = $toSheet;
-            $resultSheet = null;
-            $translator = $this->getTranslator();
-            foreach ($toSheet->getRows() as $i => $row) {
-                $saveSheet = $saveSheet->copy();
-                $saveSheet->removeRows();
-                $saveSheet->addRow($row, false, false);
-                if ($i > 0) {
-                    $logBook->addSection('Saving row index ' . $i);
-                }
-                try {
-                    $writer = $this->writeData(
-                        $saveSheet, 
-                        $crudCounter, 
-                        $stepData, 
-                        $logBook,
-                        false
-                    );
-                    // Write the line
-                    foreach ($writer as $line) {
-                        // Do nothing, just call the writer
-                    }
-                    // Get the resulting data sheet of that single line an add it to the global
-                    // result data
-                    $rowResultSheet = $writer->getReturn();
-                    if ($resultSheet === null) {
-                        $resultSheet = $rowResultSheet;
-                    } else {
-                        foreach ($rowResultSheet->getRows() as $resultRow) {
-                            $resultSheet->addRow($resultRow, false, false);
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    if($e instanceof DataCheckFailedErrorMultiple) {
-                        throw $e;
-                    }
-                    
-                    // If anything goes wrong, just continue with the next row.
-                    $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
-                    $rowNo = $this->getFromDataRowNumber($i);
-                    $note = NoteTaker::createNoteFromException(
-                        $this->getWorkbench(), 
-                        $stepData, 
-                        $e,
-                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                        false
-                    );
-                    NoteTaker::takeNote($note);
-                    yield $note->getMessage();
+            // Apply output mappers.
+            $toSheet = $this->transformDataRowByRow(
+                'applyOutputMappers',
+                $toSheet,
+                $stepData,
+                $logBook
+            );
+
+            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+            // writes for each row, so it will end up here anyway.
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
+
+                if($toSheet->countRows() === 0) {
+                    $logBook->addLine('All input rows removed by failed data checks.');
+                    return $toSheet;
                 }
             }
             
+            // Perform write.
+            $resultSheet = $this->transformDataRowByRow(
+                'performWrite',
+                $toSheet,
+                $stepData,
+                $logBook
+            );
+            
         } else {
-            foreach($this->getOutputMappers() as $i => $mapper) {
-                $toSheet = $mapper->map($toSheet, false, $logBook);
-            }
+            $toSheet = $this->applyOutputMappers($toSheet, $stepData, $logBook);
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
             // writes for each row, so it will end up here anyway
@@ -454,24 +463,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     return $toSheet;
                 }
             }
-
-            if ($toSheet->isEmpty()) {
-                return $toSheet;
-            }
-
-            $transaction = $this->getWorkbench()->data()->startTransaction();
-
-            try {
-                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-                // that can be used to update known entire
-                $toSheet->dataCreate(false, $transaction);
-            } catch (\Throwable $e) {
-                throw $e;
-            }
-
-            $transaction->commit();
-
-            $resultSheet = $toSheet;
+            
+            $resultSheet = $this->performWrite($toSheet, $stepData, $logBook);
         }
 
         // If no row actually worked, we will not have a result sheet at all. This means, nothing was
@@ -483,7 +476,92 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         return $resultSheet;
     }
+    
+    protected function transformDataRowByRow(
+        string $transformFuncName, 
+        DataSheetInterface $dataSheet, 
+        ETLStepDataInterface $stepData,
+        FlowStepLogBook $logBook
+    ) : DataSheetInterface
+    {
+        $saveSheet = $dataSheet;
+        $resultSheet = null;
+        $translator = $this->getTranslator();
+        foreach ($dataSheet->getRows() as $i => $row) {
+            $saveSheet = $saveSheet->copy();
+            $saveSheet->removeRows();
+            $saveSheet->addRow($row, false, false);
+            if ($i > 0) {
+                $logBook->addSection('Saving row index ' . $i);
+            }
+            try {
+                // Get the resulting data sheet of that single line and add it to the global
+                // result data
+                $rowResultSheet = $this->$transformFuncName($saveSheet, $logBook);
+                if ($resultSheet === null) {
+                    $resultSheet = $rowResultSheet;
+                } else {
+                    foreach ($rowResultSheet->getRows() as $resultRow) {
+                        $resultSheet->addRow($resultRow, false, false);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // If anything goes wrong, just continue with the next row.
+                $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+                $rowNo = $this->getFromDataRowNumber($i);
+                StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $e,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false
+                )->takeNote();
+            }
+        }
+        
+        return $resultSheet;
+    }
 
+    protected function applyOutputMappers(DataSheetInterface $data, LogBookInterface $logBook) : DataSheetInterface
+    {
+        foreach($this->getOutputMappers() as $mapper) {
+            $data = $mapper->map($data, false, $logBook);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param DataSheetInterface $data
+     * @return DataSheetInterface
+     */
+    protected function performWrite(
+        DataSheetInterface   $data,
+    ) : DataSheetInterface
+    {
+        if ($data->isEmpty()) {
+            return $data;
+        }
+
+        $transaction = $this->getWorkbench()->data()->startTransaction();
+
+        try {
+            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+            // that can be used to update known entire
+            $data->dataCreate(false, $transaction);
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+
+        $transaction->commit();
+        return $data;
+    }
+
+    /**
+     * @param DataSheetInterface $mappedSheet
+     * @param array              $placeholders
+     * @return DataSheetInterface
+     */
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
     {
         $baseSheet = $this->createBaseDataSheet($placeholders);
