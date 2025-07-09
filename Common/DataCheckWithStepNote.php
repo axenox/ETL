@@ -62,13 +62,15 @@ class DataCheckWithStepNote extends DataCheck
      * @param LogBookInterface|null     $logBook
      * @param ETLStepDataInterface|null $stepData
      * @param DataSheetInterface|null   $badData
+     * @param bool                      $takeNotes
      * @return string
      */
     public function check(
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
         ETLStepDataInterface $stepData = null,
-        DataSheetInterface $badData = null
+        DataSheetInterface $badData = null,
+        bool $takeNotes = true
     ) : string
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
@@ -110,6 +112,7 @@ class DataCheckWithStepNote extends DataCheck
             try {
                 $result = parent::check($checkSheet, $logBook);
             } catch (DataCheckFailedError $e) {
+                
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 $badData?->addRow($row, true);
                 $invalidRows[] = $rowIdx;
@@ -122,7 +125,7 @@ class DataCheckWithStepNote extends DataCheck
                 }
                 
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
-                $errors->appendError($e, $rowIdx + 1);
+                $errors->appendError($e, $rowIdx);
             }
         }
         
@@ -136,7 +139,7 @@ class DataCheckWithStepNote extends DataCheck
         }
         
         if($errors) {
-            if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
+            if($takeNotes && $noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
                 $noteOnFailure->setCountErrors(count($errors->getAllErrors()));
                 $noteOnFailure->takeNote();
             }
@@ -144,7 +147,7 @@ class DataCheckWithStepNote extends DataCheck
             throw $errors;
         } 
         
-        if($noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
+        if($takeNotes && $noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
             $noteOnSuccess->takeNote();
         }
         

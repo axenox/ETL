@@ -309,7 +309,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         $errors = null;
         $stopOnError = false;
-        $badData = $dataSheet->copy()->removeRows();
+        $badDataBase = $dataSheet->copy()->removeRows();
+        $badData = $badDataBase->copy();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -323,13 +324,26 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 continue;
             }
 
+            $badDataForCheck = $badDataBase->copy();
+            
             try {
-                $check->check($dataSheet, $logBook, $stepData, $badData);
+                $check->check($dataSheet, $logBook, $stepData, $badDataForCheck, false);
+                $check->getNoteOnSuccess($stepData)?->takeNote();
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
 
                 $stopOnError |= $check->getStopOnCheckFailed();
+                
+                $badData->addRows($badDataForCheck->getRows());
+                
+                $note = $check->getNoteOnFailure($stepData, $e);
+                $note->setCountErrors(count($e->getAllErrors()));
+                $note->addRowsAsContext(
+                    $badDataForCheck->getRows(10),
+                    $e->getAllRowNumbers()
+                );
+                $note->takeNote();
             }
         }
         

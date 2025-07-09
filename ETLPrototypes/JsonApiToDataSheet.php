@@ -423,46 +423,47 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $crudCounter->addObject($toSheet->getMetaObject());
 
         if ($rowByRow === true) {
-            $saveSheet = $toSheet;
-            $resultSheet = null;
-            $translator = $this->getTranslator();
-            foreach ($toSheet->getRows() as $i => $row) {
-                $saveSheet = $saveSheet->copy();
-                $saveSheet->removeRows();
-                $saveSheet->addRow($row, false, false);
-                if ($i > 0) {
-                    $logBook->addSection('Saving row index ' . $i);
-                }
-                try {
-                    // Get the resulting data sheet of that single line and add it to the global
-                    // result data
-                    $rowResultSheet = $this->performWrite($saveSheet, $stepData, $logBook);
-                    if ($resultSheet === null) {
-                        $resultSheet = $rowResultSheet;
-                    } else {
-                        foreach ($rowResultSheet->getRows() as $resultRow) {
-                            $resultSheet->addRow($resultRow, false, false);
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    if($e instanceof DataCheckFailedErrorMultiple) {
-                        throw $e;
-                    }
-                    
-                    // If anything goes wrong, just continue with the next row.
-                    $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
-                    $rowNo = $this->getFromDataRowNumber($i);
-                    StepNote::fromException(
-                        $this->getWorkbench(), 
-                        $stepData, 
-                        $e,
-                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                        false
-                    )->takeNote();
+            // Apply output mappers.
+            $toSheet = $this->transformDataRowByRow(
+                'applyOutputMappers',
+                $toSheet,
+                $stepData,
+                $logBook
+            );
+
+            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+            // writes for each row, so it will end up here anyway.
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
+
+                if($toSheet->countRows() === 0) {
+                    $logBook->addLine('All input rows removed by failed data checks.');
+                    return $toSheet;
                 }
             }
             
+            // Perform write.
+            $resultSheet = $this->transformDataRowByRow(
+                'performWrite',
+                $toSheet,
+                $stepData,
+                $logBook
+            );
+            
         } else {
+            $toSheet = $this->applyOutputMappers($toSheet, $stepData, $logBook);
+
+            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
+            // writes for each row, so it will end up here anyway
+            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
+
+                if($toSheet->countRows() === 0) {
+                    $logBook->addLine('All input rows removed by failed data checks.');
+                    return $toSheet;
+                }
+            }
+            
             $resultSheet = $this->performWrite($toSheet, $stepData, $logBook);
         }
 
@@ -475,35 +476,69 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         return $resultSheet;
     }
-
-    /**
-     * @param DataSheetInterface   $data
-     * @param ETLStepDataInterface $stepData
-     * @param FlowStepLogBook      $logBook
-     * @return DataSheetInterface
-     * @throws \Throwable
-     */
-    protected function performWrite(
-        DataSheetInterface   $data,
+    
+    protected function transformDataRowByRow(
+        string $transformFuncName, 
+        DataSheetInterface $dataSheet, 
         ETLStepDataInterface $stepData,
-        FlowStepLogBook      $logBook
+        FlowStepLogBook $logBook
     ) : DataSheetInterface
     {
-        foreach($this->getOutputMappers() as $i => $mapper) {
+        $saveSheet = $dataSheet;
+        $resultSheet = null;
+        $translator = $this->getTranslator();
+        foreach ($dataSheet->getRows() as $i => $row) {
+            $saveSheet = $saveSheet->copy();
+            $saveSheet->removeRows();
+            $saveSheet->addRow($row, false, false);
+            if ($i > 0) {
+                $logBook->addSection('Saving row index ' . $i);
+            }
+            try {
+                // Get the resulting data sheet of that single line and add it to the global
+                // result data
+                $rowResultSheet = $this->$transformFuncName($saveSheet, $logBook);
+                if ($resultSheet === null) {
+                    $resultSheet = $rowResultSheet;
+                } else {
+                    foreach ($rowResultSheet->getRows() as $resultRow) {
+                        $resultSheet->addRow($resultRow, false, false);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // If anything goes wrong, just continue with the next row.
+                $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+                $rowNo = $this->getFromDataRowNumber($i);
+                StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $e,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false
+                )->takeNote();
+            }
+        }
+        
+        return $resultSheet;
+    }
+
+    protected function applyOutputMappers(DataSheetInterface $data, LogBookInterface $logBook) : DataSheetInterface
+    {
+        foreach($this->getOutputMappers() as $mapper) {
             $data = $mapper->map($data, false, $logBook);
         }
 
-        // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
-        // writes for each row, so it will end up here anyway
-        if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-            $this->performDataChecks($data, $checksUxon, 'to_data_checks', $stepData, $logBook);
+        return $data;
+    }
 
-            if($data->countRows() === 0) {
-                $logBook->addLine('All input rows removed by failed data checks.');
-                return $data;
-            }
-        }
-
+    /**
+     * @param DataSheetInterface $data
+     * @return DataSheetInterface
+     */
+    protected function performWrite(
+        DataSheetInterface   $data,
+    ) : DataSheetInterface
+    {
         if ($data->isEmpty()) {
             return $data;
         }
