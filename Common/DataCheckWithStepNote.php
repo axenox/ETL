@@ -76,7 +76,9 @@ class DataCheckWithStepNote extends DataCheck
         $isInValidValue = $this->getIsInvalidValue();
         $isValidAlias = $this->getIsValidAlias();
         
-        if(!empty($isValidAlias)) {
+        $markInvalidRows = !empty($isValidAlias) && !$removeInvalidRows;
+        
+        if($markInvalidRows) {
             if($sheet->getMetaObject()->hasAttribute($isValidAlias)) {
                 $isInValidValue = $sheet->getMetaObject()->getAttribute($isValidAlias)->getDataType()->format($isInValidValue);
             } else if (is_bool($isInValidValue)) {
@@ -86,7 +88,7 @@ class DataCheckWithStepNote extends DataCheck
         
         $checkSheet = $sheet->copy();
         $errors = null;
-        $rowsToRemove = [];
+        $invalidRows = [];
         $conditionJson = $this->getConditionGroupUxon()->toJson();
         
         foreach ($sheet->getRows() as $rowIdx => $row) {
@@ -110,12 +112,11 @@ class DataCheckWithStepNote extends DataCheck
             } catch (DataCheckFailedError $e) {
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
                 $badData?->addRow($row, true);
+                $invalidRows[] = $rowIdx;
                 
                 if($removeInvalidRows) {
-                    $rowsToRemove[] = $rowIdx;
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
-                } else if(!empty($isValidAlias)) {
-                    $rowsToMark[] = $rowIdx;
+                } else if($markInvalidRows) {
                     $sheet->setCellValue($isValidAlias, $rowIdx, $isInValidValue);
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
                 }
@@ -124,14 +125,14 @@ class DataCheckWithStepNote extends DataCheck
                 $errors->appendError($e, $rowIdx + 1);
             }
         }
-
-        if(! empty($rowsToRemove)) {
-            $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $rowsToRemove) . '`');
-            $sheet->removeRows($rowsToRemove);
-        }
-
-        if(! empty($rowsToMark)) {
-            $logBook->addLine('Added invalid-mark on row(s) with index: `' . implode('`, `', $rowsToMark) . '`');
+        
+        if(!empty($invalidRows)) {
+            if($removeInvalidRows) {
+                $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $invalidRows) . '`');
+                $sheet->removeRows($invalidRows);
+            } else if($markInvalidRows) {
+                $logBook->addLine('Added invalid-mark on row(s) with index: `' . implode('`, `', $invalidRows) . '`');
+            }
         }
         
         if($errors) {

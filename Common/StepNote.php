@@ -48,6 +48,7 @@ class StepNote implements NoteInterface
     private ?int $countDeletes = null;
     private ?int $countErrors = null;
     private ?int $countWarnings = null;
+    private array $contextData = [];
 
     /**
      * @param WorkbenchInterface   $workbench
@@ -202,7 +203,8 @@ class StepNote implements NoteInterface
             'count_updates' => $this->getCountUpdates(),
             'count_deletes' => $this->getCountDeletes(),
             'count_errors' => $this->getCountErrors(),
-            'count_warnings' => $this->getCountWarnings()
+            'count_warnings' => $this->getCountWarnings(),
+            'context_data' => $this->getContextData()
         ];
     }
 
@@ -502,6 +504,53 @@ class StepNote implements NoteInterface
         $this->setCountReads($counter->getReads());
         $this->setCountUpdates($counter->getUpdates());
         $this->setCountDeletes($counter->getDeletes());
+        
+        return $this;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function addContextData(array $contextData): NoteInterface
+    {
+        $this->contextData = array_merge($this->contextData, $contextData);
+        return $this;
+    }
+
+    /**
+     * @inerhitDoc 
+     */
+    public function getContextData(): array
+    {
+        return $this->contextData;
+    }
+
+    /**
+     * Add a set of rows and row numbers as context for this note. 
+     * 
+     * NOTE: While it is implied that the row numbers relate to the rows, this relationship
+     * does not have to be direct. For example: If you wanted to log 100 faulty rows of data, you might
+     * add only 10 sample rows, but the row numbers of all 100, to save on stored data volume.
+     * 
+     * @param string $key
+     * The data provided will be stored, using this key. Repeated calls of this method with the same key
+     * will overwrite any data stored under that key.
+     * @param array  $rows
+     * @param array  $rowNumbers
+     * @return $this
+     */
+    public function addRowsAsContext(
+        string $key = 'affected_rows', 
+        array $rows = [], 
+        array $rowNumbers = []
+    ) : StepNote
+    {
+        $this->addContextData(
+            [$key => [
+                'data' => $rows,
+                'row_numbers' => $rowNumbers
+            ]]
+        );
         
         return $this;
     }
