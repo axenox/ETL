@@ -177,7 +177,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getStorageObject()
      */
-    function getStorageObject(): MetaObjectInterface
+    public function getStorageObject(): MetaObjectInterface
     {
         return $this->storageObject;
     }
@@ -186,7 +186,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getNoteData()
      */
-    function getNoteData(): array
+    public function getNoteData(): array
     {
         return [
             'flow_run' => $this->getFlowRunUid(),
@@ -330,7 +330,7 @@ class StepNote implements NoteInterface
      * @inheritdoc 
      * @see NoteInterface::setException()
      */
-    function setException(?Throwable $exception): void
+    public function setException(?Throwable $exception): void
     {
         $this->exceptionFlag = (bool)$exception;
         $this->exceptionMessage = $exception?->getMessage();
@@ -341,7 +341,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    function getExceptionMessage(): ?string
+    public function getExceptionMessage(): ?string
     {
         return $this->exceptionMessage;
     }
@@ -350,7 +350,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    function getExceptionLogId(): ?string
+    public function getExceptionLogId(): ?string
     {
         return $this->exceptionLogId;
     }
@@ -359,7 +359,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::hasException()
      */
-    function hasException(): bool
+    public function hasException(): bool
     {
         return $this->exceptionFlag;
     }
@@ -532,17 +532,17 @@ class StepNote implements NoteInterface
      * does not have to be direct. For example: If you wanted to log 100 faulty rows of data, you might
      * add only 10 sample rows, but the row numbers of all 100, to save on stored data volume.
      * 
-     * @param string $key
-     * The data provided will be stored, using this key. Repeated calls of this method with the same key
-     * will overwrite any data stored under that key.
      * @param array  $rows
      * @param array  $rowNumbers
+     * @param string $key
+     *  The data provided will be stored, using this key. Repeated calls of this method with the same key
+     *  will overwrite any data stored under that key.
      * @return $this
      */
     public function addRowsAsContext(
-        string $key = 'affected_rows', 
-        array $rows = [], 
-        array $rowNumbers = []
+        array $rows = [],
+        array $rowNumbers = [],
+        string $key = 'affected_rows'
     ) : StepNote
     {
         $this->addContextData(
