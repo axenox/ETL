@@ -10,7 +10,9 @@ use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -315,16 +317,38 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     ) : DataSheetInterface
     {
         $translator = $this->getTranslator();
+        $affectedRows = [];
+        $affectedRowNrs = [];
+        
         if(!$this->isSkipInvalidRows()) {
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
             } catch (\Throwable $exception) {
-                StepNote::fromException(
+
+                $prev = $exception->getPrevious();
+                if($prev instanceof DataSheetInvalidValueError) {
+                    foreach ($prev->getRowIndexes() as $rowNumber) {
+                        if($rowNumber <= 10) {
+                            $affectedRows[] = $fromSheet->getRow($rowNumber);
+                        }
+                        $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
+                    }
+                }
+
+                $note = StepNote::fromException(
                     $this->getWorkbench(),
                     $stepData,
-                    $exception
-                )->takeNote();               
+                    $exception,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
+                );
+
+                if(!empty($affectedRowNrs)) {
+                    $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+                }
+                
+                $note->takeNote();
+                
                 throw $exception;
             }
             
@@ -334,7 +358,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $toSheet = null;
         $rowSheet = $fromSheet->copy();
         // TODO We should think of a way to not do this row by row.
-        // TODO Also, this fails on the first failed mapper, making the error less insightful.
         foreach ($fromSheet->getRows() as $i => $row) {
             $rowSheet->removeRows();
             $rowSheet->addRow($row);
@@ -349,6 +372,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $this->getWorkbench()->getLogger()->logException($exception);
                 $logBook->addIndent(-2);
                 $rowNo = $this->getFromDataRowNumber($i);
+                
+                if(count($affectedRows) <= 10) {
+                    $affectedRows[] = $row;
+                }
+                $affectedRowNrs[] = $rowNo;
+                
                 StepNote::fromException(
                     $this->getWorkbench(), 
                     $stepData, 
@@ -357,6 +386,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     false
                 )->takeNote();
             }
+        }
+
+        if(!empty($affectedRowNrs)) {
+            $note = new StepNote(
+                $this->getWorkbench(),
+                $stepData,
+                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs)),
+                null,
+                MessageTypeDataType::WARNING
+            );
+            
+            $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+            $note->takeNote();
         }
 
         return $toSheet ?? DataSheetFactory::createFromObject($this->getToObject());
