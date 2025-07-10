@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2023-10-18 17:03:02",
     "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-    "modified_on": "2025-07-09 16:42:30",
+    "modified_on": "2025-07-10 11:22:37",
     "contents": {
         "widget_type": "SplitHorizontal",
         "object_alias": "axenox.ETL.webservice_request",
@@ -404,6 +404,12 @@
                             {
                                 "attribute_alias": "step_run__step",
                                 "hidden": true
+                            },
+                            {
+                                "calculation": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')",
+                                "caption": "RowNrs",
+                                "width_max": 1,
+                                "id": "row_numbers"
                             }
                         ],
                         "sorters": [
@@ -435,7 +441,7 @@
                             },
                             {
                                 "bind_to_double_click": true,
-                                "action_alias": "axenox.ETL.StepNoteInstructionsDialog"
+                                "action_alias": "axenox.ETL.StepNoteContextDialog"
                             }
                         ]
                     }
