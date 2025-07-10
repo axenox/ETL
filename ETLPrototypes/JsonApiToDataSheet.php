@@ -256,7 +256,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $logBook->addSection('Filling to-sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->skipInvalidRows);
         
         if($toSheet->countRows() === 0) {
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
@@ -305,7 +305,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param DataSheetMapperInterface $mapper
      * @param DataSheetInterface       $fromSheet
      * @param ETLStepDataInterface     $stepData
-     * @param LogBookInterface         $logBook
+     * @param FlowStepLogBook          $logBook
+     * @param bool                     $rowByRow
      * @return DataSheetInterface
      * @throws \Throwable
      */
@@ -313,96 +314,57 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         DataSheetMapperInterface $mapper,
         DataSheetInterface $fromSheet,
         ETLStepDataInterface $stepData,
-        LogBookInterface $logBook
+        FlowStepLogBook $logBook,
+        bool $rowByRow
     ) : DataSheetInterface
     {
+        if($rowByRow) {
+            return $this->applyTransformRowByRow(
+                function ($data) use ($mapper, $logBook) {
+                    return $mapper->map($data, false, $logBook);
+                },
+                $fromSheet,
+                $stepData,
+                $logBook,
+                'Mapper Applied'
+            );
+        }
+        
         $translator = $this->getTranslator();
         $affectedRows = [];
         $affectedRowNrs = [];
-        
-        if(!$this->isSkipInvalidRows()) {
-            try {
-                // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
-                $toSheet = $mapper->map($fromSheet, false, $logBook);
-            } catch (\Throwable $exception) {
 
-                $prev = $exception->getPrevious();
-                if($prev instanceof DataSheetInvalidValueError) {
-                    foreach ($prev->getRowIndexes() as $rowNumber) {
-                        if($rowNumber <= 10) {
-                            $affectedRows[] = $fromSheet->getRow($rowNumber);
-                        }
-                        $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
+        try {
+            // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
+            $toSheet = $mapper->map($fromSheet, false, $logBook);
+        } catch (\Throwable $exception) {
+
+            $prev = $exception->getPrevious();
+            if($prev instanceof DataSheetInvalidValueError) {
+                foreach ($prev->getRowIndexes() as $rowNumber) {
+                    if($rowNumber <= 10) {
+                        $affectedRows[] = $fromSheet->getRow($rowNumber);
                     }
+                    $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
                 }
-
-                $note = StepNote::fromException(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $exception,
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
-                );
-
-                if(!empty($affectedRowNrs)) {
-                    $note->addRowsAsContext($affectedRows, $affectedRowNrs);
-                }
-                
-                $note->takeNote();
-                
-                throw $exception;
             }
-            
-            return $toSheet;
-        }
-        
-        $toSheet = null;
-        $rowSheet = $fromSheet->copy();
-        // TODO We should think of a way to not do this row by row.
-        // TODO Also, this fails on the first failed mapper, making the error less insightful.
-        foreach ($fromSheet->getRows() as $i => $row) {
-            $rowSheet->removeRows();
-            $rowSheet->addRow($row);
-            try {
-                $mappedSheet = $mapper->map($rowSheet, false, $logBook);
-                if($toSheet !== null) {
-                    $toSheet->addRows($mappedSheet->getRows());
-                } else {
-                    $toSheet = $mappedSheet->copy();
-                }
-            } catch (\Throwable $exception) {
-                $this->getWorkbench()->getLogger()->logException($exception);
-                $logBook->addIndent(-2);
 
-                if(count($affectedRows) <= 10) {
-                    $affectedRows[] = $row;
-                }
-                $rowNo = $this->getFromDataRowNumber($i);
-                $affectedRowNrs[] = $rowNo;
-                
-                StepNote::fromException(
-                    $this->getWorkbench(), 
-                    $stepData, 
-                    $exception, 
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                    false
-                )->takeNote();
-            }
-        }
-
-        if(!empty($affectedRowNrs)) {
-            $note = new StepNote(
+            $note = StepNote::fromException(
                 $this->getWorkbench(),
                 $stepData,
-                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs)),
-                null,
-                MessageTypeDataType::WARNING
+                $exception,
+                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
             );
-            
-            $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+
+            if(!empty($affectedRowNrs)) {
+                $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+            }
+
             $note->takeNote();
+            throw $exception;
         }
 
-        return $toSheet ?? DataSheetFactory::createFromObject($this->getToObject());
+        return $toSheet;
     }
 
     /**
@@ -424,14 +386,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         if ($this->skipInvalidRows) {
             // Apply output mappers.
             foreach ($this->getOutputMappers() as $mapper) {
-                $toSheet = $this->transformDataRowByRow(
-                    function ($data) use ($mapper, $stepData, $logBook) {
-                        return $this->applyDataSheetMapper($mapper, $data, $stepData, $logBook);
-                    },
-                    $toSheet,
-                    $stepData,
-                    $logBook
-                );
+                $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook,true);
             }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
@@ -446,18 +401,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
             
             // Perform write.
-            $resultSheet = $this->transformDataRowByRow(
+            $resultSheet = $this->applyTransformRowByRow(
                 function ($data) {
                     return $this->performWrite($data);
                 },
                 $toSheet,
                 $stepData,
-                $logBook
+                $logBook,
+                'Data Written'
             );
             
         } else {
             foreach($this->getOutputMappers() as $mapper) {
-                $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook);
+                $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook, false);
             }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
@@ -493,13 +449,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
+     * @param string               $summaryPreamble
      * @return DataSheetInterface
      */
-    protected function transformDataRowByRow(
+    protected function applyTransformRowByRow(
         callable $transformer, 
         DataSheetInterface $dataSheet, 
         ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook
+        FlowStepLogBook $logBook,
+        string $summaryPreamble
     ) : DataSheetInterface
     {
         // TODO pass func call with params 
@@ -550,10 +508,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         if(!empty($affectedRowNrs)) {
+            $lineReport = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs));
             $note = new StepNote(
                 $this->getWorkbench(),
                 $stepData,
-                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs)),
+                $summaryPreamble . ': ' . $lineReport,
                 null,
                 MessageTypeDataType::WARNING
             );
