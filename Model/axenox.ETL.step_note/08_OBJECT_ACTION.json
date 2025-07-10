@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Instructions [StepNoteInstructionsDialog]",
             "CREATED_ON": "2025-05-15 08:51:04",
-            "MODIFIED_ON": "2025-07-09 18:11:23",
+            "MODIFIED_ON": "2025-07-10 14:51:07",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f08b6df8b397b88b6d025041000001",
@@ -75,7 +75,7 @@
             "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
             "ALIAS": "StepNoteInstructionsDialog",
             "NAME": "Instructions",
-            "SHORT_DESCRIPTION": "View additional information and instructions on how to resolve this note",
+            "SHORT_DESCRIPTION": "View instructions on how to resolve this note",
             "CONFIG_UXON": {
                 "icon": "question-circle",
                 "input_rows_min": 1,
@@ -106,62 +106,21 @@
                     "object_alias": "axenox.ETL.step_note",
                     "widgets": [
                         {
-                            "widget_type": "Tabs",
-                            "id": "tabs",
-                            "tabs": [
-                                {
-                                    "caption": "Info",
-                                    "widgets": [
-                                        {
-                                            "attribute_alias": "message",
-                                            "widget_type": "Text",
-                                            "style": "bold",
-                                            "hide_caption": true
-                                        },
-                                        {
-                                            "attribute_alias": "message_code__HINT",
-                                            "widget_type": "Message",
-                                            "type": "hint",
-                                            "hide_caption": true,
-                                            "hidden_if": {
-                                                "operator": "AND",
-                                                "conditions": [
-                                                    {
-                                                        "value_left": "=~self",
-                                                        "comparator": "==",
-                                                        "value_right": ""
-                                                    }
-                                                ]
-                                            }
-                                        },
-                                        {
-                                            "attribute_alias": "message_code__DESCRIPTION",
-                                            "widget_type": "Markdown",
-                                            "hide_caption": true
-                                        }
-                                    ]
-                                },
-                                {
-                                    "caption": "Context",
-                                    "widgets": [
-                                        {
-                                            "attribute_alias": "context_data",
-                                            "hide_caption": true,
-                                            "height": "max"
-                                        },
-                                        {
-                                            "attribute_alias": "UID",
-                                            "hidden": true
-                                        },
-                                        {
-                                            "widget_type": "Display",
-                                            "value": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')",
-                                            "id": "row_nrs",
-                                            "hidden": true
-                                        }
-                                    ]
-                                }
-                            ]
+                            "attribute_alias": "UID",
+                            "hidden": true
+                        },
+                        {
+                            "widget_type": "Display",
+                            "value": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')",
+                            "id": "row_nrs",
+                            "hidden": true
+                        },
+                        {
+                            "~snippet": "axenox.ETL.StepNoteInstructions",
+                            "parameters": {
+                                "HideCaption": true,
+                                "FallbackDetails": "Check out the other notes for more information. If you cannot find what you are looking for and your issue persists, contact support."
+                            }
                         }
                     ],
                     "buttons": [
@@ -169,17 +128,12 @@
                             "action_alias": "axenox.ETL.StepNoteExportRowNumbers",
                             "close_dialog": false,
                             "hidden_if": {
-                                "operator": "OR",
+                                "operator": "AND",
                                 "conditions": [
                                     {
                                         "value_left": "=row_nrs",
                                         "comparator": "==",
                                         "value_right": ""
-                                    },
-                                    {
-                                        "value_left": "=tabs!getActiveTabIndex",
-                                        "comparator": "==",
-                                        "value_right": 1
                                     }
                                 ]
                             }
@@ -225,6 +179,108 @@
                         "calculation": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')"
                     }
                 ]
+            },
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "USE_IN_OBJECT_BASKET_FLAG": 0,
+            "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "Note: Context [StepNoteContextDialog]",
+            "CREATED_ON": "2025-07-10 10:38:36",
+            "MODIFIED_ON": "2025-07-10 14:49:25",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f0853a453614a8853af308de4e6a45",
+            "OBJECT": "0x11f08c55d9b1d6d48c55025041000001",
+            "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
+            "ALIAS": "StepNoteContextDialog",
+            "NAME": "Context",
+            "SHORT_DESCRIPTION": "View context data and instructions on how to resolve this note.",
+            "CONFIG_UXON": {
+                "icon": "question-circle",
+                "input_rows_min": 1,
+                "input_rows_max": 1,
+                "input_object_alias": "axenox.ETL.step_note",
+                "input_invalid_if": [
+                    {
+                        "error_text": "There are no instructions for this note",
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "expression": "message_code",
+                                "comparator": "==",
+                                "value": ""
+                            },
+                            {
+                                "expression": "context_data",
+                                "comparator": "==",
+                                "value": ""
+                            }
+                        ]
+                    }
+                ],
+                "dialog": {
+                    "width": "40%",
+                    "height": "60%",
+                    "columns_in_grid": 1,
+                    "object_alias": "axenox.ETL.step_note",
+                    "widgets": [
+                        {
+                            "widget_type": "Tabs",
+                            "id": "tabs",
+                            "tabs": [
+                                {
+                                    "caption": "Info",
+                                    "widgets": [
+                                        {
+                                            "~snippet": "axenox.ETL.StepNoteInstructions",
+                                            "parameters": {
+                                                "HideCaption": false,
+                                                "FallbackDetails": "For more details, check out the other tabs in this dialog or the Debug Details for this step run."
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "caption": "Context",
+                                    "widgets": [
+                                        {
+                                            "attribute_alias": "context_data",
+                                            "hide_caption": true,
+                                            "height": "100%"
+                                        },
+                                        {
+                                            "attribute_alias": "UID",
+                                            "hidden": true
+                                        },
+                                        {
+                                            "widget_type": "Display",
+                                            "value": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')",
+                                            "id": "row_nrs",
+                                            "hidden": true
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ],
+                    "buttons": [
+                        {
+                            "action_alias": "axenox.ETL.StepNoteExportRowNumbers",
+                            "close_dialog": false,
+                            "hidden_if": {
+                                "operator": "OR",
+                                "conditions": [
+                                    {
+                                        "value_left": "=row_nrs",
+                                        "comparator": "==",
+                                        "value_right": ""
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
             },
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "USE_IN_OBJECT_BASKET_FLAG": 0,
