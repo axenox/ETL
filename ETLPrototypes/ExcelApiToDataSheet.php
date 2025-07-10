@@ -161,7 +161,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Apply the mapper
         $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->isSkipInvalidRows());
 
         if($toSheet->countRows() === 0) {
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
