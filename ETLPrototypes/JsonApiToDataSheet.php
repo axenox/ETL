@@ -581,6 +581,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             switch (true) {
                 // If a x-lookup is used, transform into a lookup mapping.
                 case null !== $lookup = $propSchema->getLookupUxon():
+                    // If this property wasn't set explicitly, we make the lookup optional if its attribute isn't required.
+                    if(!$lookup->hasProperty('ignore_if_missing_from_column')) {
+                        $lookup->setProperty('ignore_if_missing_from_column', !$propSchema->isRequired());
+                    }
                     $attr = $propSchema->getAttribute();
                     switch (true) {
                         // If the lookup has a `to` property, we already know, in which column we
