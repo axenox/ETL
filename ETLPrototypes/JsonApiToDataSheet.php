@@ -11,7 +11,6 @@ use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
-use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -20,7 +19,6 @@ use exface\Core\Factories\DataSheetMapperFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
-use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
@@ -267,7 +265,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             return $result->setProcessedRowsCounter(0);
         }
         
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
+        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
         $logBook->addDataSheet('To-Sheet', $toSheet);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
@@ -285,8 +283,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $logBook,
-            $this->isSkipInvalidRows()
+            $logBook
         );
         
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
@@ -319,9 +316,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     ) : DataSheetInterface
     {
         if($rowByRow) {
+            $passLogBook = true;
             return $this->applyTransformRowByRow(
-                function ($data) use ($mapper, $logBook) {
-                    return $mapper->map($data, false, $logBook);
+                function ($data) use ($mapper, $logBook, &$passLogBook) {
+                    if($passLogBook) {
+                        $passLogBook = false;
+                        return $mapper->map($data, false, $logBook);
+                    } else {
+                        return $mapper->map($data, false);
+                    }
                 },
                 $fromSheet,
                 $stepData,
@@ -472,9 +475,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $saveSheet = $saveSheet->copy();
             $saveSheet->removeRows();
             $saveSheet->addRow($row, false, false);
-            if ($i > 0) {
-                $logBook->addSection('Saving row index ' . $i);
-            }
             try {
                 // Get the resulting data sheet of that single line and add it to the global
                 // result data
@@ -551,11 +551,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * @param DataSheetInterface $mappedSheet
-     * @param array              $placeholders
+     * @param DataSheetInterface   $mappedSheet
+     * @param array                $placeholders
+     * @param ETLStepDataInterface $stepData
      * @return DataSheetInterface
      */
-    protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders) : DataSheetInterface
+    protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders, ETLStepDataInterface $stepData) : DataSheetInterface
     {
         $baseSheet = $this->createBaseDataSheet($placeholders);
         
@@ -564,6 +565,24 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $mappedSheet->getColumns()->add($baseCol);
             }
         }
+        
+        foreach ($mappedSheet->getColumns() as $column) {
+            if(!$column->isFresh() && $column->isFormula()) {
+                try {
+                    $column->setValuesByExpression($column->getFormula());
+                    $column->setFresh(true);
+                } catch (\Throwable $e) {
+                    (new StepNote(
+                        $this->getWorkbench(),
+                        $stepData,
+                        'Cannot load column "' . $column->getName() . '" for base sheet! ' . $e->getMessage(),
+                        $e,
+                        MessageTypeDataType::WARNING
+                    ))->takeNote();
+                }
+            }
+        }
+        
         return $mappedSheet;
     }
 
