@@ -171,7 +171,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             return $result->setProcessedRowsCounter(0);
         }
         
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
+        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
         $logBook->addDataSheet('To-data', $toSheet);
 
         $logBook->addSection('Saving data');
@@ -185,8 +185,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $logBook,
-            $this->isSkipInvalidRows()
+            $logBook
         );
 
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
