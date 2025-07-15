@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Instructions [StepNoteInstructionsDialog]",
             "CREATED_ON": "2025-05-15 08:51:04",
-            "MODIFIED_ON": "2025-07-10 14:51:07",
+            "MODIFIED_ON": "2025-07-15 10:04:24",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f08b6df8b397b88b6d025041000001",
@@ -116,11 +116,37 @@
                             "hidden": true
                         },
                         {
-                            "~snippet": "axenox.ETL.StepNoteInstructions",
-                            "parameters": {
-                                "HideCaption": true,
-                                "FallbackDetails": "Check out the other notes for more information. If you cannot find what you are looking for and your issue persists, contact support."
+                            "attribute_alias": "message",
+                            "widget_type": "Text",
+                            "style": "bold",
+                            "hide_caption": true
+                        },
+                        {
+                            "widget_type": "Display",
+                            "attribute_alias": "message_code__HINT",
+                            "id": "message_hint",
+                            "hidden": true
+                        },
+                        {
+                            "widget_type": "Message",
+                            "value": "=Calc(message_code__HINT !== '' ? message_code__HINT : 'There are no detailed instructions for this note, yet. Check out the other notes for more information. If you cannot find what you are looking for and your issue persists, contact support.')",
+                            "type": "hint",
+                            "hide_caption": true,
+                            "hidden_if": {
+                                "operator": "AND",
+                                "conditions": [
+                                    {
+                                        "value_left": "=~self",
+                                        "comparator": "==",
+                                        "value_right": 1
+                                    }
+                                ]
                             }
+                        },
+                        {
+                            "attribute_alias": "message_code__DESCRIPTION",
+                            "widget_type": "Markdown",
+                            "hide_caption": true
                         }
                     ],
                     "buttons": [
@@ -187,7 +213,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Context [StepNoteContextDialog]",
             "CREATED_ON": "2025-07-10 10:38:36",
-            "MODIFIED_ON": "2025-07-10 14:49:25",
+            "MODIFIED_ON": "2025-07-15 10:03:16",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0853a453614a8853af308de4e6a45",
@@ -233,11 +259,36 @@
                                     "caption": "Info",
                                     "widgets": [
                                         {
-                                            "~snippet": "axenox.ETL.StepNoteInstructions",
-                                            "parameters": {
-                                                "HideCaption": false,
-                                                "FallbackDetails": "For more details, check out the other tabs in this dialog or the Debug Details for this step run."
+                                            "attribute_alias": "message",
+                                            "widget_type": "Text",
+                                            "style": "bold"
+                                        },
+                                        {
+                                            "widget_type": "Display",
+                                            "attribute_alias": "message_code__HINT",
+                                            "id": "message_hint",
+                                            "hidden": true
+                                        },
+                                        {
+                                            "widget_type": "Message",
+                                            "value": "=Calc(message_code__HINT !== '' ? message_code__HINT : 'There are no detailed instructions for this note, yet. For more details, check out the other tabs in this dialog or the Debug Details for this step run.')",
+                                            "type": "hint",
+                                            "hide_caption": true,
+                                            "hidden_if": {
+                                                "operator": "AND",
+                                                "conditions": [
+                                                    {
+                                                        "value_left": "=~self",
+                                                        "comparator": "==",
+                                                        "value_right": 1
+                                                    }
+                                                ]
                                             }
+                                        },
+                                        {
+                                            "attribute_alias": "message_code__DESCRIPTION",
+                                            "widget_type": "Markdown",
+                                            "hide_caption": true
                                         }
                                     ]
                                 },
