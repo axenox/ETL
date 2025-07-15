@@ -450,7 +450,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param string               $summaryPreamble
-     * @return DataSheetInterface
+     * @return DataSheetInterface|null
      */
     protected function applyTransformRowByRow(
         callable $transformer, 
@@ -458,7 +458,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
         string $summaryPreamble
-    ) : DataSheetInterface
+    ) : ?DataSheetInterface
     {
         // TODO pass func call with params 
         $saveSheet = $dataSheet;
