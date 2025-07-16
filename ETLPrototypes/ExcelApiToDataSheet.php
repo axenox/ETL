@@ -8,7 +8,6 @@ use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\SemanticVersionDataType;
-use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -75,7 +74,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
-    private $excelHasHeaderRow = true;
+    private int $firstRowIndex = 2;
 
     /**
      *
@@ -415,18 +414,26 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * Set to FALSE if the excel table does NOT have a header row with column names
-     * 
-     * @uxon-property excel_has_header_row
-     * @uxon-type boolean
-     * @uxon-default true
-     * 
-     * @param bool $trueOrFalse
-     * @return ExcelApiToDataSheet
+     * @deprecated 
      */
     protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
     {
-        $this->excelHasHeaderRow = $trueOrFalse;
+        $this->firstRowIndex = $trueOrFalse ? 2 : 1;
+        return $this;
+    }
+
+    /**
+     * When outputting row numbers, they will be counted starting from this number.
+     * 
+     * @uxon-property first_row_index
+     * @uxon-type integer
+     * 
+     * @param int $index
+     * @return ExcelApiToDataSheet
+     */
+    protected function setFirstRowIndex(int $index) : ExcelApiToDataSheet
+    {
+        $this->firstRowIndex = $index;
         return $this;
     }
     
@@ -436,6 +443,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
      */
     protected function getFromDataRowNumber(int $dataSheetRowIdx): int
     {
-        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
+        return $dataSheetRowIdx + $this->firstRowIndex;
     }
 }
