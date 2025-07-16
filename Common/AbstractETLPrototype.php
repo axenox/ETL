@@ -52,6 +52,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?UxonObject $fromDataChecksUxon = null;
     private CrudCounter $crudCounter;
     private array $logBooks = [];
+    private array $metaObjectModifiers = [];
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -341,7 +342,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $note->setCountErrors(count($e->getAllErrors()));
                 $note->addRowsAsContext(
                     $badDataForCheck->getRows(10),
-                    $e->getAllRowNumbers()
+                    array_map(function ($number) {return $this->getFromDataRowNumber($number);}, $e->getAllRowNumbers())
                 );
                 $note->takeNote();
             }
@@ -459,5 +460,22 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             return $this->logBooks[0]->createDebugWidget($debug_widget);
         }
         return $this->getLogBook($stepData)->createDebugWidget($debug_widget);
+    }
+
+    /**
+     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view
+     * of a human.
+     *
+     * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
+     * the data sheet - so the row index matches visually. However, if the from-data was an excel,
+     * the row numbering starts with 1 AND the excel often has a header-row, so the data sheet row
+     * 7 will correspond to excel line 9 from the point of view of the user.
+     *
+     * @param int $dataSheetRowIdx
+     * @return int
+     */
+    protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
+    {
+        return $dataSheetRowIdx;
     }
 }
