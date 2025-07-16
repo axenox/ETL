@@ -12,6 +12,7 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
@@ -190,7 +191,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     private $propertiesMapperUxon = null;
     private $outputMapperUxon = null;
     private $skipInvalidRows = false;
-
+    
     /**
      *
      * {@inheritDoc}
@@ -435,12 +436,38 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         // If no row actually worked, we will not have a result sheet at all. This means, nothing was
         // written. However, it is easier to understand, what happened if we return an empty sheet
-        // and not NULL, so we just compy the to-sheet and empty it.
-        if ($resultSheet === null) {
-            $resultSheet = $toSheet->copy()->removeRows();
+        // and not NULL, so we just copy the to-sheet and empty it.
+        if ($resultSheet === null || $resultSheet->countRows() === 0) {
+            throw new RuntimeException('All input rows failed to write or skipped due to errors!');
         }
 
         return $resultSheet;
+    }
+
+    /**
+     * @param DataSheetInterface $data
+     * @return DataSheetInterface
+     */
+    protected function performWrite(
+        DataSheetInterface   $data,
+    ) : DataSheetInterface
+    {
+        if ($data->isEmpty()) {
+            return $data;
+        }
+
+        $transaction = $this->getWorkbench()->data()->startTransaction();
+
+        try {
+            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+            // that can be used to update known entire
+            $data->dataCreate(false, $transaction);
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+
+        $transaction->commit();
+        return $data;
     }
 
     /**
@@ -525,32 +552,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * @param DataSheetInterface $data
-     * @return DataSheetInterface
-     */
-    protected function performWrite(
-        DataSheetInterface   $data,
-    ) : DataSheetInterface
-    {
-        if ($data->isEmpty()) {
-            return $data;
-        }
-
-        $transaction = $this->getWorkbench()->data()->startTransaction();
-
-        try {
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $data->dataCreate(false, $transaction);
-        } catch (\Throwable $e) {
-            throw $e;
-        }
-
-        $transaction->commit();
-        return $data;
-    }
-
-    /**
      * @param DataSheetInterface   $mappedSheet
      * @param array                $placeholders
      * @param ETLStepDataInterface $stepData
@@ -565,7 +566,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $mappedSheet->getColumns()->add($baseCol);
             }
         }
-        
         foreach ($mappedSheet->getColumns() as $column) {
             if(!$column->isFresh() && $column->isFormula()) {
                 try {
@@ -604,7 +604,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     if(!$lookup->hasProperty('ignore_if_missing_from_column')) {
                         $lookup->setProperty('ignore_if_missing_from_column', !$propSchema->isRequired());
                     }
+                    
                     $attr = $propSchema->getAttribute();
+                
                     switch (true) {
                         // If the lookup has a `to` property, we already know, in which column we
                         // need to place the value. If we have an x-attribute-alias too, we will
@@ -913,23 +915,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function isSkipInvalidRows() : bool
     {
         return $this->skipInvalidRows;
-    }
-
-    /**
-     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view
-     * of a human.
-     * 
-     * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
-     * the data sheet - so the row index matches visually. However, if the from-data was an excel,
-     * the row numbering starts with 1 AND the excel often has a header-row, so the data sheet row
-     * 7 will correspond to excel line 9 from the point of view of the user.
-     * 
-     * @param int $dataSheetRowIdx
-     * @return int
-     */
-    protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
-    {
-        return $dataSheetRowIdx;
     }
 
     protected function getTranslator() : TranslationInterface
