@@ -434,10 +434,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $resultSheet = $this->performWrite($toSheet);
         }
 
-        // If no row actually worked, we will not have a result sheet at all. This means, nothing was
-        // written. However, it is easier to understand, what happened if we return an empty sheet
-        // and not NULL, so we just copy the to-sheet and empty it.
-        if ($resultSheet === null || $resultSheet->countRows() === 0) {
+        // If no row actually worked, nothing was written, and we will report a failed step.
+        if ($resultSheet->countRows() === 0) {
             throw new RuntimeException('All input rows failed to write or skipped due to errors!');
         }
 
@@ -488,7 +486,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
         string $summaryPreamble
-    ) : ?DataSheetInterface
+    ) : DataSheetInterface
     {
         // TODO pass func call with params 
         $saveSheet = $dataSheet;
@@ -546,6 +544,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
             $note->addRowsAsContext($affectedRows, $affectedRowNrs);
             $note->takeNote();
+        }
+        
+        if($resultSheet === null) {
+            $resultSheet = $dataSheet->copy()->removeRows();
         }
         
         return $resultSheet;
