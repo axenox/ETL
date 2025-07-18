@@ -7,6 +7,7 @@ use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
@@ -240,6 +241,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook->addLine("Read {$fromSheet->countRows()} rows from JSON into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('JSON data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+
+        $this->startTrackingData(
+            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
+            $stepData,
+            $logBook
+        );
         
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
@@ -290,6 +297,20 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
+    
+    protected function getUidColumnsFromSchema(APIObjectSchemaInterface $schema, DataSheetInterface $dataSheet) : array
+    {
+        $columns = [];
+        $columnsFromData = $dataSheet->getColumns();
+
+        foreach ($schema->getUidProperties() as $prop) {
+            if($columnsFromData->has($prop)) {
+                $columns[] = $columnsFromData->get($prop);
+            }
+        }
+        
+        return $columns;
+    }
 
     /**
      * @param DataSheetMapperInterface $mapper
@@ -308,56 +329,91 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         bool $rowByRow
     ) : DataSheetInterface
     {
+        // Setup for data tracking.
+        $fromTrackedAliases = $this->getTrackedAliases();
+        $toTrackedAliases = [];
+        
+        foreach ($mapper->getMappings() as $mapping) {
+            // TODO Are there other mappings, where one column might transform into another?
+            if(!$mapping instanceof  DataColumnMapping) {
+                continue;
+            }
+            
+            $fromAlias = $mapping->getFromExpression()->getAttributeAlias();
+            if(key_exists($fromAlias, $fromTrackedAliases)) {
+                $toTrackedAliases[$fromAlias] = $mapping->getToExpression()->getAttributeAlias();
+            }
+        }
+        $toTrackedAliases = array_merge($fromTrackedAliases, $toTrackedAliases);
+        
         if($rowByRow) {
             $passLogBook = true;
-            return $this->applyTransformRowByRow(
-                function ($data) use ($mapper, $logBook, &$passLogBook) {
+            $toSheet = $this->applyTransformRowByRow(
+                function ($i, $data) use (
+                    $mapper, 
+                    $logBook, 
+                    &$passLogBook, 
+                    $fromTrackedAliases,
+                    $toTrackedAliases
+                ) {
+                    
                     if($passLogBook) {
                         $passLogBook = false;
-                        return $mapper->map($data, false, $logBook);
+                        $result = $mapper->map($data, false, $logBook);
                     } else {
-                        return $mapper->map($data, false);
+                        $result = $mapper->map($data, false);
                     }
+                    
+                    $this->recordDataTransform(
+                        $data->getColumns()->getMultiple($fromTrackedAliases),
+                        $result->getColumns()->getMultiple($toTrackedAliases)
+                    );
+                    
+                    return $result;
                 },
                 $fromSheet,
                 $stepData,
                 $logBook,
                 'Mapper Applied'
             );
-        }
-        
-        $translator = $this->getTranslator();
-        $affectedRows = [];
-        $affectedRowNrs = [];
+        } else {
+            $translator = $this->getTranslator();
+            $affectedRows = [];
+            $affectedRowNrs = [];
 
-        try {
-            // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
-            $toSheet = $mapper->map($fromSheet, false, $logBook);
-        } catch (\Throwable $exception) {
+            try {
+                // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
+                $toSheet = $mapper->map($fromSheet, false, $logBook);
+                $this->recordDataTransform(
+                    $fromSheet->getColumns()->getMultiple($fromTrackedAliases),
+                    $toSheet->getColumns()->getMultiple($toTrackedAliases)
+                );
+            } catch (\Throwable $exception) {
 
-            $prev = $exception->getPrevious();
-            if($prev instanceof DataSheetInvalidValueError) {
-                foreach ($prev->getRowIndexes() as $rowNumber) {
-                    if($rowNumber <= 10) {
-                        $affectedRows[] = $fromSheet->getRow($rowNumber);
+                $prev = $exception->getPrevious();
+                if($prev instanceof DataSheetInvalidValueError) {
+                    foreach ($prev->getRowIndexes() as $rowNumber) {
+                        if($rowNumber <= 10) {
+                            $affectedRows[] = $fromSheet->getRow($rowNumber);
+                        }
+                        $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
                     }
-                    $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
                 }
+
+                $note = StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $exception,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
+                );
+
+                if(!empty($affectedRowNrs)) {
+                    $note->addRowsAsContext($affectedRows, $affectedRowNrs);
+                }
+
+                $note->takeNote();
+                throw $exception;
             }
-
-            $note = StepNote::fromException(
-                $this->getWorkbench(),
-                $stepData,
-                $exception,
-                $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
-            );
-
-            if(!empty($affectedRowNrs)) {
-                $note->addRowsAsContext($affectedRows, $affectedRowNrs);
-            }
-
-            $note->takeNote();
-            throw $exception;
         }
 
         return $toSheet;
@@ -393,7 +449,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             
             // Perform write.
             $resultSheet = $this->applyTransformRowByRow(
-                function ($data) {
+                function ($i, $data) {
                     return $this->performWrite($data);
                 },
                 $toSheet,
@@ -459,7 +515,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param string               $summaryPreamble
-     * @return DataSheetInterface|null
+     * @return DataSheetInterface
      */
     protected function applyTransformRowByRow(
         callable $transformer, 
@@ -484,7 +540,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             try {
                 // Get the resulting data sheet of that single line and add it to the global
                 // result data
-                $rowResultSheet = call_user_func($transformer, $saveSheet);
+                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
                 //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
                 if ($resultSheet === null) {
                     $resultSheet = $rowResultSheet;
@@ -496,7 +552,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             } catch (\Throwable $e) {
                 // If anything goes wrong, just continue with the next row.
                 $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
-
+                $baseData = $this->getBaseData($saveSheet);
                 if(count($affectedRows) <= 10) {
                     $affectedRows[] = $row;
                 }
@@ -571,14 +627,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
     /**
      * 
-     * @param \exface\Core\Interfaces\Model\MetaObjectInterface $fromObj
-     * @param \axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface $toObjectSchema
+     * @param MetaObjectInterface      $fromObj
+     * @param APIObjectSchemaInterface $toObjectSchema
      * @return DataSheetMapperInterface
      */
-    protected function getPropertiesToDataSheetMapper(MetaObjectInterface $fromObj, APIObjectSchemaInterface $toObjectSchema) : DataSheetMapperInterface
+    protected function getPropertiesToDataSheetMapper(
+        MetaObjectInterface $fromObj, 
+        APIObjectSchemaInterface $toObjectSchema
+    ) : DataSheetMapperInterface
     {
         $col2col = [];
         $lookups = [];
+        $object = $toObjectSchema->getMetaObject();
+
         foreach ($toObjectSchema->getProperties() as $propName => $propSchema) {
             switch (true) {
                 // If a x-lookup is used, transform into a lookup mapping.
@@ -636,7 +697,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
         $uxon = new UxonObject([
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
-            'to_object_alias' => $toObjectSchema->getMetaObject()->getAliasWithNamespace()
+            'to_object_alias' => $object->getAliasWithNamespace()
         ]);
         if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
             $uxon = $customMapperUxon->extend($uxon);
@@ -698,8 +759,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * 
-     * @return UxonObject
+     *
+     * @return array
      */
     protected function getOutputMappers() : array
     {
@@ -714,11 +775,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     }
 
     /**
-     * 
-     * @param array $requestBody
-     * @param array $toObjectSchema
-     * @param string|null $key
-     * @param string $objectAlias
+     *
+     * @param array                    $data
+     * @param APIObjectSchemaInterface $toObjectSchema
      * @return DataSheetInterface
      */
     protected function readJson(array $data, APIObjectSchemaInterface $toObjectSchema) : DataSheetInterface
@@ -738,7 +797,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $row = $this->readJsonRow($data, $toObjectSchema);
             $dataSheet->addRow($row);
         }
-        
+
         return $dataSheet;
     }
 
@@ -768,13 +827,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 '',
                 $propSchema->guessDataType()
             );
-        }
-
-        if (null !== $uidPropName = $schema->getUidPropertyName()) {
-            $result->setUidAttributeAlias($uidPropName);
-        }
-        if (null !== $labelPropName = $schema->getLabelPropertyName()) {
-            $result->setLabelAttributeAlias($labelPropName);
         }
         
         return $result;

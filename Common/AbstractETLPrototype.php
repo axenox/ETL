@@ -4,8 +4,12 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\DataSheets\DataSheet;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use exface\Core\CommonLogic\Utils\DataTracker;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -53,7 +57,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?UxonObject $fromDataChecksUxon = null;
     private CrudCounter $crudCounter;
     private array $logBooks = [];
-    private array $metaObjectModifiers = [];
+    private ?DataTracker $dataTracker = null;
+    private array $trackedAliases = [];
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -485,5 +490,109 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
     {
         return $dataSheetRowIdx;
+    }
+    
+    protected function columnsToRows(array $columns) : array
+    {
+        $result = [];
+        
+        foreach ($columns as $column) {
+            $alias = $column->getAttributeAlias();
+            foreach ($column->getValues() as $rowNr => $value) {
+                $result[$rowNr][$alias] = $value;
+            }
+        }
+        
+        return $result;
+    }
+    
+    protected function startTrackingData(array $columns, ETLStepDataInterface $stepData, FlowStepLogBook $logBook) : bool
+    {
+        if($this->dataTracker !== null || empty($columns)) {
+            return false;
+        }
+
+        try {
+            $this->dataTracker = new DataTracker($this->columnsToRows($columns));
+        } catch (DataTrackerException $exception) {
+            StepNote::fromException(
+                $this->getWorkbench(),
+                $stepData,
+                $exception,
+                null,
+                false
+            )->addRowsAsContext(
+                $exception->getBadData()
+            )->setMessageType(
+                MessageTypeDataType::WARNING
+            )->takeNote();
+            
+            $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
+        }
+
+        $this->updateTrackedAliases($columns);
+        return true;
+    }
+    
+    private function updateTrackedAliases(array $columns) : void
+    {
+        $this->trackedAliases = [];
+        
+        foreach ($columns as $column) {
+            $alias = $column->getAttributeAlias();
+            $this->trackedAliases[$alias] = $alias;
+        }
+    }
+    
+    protected function isTrackedAlias(string $alias) : bool
+    {
+        return key_exists($alias, $this->trackedAliases);
+    }
+    
+    protected function getTrackedAliases() : array
+    {
+        return $this->trackedAliases;
+    }
+    
+    protected function recordDataTransform(
+        array $fromColumns,
+        array $toColumns,
+        int $preferredVersion = -1
+    ) : false|int
+    {
+        if($this->dataTracker === null) {
+            return false;
+        }
+
+        $result = $this->dataTracker->recordDataTransform(
+            $this->columnsToRows($fromColumns),
+            $this->columnsToRows($toColumns),
+            $preferredVersion
+        );
+        
+        if($result > -1) {
+            $this->updateTrackedAliases($toColumns);
+        }
+        
+        return $result;
+    }
+    
+    protected function getVersionForData(array $columns) : int
+    {
+        if($this->dataTracker === null) {
+            return 0;
+        }
+        
+        return $this->dataTracker->getLatestVersionForData($this->columnsToRows($columns));
+    }
+    
+    protected function getBaseData(DataSheet $dataSheet) : false|array
+    {
+        if($this->dataTracker === null) {
+            return false;
+        }
+        
+        $columns = $dataSheet->getColumns()->getMultiple($this->trackedAliases);
+        return $this->dataTracker->getBaseData($this->columnsToRows($columns));
     }
 }
