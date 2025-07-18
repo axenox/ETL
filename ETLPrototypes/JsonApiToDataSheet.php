@@ -433,12 +433,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             
             $resultSheet = $this->performWrite($toSheet);
         }
-
         // If no row actually worked, nothing was written, and we will report a failed step.
         if ($resultSheet->countRows() === 0) {
-            throw new RuntimeException('All input rows failed to write or skipped due to errors!');
+            throw new RuntimeException('All input rows failed to write or skipped due to errors!', '81VV7ZF');
         }
-
+        
         return $resultSheet;
     }
 

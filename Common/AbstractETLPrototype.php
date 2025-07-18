@@ -6,6 +6,7 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -352,6 +353,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             $logBook->addDataSheet($uxonProperty . ': Bad Data', $badData);
         }
 
+        if($dataSheet->countRows() === 0) {
+            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
+            $logBook->addLine($msg);
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
+        }
+        
         if($errors === null) {
             $logBook->addLine('Data PASSED all checks.');
         } else if ($stopOnError) {
