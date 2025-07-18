@@ -244,14 +244,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
-        if($fromSheet->countRows() === 0) {
-            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
-            yield $msg . PHP_EOL;
-            $logBook->addLine($msg);
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
-        }
         
         $logBook->addSection('Filling to-sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
@@ -397,11 +389,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // writes for each row, so it will end up here anyway.
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-
-                if($toSheet->countRows() === 0) {
-                    $logBook->addLine('All input rows removed by failed data checks.');
-                    return $toSheet;
-                }
             }
             
             // Perform write.
@@ -424,23 +411,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // writes for each row, so it will end up here anyway
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-
-                if($toSheet->countRows() === 0) {
-                    $logBook->addLine('All input rows removed by failed data checks.');
-                    return $toSheet;
-                }
             }
             
             $resultSheet = $this->performWrite($toSheet);
         }
-
-        // If no row actually worked, we will not have a result sheet at all. This means, nothing was
-        // written. However, it is easier to understand, what happened if we return an empty sheet
-        // and not NULL, so we just copy the to-sheet and empty it.
-        if ($resultSheet === null || $resultSheet->countRows() === 0) {
-            throw new RuntimeException('All input rows failed to write or skipped due to errors!');
+        // If no row actually worked, nothing was written, and we will report a failed step.
+        if ($resultSheet->countRows() === 0) {
+            throw new RuntimeException('All input rows failed to write or skipped due to errors!', '81VV7ZF');
         }
-
+        
         return $resultSheet;
     }
 
@@ -488,7 +467,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
         string $summaryPreamble
-    ) : ?DataSheetInterface
+    ) : DataSheetInterface
     {
         // TODO pass func call with params 
         $saveSheet = $dataSheet;
@@ -546,6 +525,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
             $note->addRowsAsContext($affectedRows, $affectedRowNrs);
             $note->takeNote();
+        }
+        
+        if($resultSheet === null) {
+            $resultSheet = $dataSheet->copy()->removeRows();
         }
         
         return $resultSheet;

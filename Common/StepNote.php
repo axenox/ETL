@@ -77,6 +77,11 @@ class StepNote implements NoteInterface
             
             if($exception instanceof ExceptionInterface) {
                 $this->exceptionLogId = $exception->getId();
+                
+                if(empty($this->messageCode)) {
+                    $this->messageCode = $exception->getAlias();
+                }
+                
                 if ($this->message === "") {
                     switch (true) {
                         /* TODO Create DataSheetValueExceptionInterface and implement it
@@ -112,8 +117,8 @@ class StepNote implements NoteInterface
     ) : StepNote 
     {
         $note = new StepNote($workbench, $stepData);
-        $note->setException($exception);
         $note->importUxonObject($uxon);
+        $note->setException($exception);
         return $note;
     }
 
@@ -335,6 +340,9 @@ class StepNote implements NoteInterface
         $this->exceptionFlag = (bool)$exception;
         $this->exceptionMessage = $exception?->getMessage();
         $this->exceptionLogId = $exception?->getId();
+        if(empty($this->messageCode) && $exception instanceof ExceptionInterface) {
+            $this->messageCode = $exception->getAlias();
+        }
     }
 
     /**
