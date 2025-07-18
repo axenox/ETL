@@ -244,14 +244,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
-        if($fromSheet->countRows() === 0) {
-            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
-            yield $msg . PHP_EOL;
-            $logBook->addLine($msg);
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
-        }
         
         $logBook->addSection('Filling to-sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
@@ -397,11 +389,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // writes for each row, so it will end up here anyway.
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-
-                if($toSheet->countRows() === 0) {
-                    $logBook->addLine('All input rows removed by failed data checks.');
-                    return $toSheet;
-                }
             }
             
             // Perform write.
@@ -424,11 +411,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             // writes for each row, so it will end up here anyway
             if (null !== $checksUxon = $this->getToDataChecksUxon()) {
                 $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-
-                if($toSheet->countRows() === 0) {
-                    $logBook->addLine('All input rows removed by failed data checks.');
-                    return $toSheet;
-                }
             }
             
             $resultSheet = $this->performWrite($toSheet);
