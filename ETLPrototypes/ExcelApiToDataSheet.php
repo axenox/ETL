@@ -148,14 +148,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
-        if($fromSheet->countRows() === 0) {
-            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
-            yield $msg . PHP_EOL;
-            $logBook->addLine($msg);
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
-        }
 
         // Apply the mapper
         $logBook->addSection('Filling data sheet');
