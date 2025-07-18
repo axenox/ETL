@@ -132,7 +132,13 @@ class StepNote implements NoteInterface
      * @param bool                 $showRowNumbers
      * @return StepNote
      */
-    public static function fromException(WorkbenchInterface $workbench, ETLStepDataInterface $stepData, \Throwable $exception, string $preamble = null, bool $showRowNumbers = true) : NoteInterface
+    public static function fromException(
+        WorkbenchInterface $workbench, 
+        ETLStepDataInterface $stepData, 
+        \Throwable $exception, 
+        string $preamble = null, 
+        bool $showRowNumbers = true
+    ) : StepNote
     {
         if ($exception instanceof ExceptionInterface) {
             $logLevel = $exception->getLogLevel();
@@ -164,7 +170,10 @@ class StepNote implements NoteInterface
             $exception,
             $msgType
         );
-        $note->setMessageCode($code);
+        
+        if($code !== null) {
+            $note->setMessageCode($code);
+        }
 
         return $note;
     }

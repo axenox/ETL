@@ -55,12 +55,12 @@ interface APIObjectSchemaInterface
     /**
      * @return bool
      */
-    public function hasUidProperty() : bool;
+    public function hasUidProperties() : bool;
 
     /**
      * @return string|null
      */
-    public function getUidPropertyName() : ?string;
+    public function getUidProperties() : null|array;
 
     /**
      * @return bool

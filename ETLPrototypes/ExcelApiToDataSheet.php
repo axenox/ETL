@@ -121,10 +121,17 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
+        $this->startTrackingData(
+            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
+            $stepData,
+            $logBook
+        );
+
         // Validate data in the from-sheet against the JSON schema
         $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
@@ -349,7 +356,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // getting completely empty rows, that cannot be used for imports anyway.
         $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
         $this->getCrudCounter()->addObject($fakeObj);
-
+        
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
             if ($excelColName === null || $excelColName === '') {
@@ -365,13 +372,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
                 $excelAddress, 
                 $propSchema->guessDataType()
             );
-        }
-
-        if (null !== $uidPropName = $toObjectSchema->getUidPropertyName()) {
-            $fakeObj->setUidAttributeAlias($uidPropName);
-        }
-        if (null !== $labelPropName = $toObjectSchema->getLabelPropertyName()) {
-            $fakeObj->setLabelAttributeAlias($labelPropName);
         }
 
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
