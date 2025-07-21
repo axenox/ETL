@@ -4,7 +4,6 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
-use exface\Core\CommonLogic\DataSheets\DataSheet;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\Utils\DataTracker;
 use exface\Core\DataTypes\MessageTypeDataType;
@@ -12,6 +11,7 @@ use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -318,6 +318,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $stopOnError = false;
         $badDataBase = $dataSheet->copy()->removeRows();
         $badData = $badDataBase->copy();
+        $translator = $this->getTranslator();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -343,14 +344,21 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $stopOnError |= $check->getStopOnCheckFailed();
                 
                 $badData->addRows($badDataForCheck->getRows());
+
+
+                $failToFind = [];
+                $baseData = $this->getBaseData($badDataForCheck, $failToFind);
                 
-                $note = $check->getNoteOnFailure($stepData, $e);
-                $note->setCountErrors(count($e->getAllErrors()));
-                $note->addRowsAsContext(
-                    $badDataForCheck->getRows(10),
-                    array_map(function ($number) {return $this->getFromDataRowNumber($number);}, $e->getAllRowNumbers())
-                );
-                $note->takeNote();
+                $check->getNoteOnFailure(
+                    $stepData, 
+                    $e
+                )->enrichWithAffectedData(
+                    $baseData,
+                    $failToFind,
+                    $translator
+                )->setCountErrors(
+                    count($e->getAllErrors())
+                )->takeNote();
             }
         }
         
@@ -476,18 +484,24 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
-     * Returns the row number in the from-data, that corresponds to the given data sheet index from the point of view
-     * of a human.
-     *
-     * For example, if the from-data is a JSON array, it's row numbering starts with 0 just like in
-     * the data sheet - so the row index matches visually. However, if the from-data was an excel,
-     * the row numbering starts with 1 AND the excel often has a header-row, so the data sheet row
-     * 7 will correspond to excel line 9 from the point of view of the user.
-     *
+     * Converts a data sheet row number to a display row number that allows humans
+     * to identify this row in their input data.
+     * 
+     * For example, in an EXCEL-Import, where the spreadsheet has a title row, the row number
+     * will be shifted up by 2: 
+     * 
+     * - +1, because EXCEL starts counting from 1.
+     * - +1, to compensate for the title row.
+     * 
+     * Row 0 would become row 2 and so on.
+     * 
+     * NOTE: This function does not find the index your row had in the original data set!
+     * Use `findDisplayRowNumbers(array)` to find out what index a row had in the from-data.
+     * 
      * @param int $dataSheetRowIdx
      * @return int
      */
-    protected function getFromDataRowNumber(int $dataSheetRowIdx) : int
+    protected function toDisplayRowNumber(int $dataSheetRowIdx) : int
     {
         return $dataSheetRowIdx;
     }
@@ -586,13 +600,35 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return $this->dataTracker->getLatestVersionForData($this->columnsToRows($columns));
     }
     
-    protected function getBaseData(DataSheet $dataSheet) : false|array
+    protected function getBaseData(DataSheetInterface $dataSheet,  array &$failedToFind) : array
     {
         if($this->dataTracker === null) {
-            return false;
+            return [];
         }
-        
+
+        $failedToFindIndices = [];
         $columns = $dataSheet->getColumns()->getMultiple($this->trackedAliases);
-        return $this->dataTracker->getBaseData($this->columnsToRows($columns));
+        $baseData = $this->dataTracker->getBaseData($this->columnsToRows($columns), $failedToFindIndices);
+        
+        if($baseData === false) {
+            return [];
+        }
+
+        foreach ($failedToFindIndices as $rowNr) {
+            $failedToFind[$this->toDisplayRowNumber($rowNr)] = $dataSheet->getRow($rowNr);
+        }
+
+        return array_combine(
+            array_map(
+                [$this, 'toDisplayRowNumber'],
+                array_keys($baseData)
+            ),
+            $baseData
+        );
+    }
+
+    protected function getTranslator() : TranslationInterface
+    {
+        return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
     }
 }

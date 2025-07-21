@@ -431,9 +431,9 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     
     /**
      * {@inheritDoc}
-     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     * @see JsonApiToDataSheet::toDisplayRowNumber()
      */
-    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    protected function toDisplayRowNumber(int $dataSheetRowIdx): int
     {
         return $dataSheetRowIdx + $this->firstRowIndex;
     }
