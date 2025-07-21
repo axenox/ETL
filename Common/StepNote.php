@@ -11,11 +11,11 @@ use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
-use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
 
@@ -568,6 +568,49 @@ class StepNote implements NoteInterface
                 'row_numbers' => $rowNumbers
             ]]
         );
+        
+        return $this;
+    }
+
+    /**
+     * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
+     * adding a row summary to the message.
+     * 
+     * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
+     * 
+     * @param array                $baseData
+     * @param array                $currentData
+     * @param TranslationInterface $translator
+     * @param bool                 $prepend
+     * @return $this
+     */
+    public function enrichWithAffectedData(
+        array $baseData,
+        array $currentData,
+        TranslationInterface $translator,
+        bool $prepend = true
+    ) : StepNote
+    {
+        $baseRowNrs = array_keys($baseData);
+        $currentRowNrs = array_keys($currentData);
+
+        $msgBaseRowNrs = implode(', ', $baseRowNrs);
+        $msgCurrentRowNrs = implode('*, ', $currentRowNrs);
+        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
+        $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
+        $msg = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $msgAllRows], count($baseData) + count($currentData));
+
+        if($prepend) {
+            $this->setMessage($msg . ' ' . $this->getMessage());
+        } else {
+            $this->setMessage($this->getMessage() . ' ' . $msg);
+        }
+
+        $baseData = array_slice($baseData, 0, 10, true);
+        $currentData = array_slice($baseData, 0, 10, true);
+
+        $this->addRowsAsContext($baseData, $baseRowNrs);
+        $this->addRowsAsContext($currentData, $currentRowNrs, 'affected_rows_current');
         
         return $this;
     }

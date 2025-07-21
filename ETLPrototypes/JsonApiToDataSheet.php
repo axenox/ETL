@@ -378,9 +378,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             );
         } else {
             $translator = $this->getTranslator();
-            $affectedRows = [];
-            $affectedRowNrs = [];
-
+            
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
@@ -389,29 +387,25 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $toSheet->getColumns()->getMultiple($toTrackedAliases)
                 );
             } catch (\Throwable $exception) {
-
+                $failedToFind = [];
+                $baseData = [];
+                
                 $prev = $exception->getPrevious();
                 if($prev instanceof DataSheetInvalidValueError) {
-                    foreach ($prev->getRowIndexes() as $rowNumber) {
-                        if($rowNumber <= 10) {
-                            $affectedRows[] = $fromSheet->getRow($rowNumber);
-                        }
-                        $affectedRowNrs[] = $this->getFromDataRowNumber($rowNumber);
-                    }
+                    $errorSheet = $fromSheet->copy()->removeRows()->addRows($prev->getRowIndexes());
+                    $baseData = $this->getBaseData($errorSheet, $failedToFind);
                 }
 
-                $note = StepNote::fromException(
+                StepNote::fromException(
                     $this->getWorkbench(),
                     $stepData,
-                    $exception,
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs))
-                );
-
-                if(!empty($affectedRowNrs)) {
-                    $note->addRowsAsContext($affectedRows, $affectedRowNrs);
-                }
-
-                $note->takeNote();
+                    $exception
+                )->enrichWithAffectedData(
+                    $baseData,
+                    $failedToFind,
+                    $translator
+                )->takeNote();
+                
                 throw $exception;
             }
         }
@@ -530,8 +524,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $resultSheet = null;
         $translator = $this->getTranslator();
         
-        $affectedRows = [];
-        $affectedRowNrs = [];
+        $affectedBaseData = [];
+        $affectedCurrentData = [];
         
         foreach ($dataSheet->getRows() as $i => $row) {
             $saveSheet = $saveSheet->copy();
@@ -552,12 +546,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             } catch (\Throwable $e) {
                 // If anything goes wrong, just continue with the next row.
                 $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
-                $baseData = $this->getBaseData($saveSheet);
-                if(count($affectedRows) <= 10) {
-                    $affectedRows[] = $row;
+
+                $failedToFind = [];
+                $baseData = $this->getBaseData($saveSheet, $failedToFind);
+                if(!empty($baseData)) {
+                    $rowNo = array_key_first($baseData);
+                    $affectedBaseData[$rowNo] = $baseData[$rowNo];
+                } else {
+                    $rowNo = array_key_first($failedToFind);
+                    $affectedCurrentData[$rowNo] = $failedToFind[$rowNo];
                 }
-                $rowNo = $this->getFromDataRowNumber($i);
-                $affectedRowNrs[] = $rowNo;
                 
                 StepNote::fromException(
                     $this->getWorkbench(),
@@ -569,18 +567,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
         }
 
-        if(!empty($affectedRowNrs)) {
-            $lineReport = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => '(' . implode(', ', $affectedRowNrs) . ')'], count($affectedRowNrs));
-            $note = new StepNote(
+        if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
+            (new StepNote(
                 $this->getWorkbench(),
                 $stepData,
-                $summaryPreamble . ': ' . $lineReport,
+                $summaryPreamble . ': ',
                 null,
                 MessageTypeDataType::WARNING
-            );
-
-            $note->addRowsAsContext($affectedRows, $affectedRowNrs);
-            $note->takeNote();
+            ))->enrichWithAffectedData(
+                $affectedBaseData,
+                $affectedCurrentData,
+                $translator,
+                false
+            )->takeNote();
         }
         
         if($resultSheet === null) {
@@ -950,10 +949,5 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function isSkipInvalidRows() : bool
     {
         return $this->skipInvalidRows;
-    }
-
-    protected function getTranslator() : TranslationInterface
-    {
-        return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
     }
 }
