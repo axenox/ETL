@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2024-09-09 09:21:59",
     "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-    "modified_on": "2025-07-16 14:58:06",
+    "modified_on": "2025-07-22 13:30:53",
     "contents": {
         "object_alias": "axenox.ETL.file_flow",
         "widget_type": "SplitHorizontal",
@@ -214,6 +214,10 @@
                                             {
                                                 "caption": "Affected Rows",
                                                 "calculation": "=JsonExtract(context_data,'$.affected_rows.row_numbers[:]')"
+                                            },
+                                            {
+                                                "caption": "Affected Rows (*Unreliable)",
+                                                "calculation": "=JsonExtract(context_data,'$.affected_rows_current.row_numbers[:]')"
                                             }
                                         ],
                                         "sorters": [
