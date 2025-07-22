@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Instructions [StepNoteInstructionsDialog]",
             "CREATED_ON": "2025-05-15 08:51:04",
-            "MODIFIED_ON": "2025-07-15 10:04:24",
+            "MODIFIED_ON": "2025-07-22 14:04:10",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f08b6df8b397b88b6d025041000001",
@@ -129,7 +129,7 @@
                         },
                         {
                             "widget_type": "Message",
-                            "value": "=Calc(message_code__HINT !== '' ? message_code__HINT : 'There are no detailed instructions for this note, yet. Check out the other notes for more information. If you cannot find what you are looking for and your issue persists, contact support.')",
+                            "value": "=Calc((message_code__HINT !== '' && !IsNull(message_code__HINT)) ? message_code__HINT : 'There are no detailed instructions for this note, yet. Check out the other notes for more information. If you cannot find what you are looking for and your issue persists, contact support.')",
                             "type": "hint",
                             "hide_caption": true,
                             "hidden_if": {
@@ -219,7 +219,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Context [StepNoteContextDialog]",
             "CREATED_ON": "2025-07-10 10:38:36",
-            "MODIFIED_ON": "2025-07-15 10:03:16",
+            "MODIFIED_ON": "2025-07-22 14:04:31",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0853a453614a8853af308de4e6a45",
@@ -277,7 +277,7 @@
                                         },
                                         {
                                             "widget_type": "Message",
-                                            "value": "=Calc(message_code__HINT !== '' ? message_code__HINT : 'There are no detailed instructions for this note, yet. For more details, check out the other tabs in this dialog or the Debug Details for this step run.')",
+                                            "value": "=Calc((message_code__HINT !== '' && !IsNull(message_code__HINT)) ? message_code__HINT : 'There are no detailed instructions for this note, yet. For more details, check out the other tabs in this dialog or the Debug Details for this step run.')",
                                             "type": "hint",
                                             "hide_caption": true,
                                             "hidden_if": {
