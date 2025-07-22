@@ -295,7 +295,14 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
-    
+
+    /**
+     * Returns all columns from the `x-object-uid` property in the schema.
+     * 
+     * @param APIObjectSchemaInterface $schema
+     * @param DataSheetInterface       $dataSheet
+     * @return array
+     */
     protected function getUidColumnsFromSchema(APIObjectSchemaInterface $schema, DataSheetInterface $dataSheet) : array
     {
         $columns = [];

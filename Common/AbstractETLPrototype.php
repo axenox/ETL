@@ -612,7 +612,15 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     {
         return $dataSheetRowIdx;
     }
-    
+
+    /**
+     * Begin tracking transform for the data provided. 
+     * 
+     * @param array                $columns
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
+     * @return bool
+     */
     protected function startTrackingData(array $columns, ETLStepDataInterface $stepData, FlowStepLogBook $logBook) : bool
     {
         if($this->dataTracker !== null || empty($columns)) {
@@ -622,17 +630,27 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $this->dataTracker = new DataSheetTracker($columns, $stepData, $logBook);
         return true;
     }
-    
+
+    /**
+     * @return DataSheetTracker|null
+     */
     protected function getDataTracker() : ?DataSheetTracker
     {
         return $this->dataTracker;
     }
-    
+
+    /**
+     * @return array
+     * @see DataSheetTracker::getTrackedAliases()
+     */
     protected function getTrackedAliases() : array
     {
         return $this->dataTracker ? $this->dataTracker->getTrackedAliases() : [];
     }
 
+    /**
+     * @return TranslationInterface
+     */
     protected function getTranslator() : TranslationInterface
     {
         return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
