@@ -237,22 +237,24 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     /**
      * {@inheritDoc}
-     * @see APIObjectSchemaInterface::getUidPropertyName()
+     * @see APIObjectSchemaInterface::getUidProperties()
      */
-    public function getUidPropertyName() : ?string
+    public function getUidProperties() : null|array
     {
-        return $this->jsonSchema[self::X_OBJECT_UID];
+        $props = $this->jsonSchema[self::X_OBJECT_UID];
+        return is_array($props) ? $props : [$props];
     }
 
     /**
      * One or more property names, that form the UID of one instance of this object.
      *
      * @uxon-property x-object-uid
-     * @uxon-type string
+     * @uxon-type array|string
+     * @uxon-template [""]
      *
-     * @see APIObjectSchemaInterface::hasUidProperty()
+     * @see APIObjectSchemaInterface::hasUidProperties()
      */
-    public function hasUidProperty() : bool
+    public function hasUidProperties() : bool
     {
         return '' !== ($this->jsonSchema[self::X_OBJECT_UID] ?? '');
     }
