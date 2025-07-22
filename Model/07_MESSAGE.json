@@ -85,6 +85,21 @@
             "HINT": "The requested operation failed, because all input data was rejected by the system. Please check the corresponding logs to identify and fix any issues with your input data and try again.",
             "TYPE": "ERROR",
             "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "81VYS9R Data tracking not possible: Tracking keys have duplicate entries.",
+            "CREATED_ON": "2025-07-18 14:29:23",
+            "MODIFIED_ON": "2025-07-18 15:03:49",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f0bf3bd63b8e6ebf3b339cace0b735",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "CODE": "81VYS9R",
+            "TITLE": "Data tracking not possible: Tracking keys have duplicate entries.",
+            "DESCRIPTION": "You can check what properties are used as ID by searching your API Schema for the property `x-object-uid`. All properties in that list will be used together as ID. If at least two input rows match in all ID properties, they are seen as duplicates. To fix this issue, deduplicate your data set or request adding additional ID properties if necessary.",
+            "HINT": "Your input data contained one or more duplicate IDs. This means that data cannot be accurately tracked throughout the operation, which may result in inaccurate logging data, such as mismatched row num",
+            "TYPE": "WARNING",
+            "DOCS": ""
         }
     ],
     "totals_rows": [],

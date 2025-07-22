@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
+use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
@@ -431,10 +432,12 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     
     /**
      * {@inheritDoc}
-     * @see JsonApiToDataSheet::toDisplayRowNumber()
+     * @see AbstractETLPrototype::toDisplayRowNumber()
      */
-    protected function toDisplayRowNumber(int $dataSheetRowIdx): int
+    public function toDisplayRowNumber(int $dataSheetRowIdx, bool $inverse = false): int
     {
-        return $dataSheetRowIdx + $this->firstRowIndex;
+        return $inverse ?
+            $dataSheetRowIdx - $this->firstRowIndex :
+            $dataSheetRowIdx + $this->firstRowIndex;
     }
 }

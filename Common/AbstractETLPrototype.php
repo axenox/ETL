@@ -4,13 +4,13 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
-use exface\Core\CommonLogic\Utils\DataTracker;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
-use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -57,7 +57,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?UxonObject $fromDataChecksUxon = null;
     private CrudCounter $crudCounter;
     private array $logBooks = [];
-    private ?DataTracker $dataTracker = null;
+    private ?DataSheetTracker $dataTracker = null;
     private array $trackedAliases = [];
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
@@ -344,17 +344,28 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $stopOnError |= $check->getStopOnCheckFailed();
                 
                 $badData->addRows($badDataForCheck->getRows());
-
+                $errorRowNrs = $errors->getAllRowNumbers();
 
                 $failToFind = [];
-                $baseData = $this->getBaseData($badDataForCheck, $failToFind);
+                $baseData = $this->getDataTracker()?->getBaseData(
+                    $badDataForCheck, 
+                    $failToFind,
+                    [$this, 'toDisplayRowNumber']
+                );
+                
+                $failToFindWithRowNrs = [];
+                foreach ($failToFind as $rowNr => $data) {
+                    $index = $this->toDisplayRowNumber($rowNr, true);
+                    $rowNr = $this->toDisplayRowNumber($errorRowNrs[$index]);
+                    $failToFindWithRowNrs[$rowNr] = $data;
+                }
                 
                 $check->getNoteOnFailure(
                     $stepData, 
                     $e
                 )->enrichWithAffectedData(
                     $baseData,
-                    $failToFind,
+                    $failToFindWithRowNrs,
                     $translator
                 )->setCountErrors(
                     count($e->getAllErrors())
@@ -384,6 +395,100 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             throw $errors;
         }
         $logBook->addIndent(-1);
+    }
+
+    /**
+     * Applies a specified transform function row by row to the data sheet.
+     * Whenever a row encounters an error, the error will be logged and the
+     * row discarded.
+     *
+     * @param callable             $transformer
+     * @param DataSheetInterface   $dataSheet
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
+     * @param string               $summaryPreamble
+     * @return DataSheetInterface
+     */
+    protected function applyTransformRowByRow(
+        callable $transformer,
+        DataSheetInterface $dataSheet,
+        ETLStepDataInterface $stepData,
+        FlowStepLogBook $logBook,
+        string $summaryPreamble
+    ) : DataSheetInterface
+    {
+        $saveSheet = $dataSheet;
+        $resultSheet = null;
+        $translator = $this->getTranslator();
+
+        $affectedBaseData = [];
+        $affectedCurrentData = [];
+
+        foreach ($dataSheet->getRows() as $i => $row) {
+            $saveSheet = $saveSheet->copy();
+            $saveSheet->removeRows();
+            $saveSheet->addRow($row, false, false);
+            try {
+                // Get the resulting data sheet of that single line and add it to the global
+                // result data
+                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
+                //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
+                if ($resultSheet === null) {
+                    $resultSheet = $rowResultSheet;
+                } else {
+                    foreach ($rowResultSheet->getRows() as $resultRow) {
+                        $resultSheet->addRow($resultRow, false, false);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // If anything goes wrong, just continue with the next row.
+                $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+
+                $failedToFind = [];
+                $baseData = $this->getDataTracker()?->getBaseData(
+                    $saveSheet, 
+                    $failedToFind,
+                    [$this, 'toDisplayRowNumber']
+                );
+                
+                if(!empty($baseData)) {
+                    $rowNo = array_key_first($baseData);
+                    $affectedBaseData[$rowNo] = $baseData[$rowNo];
+                } else {
+                    $rowNo = $this->toDisplayRowNumber($i);
+                    $affectedCurrentData[$rowNo] = $failedToFind[0];
+                }
+
+                StepNote::fromException(
+                    $this->getWorkbench(),
+                    $stepData,
+                    $e,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false
+                )->takeNote();
+            }
+        }
+
+        if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
+            (new StepNote(
+                $this->getWorkbench(),
+                $stepData,
+                $summaryPreamble . ': ',
+                null,
+                MessageTypeDataType::WARNING
+            ))->enrichWithAffectedData(
+                $affectedBaseData,
+                $affectedCurrentData,
+                $translator,
+                false
+            )->takeNote();
+        }
+
+        if($resultSheet === null) {
+            $resultSheet = $dataSheet->copy()->removeRows();
+        }
+
+        return $resultSheet;
     }
 
     /**
@@ -486,38 +591,26 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * Converts a data sheet row number to a display row number that allows humans
      * to identify this row in their input data.
-     * 
+     *
      * For example, in an EXCEL-Import, where the spreadsheet has a title row, the row number
-     * will be shifted up by 2: 
-     * 
+     * will be shifted up by 2:
+     *
      * - +1, because EXCEL starts counting from 1.
      * - +1, to compensate for the title row.
-     * 
+     *
      * Row 0 would become row 2 and so on.
-     * 
+     *
      * NOTE: This function does not find the index your row had in the original data set!
      * Use `findDisplayRowNumbers(array)` to find out what index a row had in the from-data.
-     * 
-     * @param int $dataSheetRowIdx
+     *
+     * @param int  $dataSheetRowIdx
+     * @param bool $inverse
+     * If TRUE, the input will be converted back to an array index.
      * @return int
      */
-    protected function toDisplayRowNumber(int $dataSheetRowIdx) : int
+    public function toDisplayRowNumber(int $dataSheetRowIdx, bool $inverse = false) : int
     {
         return $dataSheetRowIdx;
-    }
-    
-    protected function columnsToRows(array $columns) : array
-    {
-        $result = [];
-        
-        foreach ($columns as $column) {
-            $alias = $column->getAttributeAlias();
-            foreach ($column->getValues() as $rowNr => $value) {
-                $result[$rowNr][$alias] = $value;
-            }
-        }
-        
-        return $result;
     }
     
     protected function startTrackingData(array $columns, ETLStepDataInterface $stepData, FlowStepLogBook $logBook) : bool
@@ -525,106 +618,19 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         if($this->dataTracker !== null || empty($columns)) {
             return false;
         }
-
-        try {
-            $this->dataTracker = new DataTracker($this->columnsToRows($columns));
-        } catch (DataTrackerException $exception) {
-            StepNote::fromException(
-                $this->getWorkbench(),
-                $stepData,
-                $exception,
-                null,
-                false
-            )->addRowsAsContext(
-                $exception->getBadData()
-            )->setMessageType(
-                MessageTypeDataType::WARNING
-            )->takeNote();
-            
-            $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
-        }
-
-        $this->updateTrackedAliases($columns);
+        
+        $this->dataTracker = new DataSheetTracker($columns, $stepData, $logBook);
         return true;
     }
     
-    private function updateTrackedAliases(array $columns) : void
+    protected function getDataTracker() : ?DataSheetTracker
     {
-        $this->trackedAliases = [];
-        
-        foreach ($columns as $column) {
-            $alias = $column->getAttributeAlias();
-            $this->trackedAliases[$alias] = $alias;
-        }
-    }
-    
-    protected function isTrackedAlias(string $alias) : bool
-    {
-        return key_exists($alias, $this->trackedAliases);
+        return $this->dataTracker;
     }
     
     protected function getTrackedAliases() : array
     {
-        return $this->trackedAliases;
-    }
-    
-    protected function recordDataTransform(
-        array $fromColumns,
-        array $toColumns,
-        int $preferredVersion = -1
-    ) : false|int
-    {
-        if($this->dataTracker === null) {
-            return false;
-        }
-
-        $result = $this->dataTracker->recordDataTransform(
-            $this->columnsToRows($fromColumns),
-            $this->columnsToRows($toColumns),
-            $preferredVersion
-        );
-        
-        if($result > -1) {
-            $this->updateTrackedAliases($toColumns);
-        }
-        
-        return $result;
-    }
-    
-    protected function getVersionForData(array $columns) : int
-    {
-        if($this->dataTracker === null) {
-            return 0;
-        }
-        
-        return $this->dataTracker->getLatestVersionForData($this->columnsToRows($columns));
-    }
-    
-    protected function getBaseData(DataSheetInterface $dataSheet,  array &$failedToFind) : array
-    {
-        if($this->dataTracker === null) {
-            return [];
-        }
-
-        $failedToFindIndices = [];
-        $columns = $dataSheet->getColumns()->getMultiple($this->trackedAliases);
-        $baseData = $this->dataTracker->getBaseData($this->columnsToRows($columns), $failedToFindIndices);
-        
-        if($baseData === false) {
-            return [];
-        }
-
-        foreach ($failedToFindIndices as $rowNr) {
-            $failedToFind[$this->toDisplayRowNumber($rowNr)] = $dataSheet->getRow($rowNr);
-        }
-
-        return array_combine(
-            array_map(
-                [$this, 'toDisplayRowNumber'],
-                array_keys($baseData)
-            ),
-            $baseData
-        );
+        return $this->dataTracker ? $this->dataTracker->getTrackedAliases() : [];
     }
 
     protected function getTranslator() : TranslationInterface

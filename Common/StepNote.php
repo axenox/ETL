@@ -595,7 +595,7 @@ class StepNote implements NoteInterface
         $currentRowNrs = array_keys($currentData);
 
         $msgBaseRowNrs = implode(', ', $baseRowNrs);
-        $msgCurrentRowNrs = implode('*, ', $currentRowNrs);
+        $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
         $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
         $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
         $msg = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $msgAllRows], count($baseData) + count($currentData));

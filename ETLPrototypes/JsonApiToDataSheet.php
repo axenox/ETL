@@ -25,11 +25,9 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Events\Flow\OnBeforeETLStepRun;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
-use exface\Core\Interfaces\TranslationInterface;
 use Flow\JSONPath\JSONPathException;
 use axenox\ETL\Common\UxonEtlStepResult;
 use exface\Core\CommonLogic\DataSheets\DataColumn;
-use exface\Core\Interfaces\Log\LoggerInterface;
 
 /**
  * Imports data received through an annotated API (like OpenAPI) using object and attribute annotations.
@@ -341,11 +339,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             
             $fromAlias = $mapping->getFromExpression()->getAttributeAlias();
             if(key_exists($fromAlias, $fromTrackedAliases)) {
-                $toTrackedAliases[$fromAlias] = $mapping->getToExpression()->getAttributeAlias();
+                $toAlias = $mapping->getToExpression()->getAttributeAlias();
+                $toTrackedAliases[$fromAlias] = $toAlias;
             }
         }
+
         $toTrackedAliases = array_merge($fromTrackedAliases, $toTrackedAliases);
-        
+
         if($rowByRow) {
             $passLogBook = true;
             $toSheet = $this->applyTransformRowByRow(
@@ -364,7 +364,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $result = $mapper->map($data, false);
                     }
                     
-                    $this->recordDataTransform(
+                    $this->getDataTracker()?->recordDataTransform(
                         $data->getColumns()->getMultiple($fromTrackedAliases),
                         $result->getColumns()->getMultiple($toTrackedAliases)
                     );
@@ -382,7 +382,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
-                $this->recordDataTransform(
+                $this->getDataTracker()?->recordDataTransform(
                     $fromSheet->getColumns()->getMultiple($fromTrackedAliases),
                     $toSheet->getColumns()->getMultiple($toTrackedAliases)
                 );
@@ -393,7 +393,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $prev = $exception->getPrevious();
                 if($prev instanceof DataSheetInvalidValueError) {
                     $errorSheet = $fromSheet->copy()->removeRows()->addRows($prev->getRowIndexes());
-                    $baseData = $this->getBaseData($errorSheet, $failedToFind);
+                    $baseData = $this->getDataTracker()?->getBaseData(
+                        $errorSheet, 
+                        $failedToFind,
+                        [$this, 'toDisplayRowNumber']
+                    );
                 }
 
                 StepNote::fromException(
@@ -497,96 +501,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         $transaction->commit();
         return $data;
-    }
-
-    /**
-     * Applies a specified transform function row by row to the data sheet.
-     * Whenever a row encounters an error, the error will be logged and the
-     * row discarded.
-     *
-     * @param callable             $transformer
-     * @param DataSheetInterface   $dataSheet
-     * @param ETLStepDataInterface $stepData
-     * @param FlowStepLogBook      $logBook
-     * @param string               $summaryPreamble
-     * @return DataSheetInterface
-     */
-    protected function applyTransformRowByRow(
-        callable $transformer, 
-        DataSheetInterface $dataSheet, 
-        ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook,
-        string $summaryPreamble
-    ) : DataSheetInterface
-    {
-        // TODO pass func call with params 
-        $saveSheet = $dataSheet;
-        $resultSheet = null;
-        $translator = $this->getTranslator();
-        
-        $affectedBaseData = [];
-        $affectedCurrentData = [];
-        
-        foreach ($dataSheet->getRows() as $i => $row) {
-            $saveSheet = $saveSheet->copy();
-            $saveSheet->removeRows();
-            $saveSheet->addRow($row, false, false);
-            try {
-                // Get the resulting data sheet of that single line and add it to the global
-                // result data
-                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
-                //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
-                if ($resultSheet === null) {
-                    $resultSheet = $rowResultSheet;
-                } else {
-                    foreach ($rowResultSheet->getRows() as $resultRow) {
-                        $resultSheet->addRow($resultRow, false, false);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // If anything goes wrong, just continue with the next row.
-                $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
-
-                $failedToFind = [];
-                $baseData = $this->getBaseData($saveSheet, $failedToFind);
-                if(!empty($baseData)) {
-                    $rowNo = array_key_first($baseData);
-                    $affectedBaseData[$rowNo] = $baseData[$rowNo];
-                } else {
-                    $rowNo = array_key_first($failedToFind);
-                    $affectedCurrentData[$rowNo] = $failedToFind[$rowNo];
-                }
-                
-                StepNote::fromException(
-                    $this->getWorkbench(),
-                    $stepData,
-                    $e,
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                    false
-                )->takeNote();
-            }
-        }
-
-        if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
-            (new StepNote(
-                $this->getWorkbench(),
-                $stepData,
-                $summaryPreamble . ': ',
-                null,
-                MessageTypeDataType::WARNING
-            ))->enrichWithAffectedData(
-                $affectedBaseData,
-                $affectedCurrentData,
-                $translator,
-                false
-            )->takeNote();
-        }
-        
-        if($resultSheet === null) {
-            $resultSheet = $dataSheet->copy()->removeRows();
-        }
-        
-        return $resultSheet;
     }
 
     /**
