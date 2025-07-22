@@ -160,7 +160,7 @@ class OpenAPI3 implements APISchemaInterface
     
     /**
      * @uxon-property components
-     * @uxon-type \cebe\openapi\spec\Components
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenApi3Component[]
      * 
      * @return mixed
      */
