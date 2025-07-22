@@ -223,7 +223,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      * is found, the step will perform an update and will not create a new item.
      * 
      * **NOTE:** this will overwrite data in all the attributes affected by the `mapper`.
-     *
+     * 
      * @uxon-property x-update-if-matching-attributes
      * @uxon-type metamodel:attribute[]
      * @uxon-template [""]
@@ -247,11 +247,11 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     /**
      * One or more property names, that form the UID of one instance of this object.
-     *
+     * 
      * @uxon-property x-object-uid
      * @uxon-type array|string
      * @uxon-template [""]
-     *
+     * 
      * @see APIObjectSchemaInterface::hasUidProperties()
      */
     public function hasUidProperties() : bool
@@ -270,10 +270,10 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     /**
      * Name of the property, that form the UID of one instance of this object.
-     *
+     * 
      * @uxon-property x-object-label
      * @uxon-type string
-     *
+     * 
      * @see APIObjectSchemaInterface::hasLabelProperty()
      */
     public function hasLabelProperty() : bool

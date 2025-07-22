@@ -120,6 +120,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * of the to-object.
      * 
      * ```
+     * 
      * {
      *      "Country": {
      *          "type": "string",
@@ -148,6 +149,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * `x-lookup` now explicitly specifies a `to`-column to place the UID into. 
      * 
      * ```
+     * 
      * {
      *      "Country": {
      *          "type": "string",
@@ -198,7 +200,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-attribute-alias
      * @uxon-type metamodel:attribute
-     *
+     * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeAlias()
      */
     public function getAttributeAlias() : ?string
@@ -231,6 +233,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * stored in `my.App.ORDER_ATTRIBUTE`.
      * 
      * ```
+     * 
      * {
      *  "properties": {
      *      "CustomAttributes": {
@@ -268,6 +271,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * For example, to generate properties for every available event type:
      * 
      * ```
+     * 
      * {
      *  "properties": {
      *      "EventTypes": {
