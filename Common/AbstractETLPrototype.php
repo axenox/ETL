@@ -645,7 +645,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 false
             )->enrichWithAffectedData(
                 $badData,
-                []
+                [],
+                $this->getTranslator()
             )->setMessageType(
                 MessageTypeDataType::WARNING
             )->takeNote();
