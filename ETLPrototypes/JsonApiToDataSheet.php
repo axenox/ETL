@@ -400,7 +400,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $prev = $exception->getPrevious();
                 if($prev instanceof DataSheetInvalidValueError) {
                     $errorSheet = $fromSheet->copy()->removeRows()->addRows($prev->getRowIndexes());
-                    $baseData = $this->getDataTracker()?->getBaseData(
+                    $baseData = $this->getDataTracker()?->getBaseDataForSheet(
                         $errorSheet, 
                         $failedToFind,
                         [$this, 'toDisplayRowNumber']
