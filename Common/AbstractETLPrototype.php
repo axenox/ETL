@@ -348,7 +348,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $errorRowNrs = $errors->getAllRowNumbers();
 
                 $failToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseData(
+                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
                     $badDataForCheck, 
                     $failToFind,
                     [$this, 'toDisplayRowNumber']
@@ -446,7 +446,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
 
                 $failedToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseData(
+                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
                     $saveSheet, 
                     $failedToFind,
                     [$this, 'toDisplayRowNumber']
@@ -651,7 +651,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 MessageTypeDataType::WARNING
             )->takeNote();
 
-            $logBook->addLine('**WARNING** - Data tracking ambiguous: ' . $exception->getMessage());
+            $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
         }
         
         return true;

@@ -174,7 +174,7 @@
         {
             "_EXPORT_SUMMARY": "Note: Export Row Numbers [StepNoteExportRowNumbers]",
             "CREATED_ON": "2025-07-09 14:43:26",
-            "MODIFIED_ON": "2025-07-22 13:16:27",
+            "MODIFIED_ON": "2025-07-23 09:49:14",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0803a4ed9a634803a4b521a50466f",
@@ -207,7 +207,7 @@
                     },
                     {
                         "data_column_name": "row_numbers_current",
-                        "caption": "Row Numbers (unreliable)",
+                        "caption": "Row Numbers (*unreliable)",
                         "calculation": "=JsonExtract(context_data,'$.affected_rows_current.row_numbers[:]')"
                     }
                 ]
