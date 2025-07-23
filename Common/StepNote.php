@@ -575,19 +575,19 @@ class StepNote implements NoteInterface
     /**
      * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
      * adding a row summary to the message.
-     * 
+     *
      * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
-     * 
-     * @param array                $baseData
-     * @param array                $currentData
-     * @param TranslationInterface $translator
-     * @param bool                 $prepend
+     *
+     * @param array                     $baseData
+     * @param array                     $currentData
+     * @param TranslationInterface|null $translator
+     * @param bool                      $prepend
      * @return $this
      */
     public function enrichWithAffectedData(
         array $baseData,
         array $currentData,
-        TranslationInterface $translator,
+        TranslationInterface $translator = null,
         bool $prepend = true
     ) : StepNote
     {
@@ -598,7 +598,15 @@ class StepNote implements NoteInterface
         $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
         $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
         $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
-        $msg = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $msgAllRows], count($baseData) + count($currentData));
+        if($translator) {
+            $msg = $translator->translate(
+                'NOTE.ROWS_SKIPPED', 
+                ['%number%' => $msgAllRows], 
+                count($baseData) + count($currentData)
+            );
+        } else {
+            $msg = 'Rows ' . $msgAllRows;
+        }
 
         if($prepend) {
             $this->setMessage($msg . ' ' . $this->getMessage());

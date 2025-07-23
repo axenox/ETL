@@ -8,6 +8,7 @@ use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
@@ -626,8 +627,32 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         if($this->dataTracker !== null || empty($columns)) {
             return false;
         }
+
+        try {
+            $this->dataTracker = new DataSheetTracker($columns);
+        } catch (DataTrackerException $exception) {
+            $badData = $exception->getBadData();
+            $badData = array_combine(
+                array_map([$this, 'toDisplayRowNumber'], array_keys($badData)),
+                $badData
+            );
+            
+            StepNote::fromException(
+                $columns[0]->getWorkbench(),
+                $stepData,
+                $exception,
+                null,
+                false
+            )->enrichWithAffectedData(
+                $badData,
+                []
+            )->setMessageType(
+                MessageTypeDataType::WARNING
+            )->takeNote();
+
+            $logBook->addLine('**WARNING** - Data tracking ambiguous: ' . $exception->getMessage());
+        }
         
-        $this->dataTracker = new DataSheetTracker($columns, $stepData, $logBook);
         return true;
     }
 
