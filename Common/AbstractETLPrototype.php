@@ -28,14 +28,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     use ITakeStepNotesTrait;
     
     const PH_PARAMETER_PREFIX = '~parameter:';
-    
     const PH_LAST_RUN_PREFIX = 'last_run_';
-    
     const PH_LAST_RUN_UID = 'last_run_uid';
-    
     const PH_FLOW_RUN_UID = 'flow_run_uid';
-    
     const PH_STEP_RUN_UID = 'step_run_uid';
+    const IF_DUPLICATES_ERROR = 'error';
+    const IF_DUPLICATES_DISABLE_TRACKER = 'disable_tracker';
+    const IF_DUPLICATES_IGNORE = 'ignore';
     
     private $workbench = null;
     
@@ -60,6 +59,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private array $logBooks = [];
     private ?DataSheetTracker $dataTracker = null;
     private array $trackedAliases = [];
+    private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -171,6 +171,30 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function setFlowRunUidAttribute(string $value) : AbstractETLPrototype
     {
         $this->flowRunUidAttribtueAlias = $value;
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getIfDuplicatesDetected() : string
+    {
+        return $this->ifDuplicatesDetected;
+    }
+
+    /**
+     * Configure how this step should react, if it detects duplicate entries in its input data.
+     * 
+     * @uxon-property if_duplicates_detected
+     * @uxon-type [error,disable_tracker,ignore]
+     * @uxon-template error
+     * 
+     * @param string $behavior
+     * @return $this
+     */
+    protected function setIfDuplicatesDetected(string $behavior) : AbstractETLPrototype
+    {
+        $this->ifDuplicatesDetected = $behavior;
         return $this;
     }
     
@@ -500,7 +524,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
+     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -529,7 +554,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property to_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
+     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -629,13 +655,17 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         }
 
         try {
-            $this->dataTracker = new DataSheetTracker($columns);
+            $this->dataTracker = new DataSheetTracker($columns, false);
         } catch (DataTrackerException $exception) {
             $badData = $exception->getBadData();
             $badData = array_combine(
                 array_map([$this, 'toDisplayRowNumber'], array_keys($badData)),
                 $badData
             );
+            
+            if($this->ifDuplicatesDetected == self::IF_DUPLICATES_IGNORE) {
+                $exception->setAlias('81YKZHB');
+            }
             
             StepNote::fromException(
                 $columns[0]->getWorkbench(),
@@ -651,7 +681,17 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 MessageTypeDataType::WARNING
             )->takeNote();
 
-            $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
+
+            switch ($this->ifDuplicatesDetected) {
+                case self::IF_DUPLICATES_ERROR:
+                    throw new RuntimeException('Process failed.', '81YKTKG');
+                case self::IF_DUPLICATES_IGNORE:
+                    $this->dataTracker = new DataSheetTracker($columns, true);
+                    $logBook->addLine('**WARNING** - Data tracking will be unreliable: ' . $exception->getMessage());
+                    break;
+                default:
+                    $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
+            }
         }
         
         return true;
