@@ -9,9 +9,13 @@ use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
+use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
 
@@ -44,6 +48,7 @@ class StepNote implements NoteInterface
     private ?int $countDeletes = null;
     private ?int $countErrors = null;
     private ?int $countWarnings = null;
+    private array $contextData = [];
 
     /**
      * @param WorkbenchInterface   $workbench
@@ -72,6 +77,11 @@ class StepNote implements NoteInterface
             
             if($exception instanceof ExceptionInterface) {
                 $this->exceptionLogId = $exception->getId();
+                
+                if(empty($this->messageCode)) {
+                    $this->messageCode = $exception->getAlias();
+                }
+                
                 if ($this->message === "") {
                     switch (true) {
                         /* TODO Create DataSheetValueExceptionInterface and implement it
@@ -107,8 +117,64 @@ class StepNote implements NoteInterface
     ) : StepNote 
     {
         $note = new StepNote($workbench, $stepData);
-        $note->setException($exception);
         $note->importUxonObject($uxon);
+        $note->setException($exception);
+        return $note;
+    }
+
+    /**
+     * Instantiates a note from a given exception
+     *
+     * @param WorkbenchInterface   $workbench
+     * @param ETLStepDataInterface $stepData
+     * @param \Throwable           $exception
+     * @param string|null          $preamble
+     * @param bool                 $showRowNumbers
+     * @return StepNote
+     */
+    public static function fromException(
+        WorkbenchInterface $workbench, 
+        ETLStepDataInterface $stepData, 
+        \Throwable $exception, 
+        string $preamble = null, 
+        bool $showRowNumbers = true
+    ) : StepNote
+    {
+        if ($exception instanceof ExceptionInterface) {
+            $logLevel = $exception->getLogLevel();
+            if (LogLevelDataType::compareLogLevels($logLevel, LoggerInterface::ERROR) < 0) {
+                $msgType = MessageTypeDataType::WARNING;
+            } else {
+                $msgType = MessageTypeDataType::ERROR;
+            }
+            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
+                $text = $exception->getMessageTitleWithoutLocation();
+            } else {
+                $text = $exception->getMessageModel($workbench)->getTitle();
+            }
+            $code = $exception->getAlias();
+        } else {
+            $msgType = MessageTypeDataType::ERROR;
+            $text = $exception->getMessage();
+            $code = null;
+        }
+
+        if ($preamble !== null) {
+            $text = StringDataType::endSentence($preamble) . ' ' . $text;
+        }
+
+        $note = new StepNote(
+            $workbench,
+            $stepData,
+            $text,
+            $exception,
+            $msgType
+        );
+        
+        if($code !== null) {
+            $note->setMessageCode($code);
+        }
+
         return $note;
     }
 
@@ -125,7 +191,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getStorageObject()
      */
-    function getStorageObject(): MetaObjectInterface
+    public function getStorageObject(): MetaObjectInterface
     {
         return $this->storageObject;
     }
@@ -134,7 +200,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getNoteData()
      */
-    function getNoteData(): array
+    public function getNoteData(): array
     {
         return [
             'flow_run' => $this->getFlowRunUid(),
@@ -151,7 +217,8 @@ class StepNote implements NoteInterface
             'count_updates' => $this->getCountUpdates(),
             'count_deletes' => $this->getCountDeletes(),
             'count_errors' => $this->getCountErrors(),
-            'count_warnings' => $this->getCountWarnings()
+            'count_warnings' => $this->getCountWarnings(),
+            'context_data' => $this->getContextData()
         ];
     }
 
@@ -277,18 +344,21 @@ class StepNote implements NoteInterface
      * @inheritdoc 
      * @see NoteInterface::setException()
      */
-    function setException(?Throwable $exception): void
+    public function setException(?Throwable $exception): void
     {
         $this->exceptionFlag = (bool)$exception;
         $this->exceptionMessage = $exception?->getMessage();
         $this->exceptionLogId = $exception?->getId();
+        if(empty($this->messageCode) && $exception instanceof ExceptionInterface) {
+            $this->messageCode = $exception->getAlias();
+        }
     }
 
     /**
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    function getExceptionMessage(): ?string
+    public function getExceptionMessage(): ?string
     {
         return $this->exceptionMessage;
     }
@@ -297,7 +367,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getExceptionMessage()
      */
-    function getExceptionLogId(): ?string
+    public function getExceptionLogId(): ?string
     {
         return $this->exceptionLogId;
     }
@@ -306,7 +376,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::hasException()
      */
-    function hasException(): bool
+    public function hasException(): bool
     {
         return $this->exceptionFlag;
     }
@@ -451,6 +521,104 @@ class StepNote implements NoteInterface
         $this->setCountReads($counter->getReads());
         $this->setCountUpdates($counter->getUpdates());
         $this->setCountDeletes($counter->getDeletes());
+        
+        return $this;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function addContextData(array $contextData): NoteInterface
+    {
+        $this->contextData = array_merge($this->contextData, $contextData);
+        return $this;
+    }
+
+    /**
+     * @inerhitDoc 
+     */
+    public function getContextData(): array
+    {
+        return $this->contextData;
+    }
+
+    /**
+     * Add a set of rows and row numbers as context for this note. 
+     * 
+     * NOTE: While it is implied that the row numbers relate to the rows, this relationship
+     * does not have to be direct. For example: If you wanted to log 100 faulty rows of data, you might
+     * add only 10 sample rows, but the row numbers of all 100, to save on stored data volume.
+     * 
+     * @param array  $rows
+     * @param array  $rowNumbers
+     * @param string $key
+     *  The data provided will be stored, using this key. Repeated calls of this method with the same key
+     *  will overwrite any data stored under that key.
+     * @return $this
+     */
+    public function addRowsAsContext(
+        array $rows = [],
+        array $rowNumbers = [],
+        string $key = 'affected_rows'
+    ) : StepNote
+    {
+        $this->addContextData(
+            [$key => [
+                'data' => $rows,
+                'row_numbers' => $rowNumbers
+            ]]
+        );
+        
+        return $this;
+    }
+
+    /**
+     * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
+     * adding a row summary to the message.
+     *
+     * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
+     *
+     * @param array                     $baseData
+     * @param array                     $currentData
+     * @param TranslationInterface|null $translator
+     * @param bool                      $prepend
+     * @return $this
+     */
+    public function enrichWithAffectedData(
+        array $baseData,
+        array $currentData,
+        TranslationInterface $translator = null,
+        bool $prepend = true
+    ) : StepNote
+    {
+        $baseRowNrs = array_keys($baseData);
+        $currentRowNrs = array_keys($currentData);
+
+        $msgBaseRowNrs = implode(', ', $baseRowNrs);
+        $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
+        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
+        $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
+        if($translator) {
+            $msg = $translator->translate(
+                'NOTE.ROWS_SKIPPED', 
+                ['%number%' => $msgAllRows], 
+                count($baseData) + count($currentData)
+            );
+        } else {
+            $msg = 'Rows ' . $msgAllRows;
+        }
+
+        if($prepend) {
+            $this->setMessage($msg . ' ' . $this->getMessage());
+        } else {
+            $this->setMessage($this->getMessage() . ' ' . $msg);
+        }
+
+        $baseData = array_slice($baseData, 0, 10, true);
+        $currentData = array_slice($baseData, 0, 10, true);
+
+        $this->addRowsAsContext($baseData, $baseRowNrs);
+        $this->addRowsAsContext($currentData, $currentRowNrs, 'affected_rows_current');
         
         return $this;
     }

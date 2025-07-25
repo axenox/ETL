@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
+use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
@@ -8,7 +9,6 @@ use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\SemanticVersionDataType;
-use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -75,7 +75,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
-    private $excelHasHeaderRow = true;
+    private int $firstRowIndex = 2;
 
     /**
      *
@@ -122,10 +122,17 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
+        $this->startTrackingData(
+            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
+            $stepData,
+            $logBook
+        );
+
         // Validate data in the from-sheet against the JSON schema
         $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
@@ -149,19 +156,11 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Perform 'from_data_checks'.
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
-        if($fromSheet->countRows() === 0) {
-            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
-            yield $msg . PHP_EOL;
-            $logBook->addLine($msg);
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
-        }
 
         // Apply the mapper
         $logBook->addSection('Filling data sheet');
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->isSkipInvalidRows());
 
         if($toSheet->countRows() === 0) {
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
@@ -171,7 +170,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
             return $result->setProcessedRowsCounter(0);
         }
         
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
+        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
         $logBook->addDataSheet('To-data', $toSheet);
 
         $logBook->addSection('Saving data');
@@ -181,17 +180,13 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
         
-        $writer = $this->writeData(
+        $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $logBook,
-            $this->isSkipInvalidRows()
+            $logBook
         );
 
-        yield from $writer;
-        $resultSheet = $writer->getReturn();
-        
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
@@ -362,7 +357,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // getting completely empty rows, that cannot be used for imports anyway.
         $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
         $this->getCrudCounter()->addObject($fakeObj);
-
+        
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
             if ($excelColName === null || $excelColName === '') {
@@ -412,27 +407,37 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * Set to FALSE if the excel table does NOT have a header row with column names
-     * 
-     * @uxon-property excel_has_header_row
-     * @uxon-type boolean
-     * @uxon-default true
-     * 
-     * @param bool $trueOrFalse
-     * @return ExcelApiToDataSheet
+     * @deprecated 
      */
     protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
     {
-        $this->excelHasHeaderRow = $trueOrFalse;
+        $this->firstRowIndex = $trueOrFalse ? 2 : 1;
+        return $this;
+    }
+
+    /**
+     * When outputting row numbers, they will be counted starting from this number.
+     * 
+     * @uxon-property first_row_index
+     * @uxon-type integer
+     * 
+     * @param int $index
+     * @return ExcelApiToDataSheet
+     */
+    protected function setFirstRowIndex(int $index) : ExcelApiToDataSheet
+    {
+        $this->firstRowIndex = $index;
         return $this;
     }
     
     /**
      * {@inheritDoc}
-     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     * @see AbstractETLPrototype::toDisplayRowNumber()
      */
-    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    public function toDisplayRowNumber(int $dataSheetRowIdx, bool $inverse = false): int
     {
-        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
+        return $inverse ?
+            $dataSheetRowIdx - $this->firstRowIndex :
+            $dataSheetRowIdx + $this->firstRowIndex;
     }
 }

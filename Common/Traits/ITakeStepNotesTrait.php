@@ -3,7 +3,6 @@
 namespace axenox\ETL\Common\Traits;
 
 use axenox\ETL\Common\StepNote;
-use axenox\ETL\Common\NoteTaker;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
 
@@ -21,7 +20,7 @@ trait ITakeStepNotesTrait
      *
      * @uxon-property note_on_success
      * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"info"}
+     * @uxon-template {"message":"", "message_type":"info"}
      *
      * @param UxonObject $uxon
      * @return $this
@@ -56,7 +55,7 @@ trait ITakeStepNotesTrait
      *
      * @uxon-property note_on_failure
      * @uxon-type \axenox\etl\Common\StepNote
-     * @uxon-template {"message":"", "log_level":"warning"}
+     * @uxon-template {"message":"", "message_type":"warning"}
      *
      * @param UxonObject $uxon
      * @return $this
@@ -77,7 +76,7 @@ trait ITakeStepNotesTrait
     public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
     {
         if($this->noteOnFailureUxon === null) {
-            return NoteTaker::createNoteFromException($this->getWorkbench(), $stepData, $exception);
+            return StepNote::fromException($this->getWorkbench(), $stepData, $exception);
         }
 
         return StepNote::FromUxon(

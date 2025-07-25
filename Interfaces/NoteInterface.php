@@ -96,4 +96,20 @@ interface NoteInterface extends WorkbenchDependantInterface
      * @return bool
      */
     function hasException() : bool;
+
+    /**
+     * Add context data for this note. The data provided will be merged
+     * with any context data already present.
+     * 
+     * @param array $contextData
+     * @return NoteInterface
+     */
+    function addContextData(array $contextData) : NoteInterface;
+
+    /**
+     * Get any context data currently attached to this note.
+     * 
+     * @return array
+     */
+    function getContextData() : array;
 }
