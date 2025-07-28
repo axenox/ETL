@@ -6,6 +6,7 @@ use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
+use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
@@ -381,7 +382,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $fromSheet,
                 $stepData,
                 $logBook,
-                'Mapper Applied'
+                NoteInterface::VISIBLE_FOR_EVERYONE
             );
         } else {
             $translator = $this->getTranslator();
@@ -460,7 +461,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $toSheet,
                 $stepData,
                 $logBook,
-                'Data Written'
+                NoteInterface::VISIBLE_FOR_SUPERUSER
             );
             
         } else {

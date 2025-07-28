@@ -610,10 +610,12 @@ class StepNote implements NoteInterface
             $msg = 'Rows ' . $msgAllRows;
         }
 
+        $msg = StringDataType::endSentence($msg);
+        
         if($prepend) {
             $this->setMessage($msg . ' ' . $this->getMessage());
         } else {
-            $this->setMessage($this->getMessage() . ' ' . $msg);
+            $this->setMessage(StringDataType::endSentence($this->getMessage()) . ' ' . $msg);
         }
 
         $baseData = array_slice($baseData, 0, 10, true);
