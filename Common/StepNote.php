@@ -49,6 +49,7 @@ class StepNote implements NoteInterface
     private ?int $countErrors = null;
     private ?int $countWarnings = null;
     private array $contextData = [];
+    private array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE;
 
     /**
      * @param WorkbenchInterface   $workbench
@@ -218,7 +219,8 @@ class StepNote implements NoteInterface
             'count_deletes' => $this->getCountDeletes(),
             'count_errors' => $this->getCountErrors(),
             'count_warnings' => $this->getCountWarnings(),
-            'context_data' => $this->getContextData()
+            'context_data' => $this->getContextData(),
+            'visible_for_user_roles' => implode(',',$this->getVisibleForUserRoles())
         ];
     }
 
@@ -621,5 +623,33 @@ class StepNote implements NoteInterface
         $this->addRowsAsContext($currentData, $currentRowNrs, 'affected_rows_current');
         
         return $this;
+    }
+
+    /**
+     * @inheritDoc
+     * 
+     * @uxon-property visible_for_user_roles
+     * @uxon-type metamodel:exface.Core.USER_ROLE:ALIAS[]
+     * @uxon-template ["ADMINISTRATOR"]
+     * 
+     * @param array $roles
+     * @return NoteInterface
+     */
+    function setVisibleUserRoles(array|string $roles) : NoteInterface
+    {
+        if(is_string($roles)) {
+            $roles = [$roles];
+        }
+        
+        $this->visibleForUserRoles = $roles;
+        return $this;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    function getVisibleForUserRoles(): array
+    {
+        return $this->visibleForUserRoles;
     }
 }

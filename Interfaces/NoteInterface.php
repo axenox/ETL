@@ -23,6 +23,9 @@ use exface\Core\Interfaces\WorkbenchDependantInterface;
  */
 interface NoteInterface extends WorkbenchDependantInterface
 {
+    const VISIBLE_FOR_SUPERUSER = ['SUPERUSER'];
+    const VISIBLE_FOR_EVERYONE = ['AUTHENTICATED'];
+    
     /**
      * Take this note, adding it to the pending notes to be commited later.
      * 
@@ -112,4 +115,20 @@ interface NoteInterface extends WorkbenchDependantInterface
      * @return array
      */
     function getContextData() : array;
+
+    /**
+     * Returns an array with `exface.Core.USER_ROLE` aliases that this note
+     * should be visible for. 
+     * 
+     * @return array
+     */
+    function getVisibleForUserRoles() : array;
+
+    /**
+     * Set which `exface.Core.USER_ROLE` aliases this note should be visible for.
+     *
+     * @param string|array $roles
+     * @return NoteInterface
+     */
+    function setVisibleUserRoles(string|array $roles) : NoteInterface;
 }
