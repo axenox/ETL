@@ -3,6 +3,7 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
+use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
@@ -10,6 +11,7 @@ use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Factories\MessageFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
@@ -431,7 +433,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
-     * @param string               $summaryPreamble
+     * @param array                $visibility
      * @return DataSheetInterface
      */
     protected function applyTransformRowByRow(
@@ -439,7 +441,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         DataSheetInterface $dataSheet,
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
-        string $summaryPreamble
+        array $visibility
     ) : DataSheetInterface
     {
         $saveSheet = $dataSheet;
@@ -490,6 +492,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $e,
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                     false
+                )->setVisibleUserRoles(
+                    $visibility
                 )->takeNote();
             }
         }
@@ -498,10 +502,12 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             (new StepNote(
                 $this->getWorkbench(),
                 $stepData,
-                $summaryPreamble . ': ',
+                MessageFactory::createFromCode($this->getWorkbench(), '82131JM')->getTitle(),
                 null,
                 MessageTypeDataType::WARNING
-            ))->enrichWithAffectedData(
+            ))->setMessageCode(
+                '82131JM'
+            )->enrichWithAffectedData(
                 $affectedBaseData,
                 $affectedCurrentData,
                 $translator,
