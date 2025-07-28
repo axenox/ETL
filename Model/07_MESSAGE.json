@@ -130,6 +130,26 @@
             "HINT": "Your input data contained one or more duplicate IDs. Data cannot be accurately tracked throughout the operation, which may result in inaccurate logging data, such as mismatched row numbers.",
             "TYPE": "ERROR",
             "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "82131JM Some rows encountered issues.",
+            "CREATED_ON": "2025-07-28 13:18:56",
+            "MODIFIED_ON": "2025-07-28 13:32:48",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f085a2a694af1885a26d090ac496ab",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "CODE": "82131JM",
+            "TITLE": "Some rows encountered issues.",
+            "DESCRIPTION": [
+                "// Multiline text delimited by `\n`",
+                "This means that one or more of your input rows had some issues. Have a look at the error log and search for the row numbers provided with this message. If you can't find a matching error or can't determine the issue, you can export the affected row numbers with the `Export Row Numbers` button to check your input data directly. Look for common issues, such as spelling mistakes, mislabeled columns and so on.",
+                "",
+                "If you cannot fix the issue yourself, contact support with your input data, the exported row numbers and any additional information that might help with finding a solution."
+            ],
+            "HINT": "The rows listed with this message encountered one or more issues and were rejected. Check the error log for more details.",
+            "TYPE": "WARNING",
+            "DOCS": ""
         }
     ],
     "totals_rows": [],
