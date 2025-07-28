@@ -444,7 +444,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         if ($this->skipInvalidRows) {
             // Apply output mappers.
             foreach ($this->getOutputMappers() as $mapper) {
-                $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook,true);
+                $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook,true);
             }
 
             // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
