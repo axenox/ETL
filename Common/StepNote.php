@@ -630,7 +630,7 @@ class StepNote implements NoteInterface
      * 
      * @uxon-property visible_for_user_roles
      * @uxon-type metamodel:exface.Core.USER_ROLE:ALIAS[]
-     * @uxon-template ["ADMINISTRATOR"]
+     * @uxon-template ["SUPERUSER"]
      * 
      * @param array $roles
      * @return NoteInterface
