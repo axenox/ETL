@@ -126,6 +126,7 @@ interface NoteInterface extends WorkbenchDependantInterface
 
     /**
      * Set which `exface.Core.USER_ROLE` aliases this note should be visible for.
+     * Default is `AUTHENTICATED` (visible for everyone).
      *
      * @param string|array $roles
      * @return NoteInterface
