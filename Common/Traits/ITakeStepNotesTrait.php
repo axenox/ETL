@@ -49,7 +49,7 @@ trait ITakeStepNotesTrait
             $this->noteOnSuccessUxon
         );
     }
-
+    
     /**
      * Define a note that will be taken, on failure.
      *
@@ -76,14 +76,16 @@ trait ITakeStepNotesTrait
     public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
     {
         if($this->noteOnFailureUxon === null) {
-            return StepNote::fromException($this->getWorkbench(), $stepData, $exception);
+            $note = StepNote::fromException($this->getWorkbench(), $stepData, $exception);
+        } else {
+            $note = StepNote::FromUxon(
+                $this->getWorkbench(),
+                $stepData,
+                $this->noteOnFailureUxon,
+                $exception
+            );
         }
-
-        return StepNote::FromUxon(
-            $this->getWorkbench(),
-            $stepData,
-            $this->noteOnFailureUxon,
-            $exception
-        );
+        
+        return $note;
     }
 }

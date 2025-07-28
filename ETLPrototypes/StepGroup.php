@@ -4,6 +4,7 @@ namespace axenox\ETL\ETLPrototypes;
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\NoteTaker;
 use axenox\ETL\Common\StepNote;
+use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
@@ -326,12 +327,14 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         if($step instanceof AbstractETLPrototype && $result->countProcessedRows() > 0) {
-            $note = $step->getNoteOnSuccess($stepData) ?? new StepNote(
+            $note = $step->getNoteOnSuccess($stepData) ?? (new StepNote(
                 $this->getWorkbench(),
                 $stepData,
                 $step->getName() . ': Done.',
                 null,
                 MessageTypeDataType::SUCCESS
+            ))->setVisibleUserRoles(
+                NoteInterface::VISIBLE_FOR_SUPERUSER
             );
             
             if ($note !== null) {

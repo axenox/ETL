@@ -3,6 +3,7 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
+use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
@@ -490,6 +491,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $e,
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                     false
+                )->setVisibleUserRoles(
+                    NoteInterface::VISIBLE_FOR_SUPERUSER
                 )->takeNote();
             }
         }
