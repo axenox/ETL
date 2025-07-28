@@ -11,6 +11,7 @@ use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Factories\MessageFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
@@ -432,7 +433,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
-     * @param string               $summaryPreamble
+     * @param array                $visibility
      * @return DataSheetInterface
      */
     protected function applyTransformRowByRow(
@@ -440,7 +441,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         DataSheetInterface $dataSheet,
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
-        string $summaryPreamble
+        array $visibility
     ) : DataSheetInterface
     {
         $saveSheet = $dataSheet;
@@ -492,7 +493,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
                     false
                 )->setVisibleUserRoles(
-                    NoteInterface::VISIBLE_FOR_SUPERUSER
+                    $visibility
                 )->takeNote();
             }
         }
@@ -501,10 +502,12 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             (new StepNote(
                 $this->getWorkbench(),
                 $stepData,
-                $summaryPreamble . ': ',
+                MessageFactory::createFromCode($this->getWorkbench(), '82131JM')->getTitle(),
                 null,
                 MessageTypeDataType::WARNING
-            ))->enrichWithAffectedData(
+            ))->setMessageCode(
+                '82131JM'
+            )->enrichWithAffectedData(
                 $affectedBaseData,
                 $affectedCurrentData,
                 $translator,
