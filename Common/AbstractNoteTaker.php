@@ -5,29 +5,32 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
 use exface\Core\Factories\DataSheetFactory;
+use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use exface\Core\Interfaces\WorkbenchDependantInterface;
+use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
  * @inheritdoc 
  * @see NoteTakerInterface
  */
-class NoteTaker implements NoteTakerInterface
+abstract class AbstractNoteTaker implements NoteTakerInterface
 {
-    /**
-     * @var NoteTakerInterface[] 
-     */
-    protected static array $noteTakers = [];
     protected DataSheetInterface $pendingNotes;
     protected bool $hasPendingNotes = false;
     protected int $currentOrderingId = 0;
+    private WorkbenchInterface $workbench;
+    private MetaObjectInterface $storageObject;
 
     /**
-     * @param MetaObjectInterface $storageObject
+     * @param WorkbenchInterface $workbench
      */
-    public function __construct(MetaObjectInterface $storageObject)
+    public function __construct(WorkbenchInterface $workbench)
     {
-        $this->pendingNotes = DataSheetFactory::createFromObject($storageObject);
+        $this->workbench = $workbench;
+        $this->storageObject = MetaObjectFactory::createFromString($workbench, $this->getStorageObjectAlias());
+        $this->pendingNotes = DataSheetFactory::createFromObject($this->storageObject);
     }
 
     /**
@@ -37,6 +40,23 @@ class NoteTaker implements NoteTakerInterface
     {
         $this->commitPendingNotes();
     }
+
+    /**
+     * @inheritDoc
+     * @see NoteTakerInterface::getStorageObject()
+     */
+    public function getStorageObject(): MetaObjectInterface
+    {
+        return $this->storageObject;
+    }
+
+    /**
+     * Get the object alias with name space for this note taker.
+     * 
+     * @return string
+     * @see NoteTakerInterface::getStorageObject()
+     */
+    protected static abstract function getStorageObjectAlias() : string;
 
     /**
      * @inheritdoc
@@ -75,9 +95,9 @@ class NoteTaker implements NoteTakerInterface
 
     /**
      * @inheritdoc
-     * @see NoteTakerInterface::addNote()
+     * @see NoteTakerInterface::takeNote()
      */
-    public function addNote(NoteInterface $note) : void
+    public function takeNote(NoteInterface $note) : void
     {
         $data = $note->getNoteData();
         $data['ordering_id'] = $this->currentOrderingId++;
@@ -88,39 +108,19 @@ class NoteTaker implements NoteTakerInterface
 
     /**
      * @inheritdoc
-     * @see NoteTakerInterface::takeNote()
-     */
-    public static function takeNote(NoteInterface $note) : void
-    {
-        $storageObject = $note->getStorageObject();
-        self::getNoteTakerInstance($storageObject)->addNote($note);
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteTakerInterface::getNoteTakerInstance()
-     */
-    public static function getNoteTakerInstance(MetaObjectInterface $storageObject) : NoteTakerInterface
-    {
-        $alias = $storageObject->getAlias();
-        if($noteTaker = self::$noteTakers[$alias]) {
-            return $noteTaker;
-        }
-        
-        $noteTaker = new NoteTaker($storageObject);
-        self::$noteTakers[$alias] = $noteTaker;
-        
-        return $noteTaker;
-    }
-
-    /**
-     * @inheritdoc
      * @see NoteTakerInterface::commitPendingNotesAll()
      */
     public static function commitPendingNotesAll() : void
     {
-        foreach (self::$noteTakers as $noteTaker) {
-            $noteTaker->commitPendingNotes();
-        }
+        
+    }
+
+    /**
+     * @inheritDoc
+     * @see WorkbenchDependantInterface::getWorkbench()
+     */
+    public function getWorkbench() : WorkbenchInterface
+    {
+        return $this->workbench;
     }
 }

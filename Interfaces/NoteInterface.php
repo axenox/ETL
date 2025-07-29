@@ -2,10 +2,8 @@
 
 namespace axenox\ETL\Interfaces;
 
-use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\AbstractNoteTaker;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\Interfaces\WorkbenchDependantInterface;
 
 /**
  * A note is a simple data package: It contains a message, logging level and optionally, 
@@ -18,10 +16,10 @@ use exface\Core\Interfaces\WorkbenchDependantInterface;
  * the calling context is shut down (i.e. on `__destruct()`). In addition, you can commit all pending notes 
  * manually via `NoteTaker::commitPendingNotesAll()`.
  * 
- * @see NoteTaker
- * @see NoteTaker::commitPendingNotesAll()
+ * @see AbstractNoteTaker
+ * @see AbstractNoteTaker::commitPendingNotesAll()
  */
-interface NoteInterface extends WorkbenchDependantInterface
+interface NoteInterface
 {
     const VISIBLE_FOR_SUPERUSER = ['SUPERUSER'];
     const VISIBLE_FOR_EVERYONE = ['AUTHENTICATED'];
@@ -32,13 +30,6 @@ interface NoteInterface extends WorkbenchDependantInterface
      * @return void
      */
     function takeNote() : void;
-
-    /**
-     * The storage object determines how and where this note will ultimately end up being stored.
-     * 
-     * @return MetaObjectInterface
-     */
-    function getStorageObject() : MetaObjectInterface;
 
     /**
      * Generate array of all data contained in this note. The resulting array can be added as a row 
