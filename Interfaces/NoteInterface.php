@@ -50,9 +50,9 @@ interface NoteInterface
     function setMessage(string $message) : NoteInterface;
 
     /**
-     * @return string|null
+     * @return string
      */
-    function getMessage() : ?string;
+    function getMessage() : string;
 
     /**
      * @return string|null
@@ -123,4 +123,35 @@ interface NoteInterface
      * @return NoteInterface
      */
     function setVisibleUserRoles(string|array $roles) : NoteInterface;
+
+    /**
+     * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
+     * adding a row summary to the message.
+     *
+     * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
+     *
+     * @param array                     $baseData
+     * @param array                     $currentData
+     * @param bool                      $prepend
+     * @return $this
+     */
+    public function enrichWithAffectedData(
+        array $baseData,
+        array $currentData,
+        bool $prepend = true
+    ) : NoteInterface;
+
+    /**
+     * Reformats this note with an exception.
+     * 
+     * @param \Throwable  $exception
+     * @param string|null $preamble
+     * @param bool        $showRowNumbers
+     * @return mixed
+     */
+    public function enrichWithException(
+        \Throwable $exception,
+        string $preamble = null,
+        bool $showRowNumbers = true
+    ) : NoteInterface;
 }
