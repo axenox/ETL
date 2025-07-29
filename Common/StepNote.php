@@ -31,8 +31,7 @@ class StepNote implements NoteInterface
 {
     use ImportUxonObjectTrait;
     
-    private WorkbenchInterface $workbench;
-    private MetaObjectInterface $storageObject;
+    private StepNoteTaker $noteTaker;
     private string $flowRunUid;
     private string $stepRunUid;
     private ?string $message = null;
@@ -52,22 +51,21 @@ class StepNote implements NoteInterface
     private array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE;
 
     /**
-     * @param WorkbenchInterface   $workbench
+     * @param StepNoteTaker        $noteTaker
      * @param ETLStepDataInterface $stepData
      * @param string               $message
      * @param Throwable|null       $exception
      * @param string|null          $logLevel
      */
     public function __construct(
-        WorkbenchInterface $workbench,
+        StepNoteTaker $noteTaker,
         ETLStepDataInterface $stepData,
         string $message = "",
         Throwable $exception = null,
         string $logLevel = null,
     )
     {
-        $this->workbench = $workbench;
-        $this->storageObject = MetaObjectFactory::createFromString($workbench,'axenox.ETL.step_note');
+        $this->noteTaker = $noteTaker;
         $this->flowRunUid = $stepData->getFlowRunUid();
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
@@ -185,7 +183,7 @@ class StepNote implements NoteInterface
      */
     public function takeNote() : void
     {
-        NoteTaker::takeNote($this);
+        AbstractNoteTaker::takeNote($this);
     }
 
     /**

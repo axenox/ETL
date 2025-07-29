@@ -2,7 +2,7 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
-use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\DataTypes\MessageTypeDataType;
@@ -151,7 +151,7 @@ class StepGroup implements DataFlowStepInterface
                         . ' on line ' . $el->getLine();
                     }
                     if ($this->getStopFlowOnError($step)) {
-                        NoteTaker::commitPendingNotesAll();
+                        AbstractNoteTaker::commitPendingNotesAll();
                         throw $e;
                     } else {
                         yield PHP_EOL . '✗ ERROR: ' . $e->getMessage();
@@ -164,7 +164,7 @@ class StepGroup implements DataFlowStepInterface
             $prevStepResult = $stepResult;
         }
         
-        NoteTaker::commitPendingNotesAll();
+        AbstractNoteTaker::commitPendingNotesAll();
         return $result;
     }
     
