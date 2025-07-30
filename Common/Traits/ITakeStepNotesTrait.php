@@ -3,7 +3,7 @@
 namespace axenox\ETL\Common\Traits;
 
 use axenox\ETL\Common\StepNote;
-use axenox\ETL\Interfaces\ETLStepDataInterface;
+use axenox\ETL\Common\StepNoteTaker;
 use exface\Core\CommonLogic\UxonObject;
 
 /**
@@ -34,20 +34,16 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_success` UXON.
      *
-     * @param ETLStepDataInterface $stepData
+     * @param StepNoteTaker $noteTaker
      * @return StepNote|null
      */
-    public function getNoteOnSuccess(ETLStepDataInterface $stepData) : ?StepNote
+    public function getNoteOnSuccess(StepNoteTaker $noteTaker) : ?StepNote
     {
         if($this->noteOnSuccessUxon === null) {
             return null;
         }
         
-        return StepNote::FromUxon(
-            $this->getWorkbench(),
-            $stepData,
-            $this->noteOnSuccessUxon
-        );
+        return $noteTaker->createNote('', null, $this->noteOnSuccessUxon);
     }
     
     /**
@@ -69,23 +65,12 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_failure` UXON.
      *
-     * @param ETLStepDataInterface $stepData
-     * @param \Throwable           $exception
+     * @param StepNoteTaker $noteTaker
+     * @param \Throwable    $exception
      * @return StepNote|null
      */
-    public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
+    public function getNoteOnFailure(StepNoteTaker $noteTaker, \Throwable $exception) : ?StepNote
     {
-        if($this->noteOnFailureUxon === null) {
-            $note = StepNote::fromException($this->getWorkbench(), $stepData, $exception);
-        } else {
-            $note = StepNote::FromUxon(
-                $this->getWorkbench(),
-                $stepData,
-                $this->noteOnFailureUxon,
-                $exception
-            );
-        }
-        
-        return $note;
+        return $noteTaker->createNote('', $exception, $this->noteOnFailureUxon);
     }
 }

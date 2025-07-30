@@ -34,13 +34,18 @@ class StepNoteTaker extends AbstractNoteTaker
         ETLStepDataInterface $stepData = null
     ) : StepNoteTaker
     {
-        $instance = parent::getInstance($workbench);
-        
+        $instance = self::locateInstance($workbench);
+
         if($stepData !== null) {
             $instance->setStepData($stepData);
             self::$instances[self::class] = $instance;
         }
         
+        assert(
+            $instance->stepData !== null,
+            'StepNoteTaker requires step data to work properly.'
+        );
+
         return $instance;
     }
 
@@ -72,7 +77,13 @@ class StepNoteTaker extends AbstractNoteTaker
         ?UxonObject $uxon = null
     ): NoteInterface
     {
-        return new StepNote($this, $message, $messageTypeOrException, $uxon);
+        return new StepNote(
+            $this->getWorkbench(), 
+            $this->stepData, 
+            $message, 
+            $messageTypeOrException, 
+            $uxon
+        );
     }
 
     /**
@@ -81,6 +92,10 @@ class StepNoteTaker extends AbstractNoteTaker
      */
     public function createNoteEmpty(): NoteInterface
     {
-        return new StepNote($this, '');
+        return new StepNote(
+            $this->getWorkbench(),
+            $this->stepData,
+            ''
+        );
     }
 }
