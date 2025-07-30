@@ -2,7 +2,6 @@
 
 namespace axenox\ETL\Interfaces;
 
-use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\TranslationInterface;
@@ -61,27 +60,6 @@ interface NoteTakerInterface extends WorkbenchDependantInterface
     public function hasPendingNotes() : bool;
 
     /**
-     * Creates a new note with the provided data.
-     *
-     * @param string                 $message
-     * @param \Throwable|string|null $messageTypeOrException
-     * @param UxonObject|null        $uxon
-     * @return NoteInterface
-     */
-    public function createNote(
-        string            $message,
-        \Throwable|string $messageTypeOrException = null,
-        ?UxonObject       $uxon = null,
-    ) : NoteInterface;
-
-    /**
-     * Creates an empty note.
-     * 
-     * @return NoteInterface
-     */
-    public function createNoteEmpty() : NoteInterface;
-
-    /**
      * Add a pending note to this instance.
      * 
      * NOTE: This method does not perform deduplication. If the same note is added
@@ -91,16 +69,6 @@ interface NoteTakerInterface extends WorkbenchDependantInterface
      * @return void
      */
     public function takeNote(NoteInterface $note) : void;
-
-    /**
-     * Get the `NoteTaker` instance for a given storage object.
-     *
-     * SINGLETON: If that instance does not exist, a new one will be created.
-     *
-     * @param WorkbenchInterface $workbench
-     * @return NoteTakerInterface
-     */
-    public static function getInstance(WorkbenchInterface $workbench) : NoteTakerInterface;
 
     /**
      * Commits all pending notes, across all `NoteTaker` instances, to their respective data sources.

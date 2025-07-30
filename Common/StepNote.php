@@ -2,6 +2,7 @@
 
 namespace axenox\ETL\Common;
 
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -13,7 +14,6 @@ use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
-use exface\Core\Interfaces\WorkbenchDependantInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
 
@@ -29,6 +29,7 @@ class StepNote implements NoteInterface
 {
     use ImportUxonObjectTrait;
     
+    private ETLStepDataInterface $stepData;
     private WorkbenchInterface $workbench;
     private TranslationInterface $translator;
     private string $flowRunUid;
@@ -50,14 +51,12 @@ class StepNote implements NoteInterface
     private array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE;
 
     /**
-     * @param WorkbenchInterface    $workbench
      * @param ETLStepData           $stepData
      * @param string                $message
      * @param Throwable|string|null $messageTypeOrException
      * @param UxonObject|null       $uxon
      */
     public function __construct(
-        WorkbenchInterface  $workbench,
         ETLStepData         $stepData,
         string              $message,
         Throwable|string    $messageTypeOrException = null,
@@ -65,12 +64,13 @@ class StepNote implements NoteInterface
     )
     {
         $hasException = $messageTypeOrException !== null && !is_string($messageTypeOrException);
-        
-        $this->workbench = $workbench;
-        $this->translator = $workbench->getCoreApp()->getTranslator();
+
+        $this->stepData = $stepData;
         $this->flowRunUid = $stepData->getFlowRunUid();
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
+        $this->workbench = $stepData->getTask()->getWorkbench();
+        $this->translator = $this->workbench->getCoreApp()->getTranslator();
 
         if(!$hasException) {
             $this->messageType = $messageTypeOrException ?? 'info';
@@ -84,12 +84,12 @@ class StepNote implements NoteInterface
     }
 
     /**
-     * @inheritdoc 
+     * @inheritDoc
      * @see NoteInterface::takeNote()
      */
     public function takeNote() : void
     {
-        StepNoteTaker::getInstance($this->workbench)->takeNote($this);
+        $this->stepData->getNoteTaker()->takeNote($this);
     }
 
     /**
@@ -521,7 +521,7 @@ class StepNote implements NoteInterface
             if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
                 $text = $exception->getMessageTitleWithoutLocation();
             } else {
-                $text = $exception->getMessageModel($this->getWorkbench())->getTitle();
+                $text = $exception->getMessageModel($this->workbench)->getTitle();
             }
             $code = $exception->getAlias();
         } else {
@@ -572,14 +572,5 @@ class StepNote implements NoteInterface
     public function getVisibleForUserRoles(): array
     {
         return $this->visibleForUserRoles;
-    }
-
-    /**
-     * @inheritDoc
-     * @see WorkbenchDependantInterface::getWorkbench()
-     */
-    public function getWorkbench() : WorkbenchInterface
-    {
-        return $this->workbench;
     }
 }

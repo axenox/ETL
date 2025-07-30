@@ -4,7 +4,6 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
-use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -19,25 +18,21 @@ use exface\Core\Interfaces\WorkbenchInterface;
 abstract class AbstractNoteTaker implements NoteTakerInterface
 {
     /**
-     * @var NoteTakerInterface[] 
+     * @var DataSheetInterface[] 
      */
-    protected static array $instances = [];
-    protected DataSheetInterface $pendingNotes;
-    protected bool $hasPendingNotes = false;
+    protected static array $pendingNotes = [];
     protected int $currentOrderingId = 0;
     private WorkbenchInterface $workbench;
     private MetaObjectInterface $storageObject;
     private TranslationInterface $translator;
 
     /**
-     * @deprecated Use getInstance() instead.
      * @param WorkbenchInterface $workbench
      */
     public function __construct(WorkbenchInterface $workbench)
     {
         $this->workbench = $workbench;
         $this->storageObject = MetaObjectFactory::createFromString($workbench, $this->getStorageObjectAlias());
-        $this->pendingNotes = DataSheetFactory::createFromObject($this->storageObject);
         $this->translator = $workbench->getCoreApp()->getTranslator();
     }
 
@@ -84,11 +79,11 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         if(!$this->hasPendingNotes()) {
             return;
         }
-        
-        $this->pendingNotes->dataCreate();
-        $this->pendingNotes->removeRows();
 
-        $this->hasPendingNotes = false;
+        $class = self::class;
+        self::$pendingNotes[$class]->dataCreate();
+        unset(self::$pendingNotes[$class]);
+
         $this->currentOrderingId = 0;
     }
 
@@ -98,7 +93,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      */
     public function getPendingNotes() : DataSheetInterface
     {
-        return $this->pendingNotes->copy();
+        return self::$pendingNotes[self::class]->copy();
     }
 
     /**
@@ -107,7 +102,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      */
     public function hasPendingNotes() : bool
     {
-        return $this->hasPendingNotes;
+        return key_exists(self::class, self::$pendingNotes);
     }
 
     /**
@@ -119,30 +114,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         $data = $note->getNoteData();
         $data['ordering_id'] = $this->currentOrderingId++;
         
-        $this->pendingNotes->addRow($data);
-        $this->hasPendingNotes = true;
-    }
-
-    /**
-     * Get the `NoteTaker` instance for a given storage object.
-     *
-     * SINGLETON: If that instance does not exist, a new one will be created.
-     *
-     * @param WorkbenchInterface $workbench
-     * @return NoteTakerInterface
-     */
-    protected static function locateInstance(WorkbenchInterface $workbench) : NoteTakerInterface
-    {
-        $class = self::class;
-        $instance = self::$instances[$class];
-        if($instance !== null) {
-            return $instance;
-        }
-        
-        $instance = new $class($workbench);
-        self::$instances[$class] = $instance;
-        
-        return $instance;
+        self::$pendingNotes[self::class]->addRow($data);
     }
 
     /**
@@ -151,8 +123,8 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      */
     public static function commitPendingNotesAll() : void
     {
-        foreach (self::$instances as $instance) {
-            $instance->commitPendingNotes();
+        foreach (self::$pendingNotes as $class => $pendingNotes) {
+            (new $class($pendingNotes->getWorkbench()))->commitPendingNotes();
         }
     }
 
