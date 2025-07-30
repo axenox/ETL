@@ -16,15 +16,16 @@ class ETLStepData implements ETLStepDataInterface
 	private ?ETLStepResultInterface $previousStepResult;
 	
 	private ?ETLStepResultInterface $lastResult;
+    
+    private StepNoteTaker $noteTaker;
 
     /**
-     * 
-     * @param TaskInterface $task
-     * @param string $flowRunUid
-     * @param string $stepRunUid
-     * @param ETLStepResultInterface $previousStepResult
-     * @param ETLStepResultInterface $lastResult
-     * @param string $openApiJson
+     *
+     * @param TaskInterface               $task
+     * @param string                      $flowRunUid
+     * @param string|null                 $stepRunUid
+     * @param ETLStepResultInterface|null $previousStepResult
+     * @param ETLStepResultInterface|null $lastResult
      */
     public function __construct(
 		TaskInterface $task,
@@ -39,6 +40,7 @@ class ETLStepData implements ETLStepDataInterface
 		$this->stepRunUid = $stepRunUid;
 		$this->previousStepResult = $previousStepResult;
 		$this->lastResult = $lastResult;
+        $this->noteTaker = new StepNoteTaker($task->getWorkbench());
 	}
 	
 	/**
@@ -101,4 +103,13 @@ class ETLStepData implements ETLStepDataInterface
 	{
 		return $this->task;
 	}
+
+    /**
+     * @inheritDoc
+     * @see ETLStepDataInterface::getNoteTaker()
+     */
+    public function getNoteTaker() : StepNoteTaker
+    {
+        return $this->noteTaker;
+    }
 }

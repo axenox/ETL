@@ -4,7 +4,6 @@ namespace axenox\ETL\Interfaces;
 
 use axenox\ETL\Common\AbstractNoteTaker;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\WorkbenchDependantInterface;
 
 /**
  * A note is a simple data package: It contains a message, logging level and optionally, 
@@ -20,7 +19,7 @@ use exface\Core\Interfaces\WorkbenchDependantInterface;
  * @see AbstractNoteTaker
  * @see AbstractNoteTaker::commitPendingNotesAll()
  */
-interface NoteInterface extends WorkbenchDependantInterface
+interface NoteInterface
 {
     const VISIBLE_FOR_SUPERUSER = ['SUPERUSER'];
     const VISIBLE_FOR_EVERYONE = ['AUTHENTICATED'];
