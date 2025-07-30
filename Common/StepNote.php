@@ -10,6 +10,7 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\StringDataType;
+use exface\Core\Factories\MessageFactory;
 use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
@@ -48,19 +49,32 @@ class StepNote implements NoteInterface
     private ?int $countErrors = null;
     private ?int $countWarnings = null;
     private array $contextData = [];
-    private array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE;
+    private array $visibleForUserRoles;
 
     /**
+     * Creates a new step note with the provided parameters.
+     * 
+     * Parameters will be applied in the following order:
+     * 
+     * 1. `$message`
+     * 2. `$messageTypeOrException`
+     * 3. `$uxon`
+     * 
+     * With the last parameter having the highest priority. For example, if you pass an exception and a UXON
+     * and both contain a message, the UXON message will be used over the exception message.
+     * 
      * @param ETLStepData           $stepData
      * @param string                $message
      * @param Throwable|string|null $messageTypeOrException
      * @param UxonObject|null       $uxon
+     * @param array                 $visibleForUserRoles
      */
     public function __construct(
         ETLStepData         $stepData,
         string              $message,
         Throwable|string    $messageTypeOrException = null,
         ?UxonObject         $uxon = null,
+        array               $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
     )
     {
         $hasException = $messageTypeOrException !== null && !is_string($messageTypeOrException);
@@ -70,17 +84,73 @@ class StepNote implements NoteInterface
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
         $this->workbench = $stepData->getTask()->getWorkbench();
-        $this->translator = $this->workbench->getCoreApp()->getTranslator();
+        $this->translator = $this->workbench->getApp('axenox.ETL')->getTranslator();
+        $this->visibleForUserRoles = $visibleForUserRoles;
 
         if(!$hasException) {
             $this->messageType = $messageTypeOrException ?? 'info';
         } else {
-            $this->enrichWithException($messageTypeOrException);
+            $this->enrichWithException($messageTypeOrException, $message);
         }
         
         if($uxon !== null) {
             $this->importUxonObject($uxon);
         }
+    }
+
+    /**
+     * Create a new step note from a UXON object.
+     * 
+     * @param ETLStepDataInterface $stepData
+     * @param UxonObject           $uxon
+     * @return StepNote
+     */
+    public static function fromUxon(ETLStepDataInterface $stepData, UxonObject $uxon) : StepNote
+    {
+        return new StepNote($stepData, '', null, $uxon);
+    }
+
+    /**
+     * Create a new step note based on a message code.
+     * 
+     * @param ETLStepDataInterface $stepData
+     * @param string               $messageCode
+     * @param array                $visibleForUserRoles
+     * @return StepNote
+     */
+    public static function fromMessageCode(
+        ETLStepDataInterface $stepData, 
+        string $messageCode, 
+        array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
+    ) : StepNote
+    {
+        $msg = MessageFactory::createFromCode($stepData->getTask()->getWorkbench(), $messageCode);
+        return new StepNote($stepData, $msg->getTitle(), $msg->getType(), null, $visibleForUserRoles);
+    }
+
+    /**
+     * Create a new step note based on an exception.
+     * 
+     * @param ETLStepDataInterface $stepData
+     * @param Throwable            $exception
+     * @param string               $preamble
+     * @param bool                 $showRowNumbers
+     * @param array                $visibleForUserRoles
+     * @return StepNote
+     */
+    public static function fromException(
+        ETLStepDataInterface $stepData,
+        Throwable            $exception,
+        string               $preamble = '',
+        bool                 $showRowNumbers = true,
+        array                $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
+    ) : StepNote
+    {
+        return (new StepNote(
+            $stepData, '', null, null, $visibleForUserRoles
+        ))->enrichWithException(
+            $exception, $preamble, $showRowNumbers
+        );
     }
 
     /**
@@ -478,6 +548,7 @@ class StepNote implements NoteInterface
         $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
         $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
         $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
+        
         $msg = $this->translator->translate(
             'NOTE.ROWS_SKIPPED',
             ['%number%' => $msgAllRows],

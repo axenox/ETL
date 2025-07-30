@@ -4,6 +4,7 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\NoteInterface;
 use axenox\ETL\Interfaces\NoteTakerInterface;
+use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -80,7 +81,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
             return;
         }
 
-        $class = self::class;
+        $class = get_called_class();
         self::$pendingNotes[$class]->dataCreate();
         unset(self::$pendingNotes[$class]);
 
@@ -88,12 +89,32 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     }
 
     /**
+     * Returns the datasheet by reference containing all currently pending notes 
+     * for this note taker class.
+     * 
+     * @return DataSheetInterface
+     */
+    protected function getPendingNotesInternal() : DataSheetInterface
+    {
+        $class = get_called_class();
+        $pendingNotes = self::$pendingNotes[$class];
+        if($pendingNotes !== null) {
+            return $pendingNotes;
+        }
+        
+        $pendingNotes = DataSheetFactory::createFromObject($this->getStorageObject());
+        self::$pendingNotes[$class] = $pendingNotes;
+        
+        return $pendingNotes;
+    }
+    
+    /**
      * @inheritdoc
      * @see NoteTakerInterface::getPendingNotes()
      */
     public function getPendingNotes() : DataSheetInterface
     {
-        return self::$pendingNotes[self::class]->copy();
+        return $this->getPendingNotesInternal()->copy();
     }
 
     /**
@@ -102,7 +123,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      */
     public function hasPendingNotes() : bool
     {
-        return key_exists(self::class, self::$pendingNotes);
+        return key_exists(get_called_class(), self::$pendingNotes);
     }
 
     /**
@@ -114,7 +135,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         $data = $note->getNoteData();
         $data['ordering_id'] = $this->currentOrderingId++;
         
-        self::$pendingNotes[self::class]->addRow($data);
+        $this->getPendingNotesInternal()->addRow($data);
     }
 
     /**

@@ -328,19 +328,15 @@ class StepGroup implements DataFlowStepInterface
         
         if($step instanceof AbstractETLPrototype && $result->countProcessedRows() > 0) {
             $note = $step->getNoteOnSuccess($stepData) ?? (new StepNote(
-                $this->getWorkbench(),
                 $stepData,
                 $step->getName() . ': Done.',
+                MessageTypeDataType::SUCCESS,
                 null,
-                MessageTypeDataType::SUCCESS
-            ))->setVisibleUserRoles(
                 NoteInterface::VISIBLE_FOR_SUPERUSER
-            );
-            
-            if ($note !== null) {
-                $note->importCrudCounter($step->getCrudCounter());
-                $note->takeNote();
-            }
+            ));
+
+            $note->importCrudCounter($step->getCrudCounter());
+            $note->takeNote();
         }
         
         $ds->addRow($row);
@@ -386,11 +382,11 @@ class StepGroup implements DataFlowStepInterface
         }
         
         if($step instanceof AbstractETLPrototype) {
-            $note = $step->getNoteOnFailure($stepData, $exception);
-            if($note !== null) {
-                $note->importCrudCounter($step->getCrudCounter());
-                $note->takeNote();
-            }
+            $step->getNoteOnFailure(
+                $stepData, $exception
+            )->importCrudCounter(
+                $step->getCrudCounter()
+            )->takeNote();
         }
         
         $ds->addRow($row);
