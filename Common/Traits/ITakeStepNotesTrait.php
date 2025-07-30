@@ -3,8 +3,9 @@
 namespace axenox\ETL\Common\Traits;
 
 use axenox\ETL\Common\StepNote;
-use axenox\ETL\Common\StepNoteTaker;
+use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\MessageTypeDataType;
 
 /**
  * This trait contains all functions and accessors necessary to enable a class to take step notes.
@@ -34,16 +35,21 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_success` UXON.
      *
-     * @param StepNoteTaker $noteTaker
+     * @param ETLStepDataInterface $stepData
      * @return StepNote|null
      */
-    public function getNoteOnSuccess(StepNoteTaker $noteTaker) : ?StepNote
+    public function getNoteOnSuccess(ETLStepDataInterface $stepData) : ?StepNote
     {
         if($this->noteOnSuccessUxon === null) {
             return null;
         }
         
-        return $noteTaker->createNote('', null, $this->noteOnSuccessUxon);
+        return new StepNote(
+            $stepData,
+            '',
+            MessageTypeDataType::SUCCESS,
+            $this->noteOnSuccessUxon
+        );
     }
     
     /**
@@ -65,12 +71,17 @@ trait ITakeStepNotesTrait
     /**
      * Generates a new step note, using the `note_on_failure` UXON.
      *
-     * @param StepNoteTaker $noteTaker
-     * @param \Throwable    $exception
-     * @return StepNote|null
+     * @param ETLStepDataInterface $stepData
+     * @param \Throwable           $exception
+     * @return StepNote
      */
-    public function getNoteOnFailure(StepNoteTaker $noteTaker, \Throwable $exception) : ?StepNote
+    public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : StepNote
     {
-        return $noteTaker->createNote('', $exception, $this->noteOnFailureUxon);
+        return new StepNote(
+            $stepData,
+            '',
+            $exception,
+            $this->noteOnFailureUxon
+        );
     }
 }
