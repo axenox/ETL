@@ -12,6 +12,9 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
+use exface\Core\Interfaces\TranslationInterface;
+use exface\Core\Interfaces\WorkbenchDependantInterface;
+use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
 
 /**
@@ -26,7 +29,8 @@ class StepNote implements NoteInterface
 {
     use ImportUxonObjectTrait;
     
-    private StepNoteTaker $noteTaker;
+    private WorkbenchInterface $workbench;
+    private TranslationInterface $translator;
     private string $flowRunUid;
     private string $stepRunUid;
     private string $message;
@@ -46,22 +50,24 @@ class StepNote implements NoteInterface
     private array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE;
 
     /**
-     * @param StepNoteTaker         $noteTaker
+     * @param WorkbenchInterface    $workbench
+     * @param ETLStepData           $stepData
      * @param string                $message
      * @param Throwable|string|null $messageTypeOrException
      * @param UxonObject|null       $uxon
      */
     public function __construct(
-        StepNoteTaker    $noteTaker,
-        string           $message,
-        Throwable|string $messageTypeOrException = null,
-        ?UxonObject      $uxon = null,
+        WorkbenchInterface  $workbench,
+        ETLStepData         $stepData,
+        string              $message,
+        Throwable|string    $messageTypeOrException = null,
+        ?UxonObject         $uxon = null,
     )
     {
-        $stepData = $noteTaker->getStepData();
         $hasException = $messageTypeOrException !== null && !is_string($messageTypeOrException);
         
-        $this->noteTaker = $noteTaker;
+        $this->workbench = $workbench;
+        $this->translator = $workbench->getCoreApp()->getTranslator();
         $this->flowRunUid = $stepData->getFlowRunUid();
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
@@ -83,7 +89,7 @@ class StepNote implements NoteInterface
      */
     public function takeNote() : void
     {
-        $this->noteTaker->takeNote($this);
+        StepNoteTaker::getInstance($this->workbench)->takeNote($this);
     }
 
     /**
@@ -472,7 +478,7 @@ class StepNote implements NoteInterface
         $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
         $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
         $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
-        $msg = $this->noteTaker->getTranslator()->translate(
+        $msg = $this->translator->translate(
             'NOTE.ROWS_SKIPPED',
             ['%number%' => $msgAllRows],
             count($baseData) + count($currentData)
@@ -515,7 +521,7 @@ class StepNote implements NoteInterface
             if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
                 $text = $exception->getMessageTitleWithoutLocation();
             } else {
-                $text = $exception->getMessageModel($this->noteTaker->getWorkbench())->getTitle();
+                $text = $exception->getMessageModel($this->getWorkbench())->getTitle();
             }
             $code = $exception->getAlias();
         } else {
@@ -550,7 +556,7 @@ class StepNote implements NoteInterface
      * @param array $roles
      * @return NoteInterface
      */
-    function setVisibleUserRoles(array|string $roles) : NoteInterface
+    public function setVisibleUserRoles(array|string $roles) : NoteInterface
     {
         if(is_string($roles)) {
             $roles = [$roles];
@@ -563,8 +569,17 @@ class StepNote implements NoteInterface
     /**
      * @inheritDoc
      */
-    function getVisibleForUserRoles(): array
+    public function getVisibleForUserRoles(): array
     {
         return $this->visibleForUserRoles;
+    }
+
+    /**
+     * @inheritDoc
+     * @see WorkbenchDependantInterface::getWorkbench()
+     */
+    public function getWorkbench() : WorkbenchInterface
+    {
+        return $this->workbench;
     }
 }

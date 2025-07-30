@@ -30,6 +30,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     private TranslationInterface $translator;
 
     /**
+     * @deprecated Use getInstance() instead.
      * @param WorkbenchInterface $workbench
      */
     public function __construct(WorkbenchInterface $workbench)
@@ -123,10 +124,14 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     }
 
     /**
-     * @inheritDoc
-     * @see NoteTakerInterface::getInstance()
+     * Get the `NoteTaker` instance for a given storage object.
+     *
+     * SINGLETON: If that instance does not exist, a new one will be created.
+     *
+     * @param WorkbenchInterface $workbench
+     * @return NoteTakerInterface
      */
-    public static function getInstance(WorkbenchInterface $workbench): NoteTakerInterface
+    protected static function locateInstance(WorkbenchInterface $workbench) : NoteTakerInterface
     {
         $class = self::class;
         $instance = self::$instances[$class];
@@ -139,7 +144,6 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         
         return $instance;
     }
-
 
     /**
      * @inheritdoc
