@@ -67,9 +67,9 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create JSON import flow [WebserviceFlowCreateJsonImport]",
             "CREATED_ON": "2025-04-08 12:26:39",
-            "MODIFIED_ON": "2025-04-09 09:17:34",
+            "MODIFIED_ON": "2025-07-28 15:50:54",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0a700f4f17f94a700025041000001",
             "OBJECT": "0x11ee81f57aaf6a1281f5025041000001",
             "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
@@ -162,7 +162,7 @@
                                                     "to": "app"
                                                 },
                                                 {
-                                                    "from": "=1",
+                                                    "from": "webservice__version",
                                                     "to": "version"
                                                 }
                                             ],
@@ -192,6 +192,11 @@
                                                                 "//": "object axenox.ETL.webservice_request",
                                                                 "from": "='0x11eeae4695964d78ae46025041000001'",
                                                                 "to": "from_object"
+                                                            },
+                                                            {
+                                                                "//": "step config",
+                                                                "from": "='{\"//doc-timeout\":\"increased timout for large amounts of data to process\",\"timeout\":500,\"//doc-skip_invalid_rows\":\"set to true if you want to accept errors like x-lookup not found and only log them\",\"skip_invalid_rows\":false,\"note_on_success\":{\"message\":\"The import succeeded!\",\"message_type\":\"success\"},\"note_on_failure\":{\"message\":\"The import has failed!\",\"message_type\":\"error\"},\"base_data_sheet\":{\"/*\":\"please implement attribute or change it to an existing equivalent\",\"columns\":[{\"//doc-LAST_IMPORTED_ON\":\"every import should have an attribute to store the last import date\",\"attribute_alias\":\"LAST_IMPORTED_ON\",\"formula\":\"=Now()\"}],\"*/\":\"\"}}'",
+                                                                "to": "etl_config_uxon"
                                                             }
                                                         ],
                                                         "variable_to_column_mappings": [
@@ -241,9 +246,9 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create Excel+JSON import flow [WebserviceFlowCreateExcelJsonImport]",
             "CREATED_ON": "2025-04-09 08:58:11",
-            "MODIFIED_ON": "2025-04-09 09:20:39",
+            "MODIFIED_ON": "2025-07-28 15:51:04",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f09474007a76349474c84bd653ed63",
             "OBJECT": "0x11ee81f57aaf6a1281f5025041000001",
             "ACTION_PROTOTYPE": "exface/Core/Actions/ShowDialog.php",
@@ -337,7 +342,7 @@
                                                     "to": "app"
                                                 },
                                                 {
-                                                    "from": "=1",
+                                                    "from": "webservice__version",
                                                     "to": "version"
                                                 }
                                             ]
@@ -374,6 +379,11 @@
                                                     "//": "object axenox.ETL.webservice_request",
                                                     "from": "='0x11eeae4695964d78ae46025041000001'",
                                                     "to": "from_object"
+                                                },
+                                                {
+                                                    "//": "step config",
+                                                    "from": "='{\"//doc-timeout\":\"increased timout for large amounts of data to process\",\"timeout\":500,\"//doc-skip_invalid_rows\":\"set to true if you want to accept errors like x-lookup not found and only log them\",\"skip_invalid_rows\":false,\"note_on_success\":{\"message\":\"The import succeeded!\",\"message_type\":\"success\"},\"note_on_failure\":{\"message\":\"The import has failed!\",\"message_type\":\"error\"},\"base_data_sheet\":{\"/*\":\"please implement attribute or change it to an existing equivalent\",\"columns\":[{\"//doc-LAST_IMPORTED_ON\":\"every import should have an attribute to store the last import date\",\"attribute_alias\":\"LAST_IMPORTED_ON\",\"formula\":\"=Now()\"}],\"*/\":\"\"}}'",
+                                                    "to": "etl_config_uxon"
                                                 }
                                             ],
                                             "variable_to_column_mappings": [
@@ -415,6 +425,11 @@
                                                     "//": "object axenox.ETL.file_upload",
                                                     "from": "='0x11ef97055df83b389705025041000001'",
                                                     "to": "from_object"
+                                                },
+                                                {
+                                                    "//": "step config",
+                                                    "from": "='{\"//doc-timeout\":\"increased timout for large amounts of data to process\",\"timeout\":500,\"//doc-skip_invalid_rows\":\"set to true if you want to accept errors like x-lookup not found and only log them\",\"skip_invalid_rows\":false,\"note_on_success\":{\"message\":\"The import succeeded!\",\"message_type\":\"success\"},\"note_on_failure\":{\"message\":\"The import has failed!\",\"message_type\":\"error\"},\"base_data_sheet\":{\"/*\":\"please implement attribute or change it to an existing equivalent\",\"columns\":[{\"//doc-LAST_IMPORTED_ON\":\"every import should have an attribute to store the last import date\",\"attribute_alias\":\"LAST_IMPORTED_ON\",\"formula\":\"=Now()\"}],\"*/\":\"\"}}'",
+                                                    "to": "etl_config_uxon"
                                                 }
                                             ],
                                             "variable_to_column_mappings": [
