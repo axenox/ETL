@@ -5,6 +5,7 @@ namespace axenox\ETL\Common\Traits;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\StringDataType;
 
 /**
@@ -44,9 +45,10 @@ trait ITakeStepNotesTrait
             return null;
         }
         
-        return StepNote::FromUxon(
-            $this->getWorkbench(),
+        return new StepNote(
             $stepData,
+            '',
+            MessageTypeDataType::SUCCESS,
             $this->noteOnSuccessUxon
         );
     }
@@ -76,7 +78,7 @@ trait ITakeStepNotesTrait
      */
     public function getNoteOnFailure(ETLStepDataInterface $stepData, \Throwable $exception) : ?StepNote
     {
-        $note = StepNote::fromException($this->getWorkbench(), $stepData, $exception);
+        $note = StepNote::fromException($stepData, $exception);
         
         if($this->noteOnFailureUxon !== null) {
             $msg = $note->getMessage();

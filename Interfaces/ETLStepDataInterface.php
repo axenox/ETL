@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\Interfaces;
 
+use axenox\ETL\Common\StepNoteTaker;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 
 interface ETLStepDataInterface
@@ -16,4 +17,6 @@ interface ETLStepDataInterface
 	public function getLastResult() : ?ETLStepResultInterface;
 	
 	public function getTask() : TaskInterface;
+    
+    public function getNoteTaker() : StepNoteTaker;
 }
