@@ -549,18 +549,19 @@ class StepNote implements NoteInterface
         $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
         $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
         
-        $msg = $this->translator->translate(
+        $rowInfo = $this->translator->translate(
             'NOTE.ROWS_SKIPPED',
             ['%number%' => $msgAllRows],
             count($baseData) + count($currentData)
         );
 
-        $msg = StringDataType::endSentence($msg);
+        $rowInfo = $this->endSentence($rowInfo);
+        $msg = $this->endSentence($this->getMessage());
         
         if($prepend) {
-            $this->setMessage($msg . ' ' . $this->getMessage());
+            $this->setMessage($rowInfo . (empty($rowInfo) ? '' : ' ') . $msg);
         } else {
-            $this->setMessage(StringDataType::endSentence($this->getMessage()) . ' ' . $msg);
+            $this->setMessage($msg . (empty($msg) ? '' : ' ') . $rowInfo);
         }
 
         $baseData = array_slice($baseData, 0, 10, true);
@@ -602,7 +603,7 @@ class StepNote implements NoteInterface
         }
 
         if ($preamble !== null) {
-            $text = StringDataType::endSentence($preamble) . ' ' . $text;
+            $text = $this->endSentence($preamble) . (empty($preamble) ? '' : ' ') . $text;
         }
 
         $this->setMessage($text);
@@ -643,5 +644,18 @@ class StepNote implements NoteInterface
     public function getVisibleForUserRoles(): array
     {
         return $this->visibleForUserRoles;
+    }
+
+    /**
+     * @param string $sentence
+     * @return string
+     */
+    protected function endSentence(string $sentence) : string
+    {
+        if(empty($sentence)) {
+            return $sentence;
+        }
+        
+        return StringDataType::endSentence($sentence);
     }
 }
