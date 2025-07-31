@@ -46,11 +46,11 @@ interface NoteTakerInterface extends WorkbenchDependantInterface
     public function getPendingNotes() : DataSheetInterface;
 
     /**
-     * Commits all currently pending notes for this instance and clears its cache.
+     * Commits all currently pending notes for all instances of this note taker class and clears its cache.
      * 
      * @return void
      */
-    public function commitPendingNotes() : void;
+    public static function commitPendingNotes() : void;
 
     /**
      * TRUE, if this instance contains any pending notes.
@@ -71,12 +71,7 @@ interface NoteTakerInterface extends WorkbenchDependantInterface
     public function takeNote(NoteInterface $note) : void;
 
     /**
-     * Commits all pending notes, across all `NoteTaker` instances, to their respective data sources.
-     * 
-     * NOTE: It is recommended you manually commit pending notes, by calling this function to ensure
-     * timing. While pending notes are automatically committed on `__destruct()`, mechanisms like `TimeStampingBehavior`
-     * might not function as expected. Each commit, be it manual or automatic, clears the pending notes cache, which 
-     * means repeated commits are allowed and don't cause any issues.
+     * Commits all pending notes, across all note taker classes.
      * 
      * @return void
      */

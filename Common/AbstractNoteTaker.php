@@ -22,7 +22,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      * @var DataSheetInterface[] 
      */
     protected static array $pendingNotes = [];
-    protected int $currentOrderingId = 0;
+    protected static array $currentOrderingIds = [];
     private WorkbenchInterface $workbench;
     private MetaObjectInterface $storageObject;
     private TranslationInterface $translator;
@@ -35,6 +35,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         $this->workbench = $workbench;
         $this->storageObject = MetaObjectFactory::createFromString($workbench, $this->getStorageObjectAlias());
         $this->translator = $workbench->getCoreApp()->getTranslator();
+        self::$currentOrderingIds[get_class()] = 0;
     }
 
     /**
@@ -75,17 +76,19 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
      * @inheritdoc
      * @see NoteTakerInterface::commitPendingNotes() 
      */
-    public function commitPendingNotes() : void
+    public static function commitPendingNotes() : void
     {
-        if(!$this->hasPendingNotes()) {
+        $class = get_called_class();
+        $pendingNotes = self::$pendingNotes[$class];
+        
+        if($pendingNotes === null) {
             return;
         }
 
-        $class = get_called_class();
-        self::$pendingNotes[$class]->dataCreate();
+        $pendingNotes->dataCreate();
         unset(self::$pendingNotes[$class]);
 
-        $this->currentOrderingId = 0;
+        self::$currentOrderingIds[$class] = 0;
     }
 
     /**
@@ -133,7 +136,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     public function takeNote(NoteInterface $note) : void
     {
         $data = $note->getNoteData();
-        $data['ordering_id'] = $this->currentOrderingId++;
+        $data['ordering_id'] = self::$currentOrderingIds[get_class()]++;
         
         $this->getPendingNotesInternal()->addRow($data);
     }
@@ -145,7 +148,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     public static function commitPendingNotesAll() : void
     {
         foreach (self::$pendingNotes as $class => $pendingNotes) {
-            (new $class($pendingNotes->getWorkbench()))->commitPendingNotes();
+            $class::commitPendingNotes();
         }
     }
 
