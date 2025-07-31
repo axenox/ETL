@@ -259,9 +259,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-
-            yield $msg . PHP_EOL;
-            return $result->setProcessedRowsCounter(0);
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
