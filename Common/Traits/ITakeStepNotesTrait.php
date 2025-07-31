@@ -83,7 +83,10 @@ trait ITakeStepNotesTrait
         if($this->noteOnFailureUxon !== null) {
             $msg = $note->getMessage();
             $note->importUxonObject($this->noteOnFailureUxon);
-            $note->setMessage(StringDataType::endSentence($note->getMessage()) . ' ' . $msg);
+            $noteMsg = $note->getMessage();
+            $noteMsg = empty($noteMsg) ? $noteMsg : StringDataType::endSentence($noteMsg);
+            
+            $note->setMessage($noteMsg . (empty($noteMsg) ? '' : ' ') . $msg);
         }
         
         return $note;

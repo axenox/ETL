@@ -12,6 +12,7 @@ use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\MessageFactory;
+use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
@@ -373,10 +374,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $errorRowNrs = $errors->getAllRowNumbers();
 
                 $failToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
+                $baseData = $this->getBaseData(
                     $badDataForCheck, 
-                    $failToFind,
-                    [$this, 'toDisplayRowNumber']
+                    $failToFind
                 );
                 
                 $failToFindWithRowNrs = [];
@@ -470,10 +470,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
 
                 $failedToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
+                $baseData = $this->getBaseData(
                     $saveSheet, 
-                    $failedToFind,
-                    [$this, 'toDisplayRowNumber']
+                    $failedToFind
                 );
                 
                 if(!empty($baseData)) {
@@ -691,6 +690,38 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return true;
     }
 
+    /**
+     * @param DataColumnInterface[] $fromColumns
+     * @param DataColumnInterface[] $toColumns
+     * @param int   $preferredVersion
+     * @return void
+     * @see DataSheetTracker::recordDataTransform()
+     */
+    protected function recordTransform(array $fromColumns, array $toColumns, int $preferredVersion = -1) : void
+    {
+        $this->dataTracker?->recordDataTransform($fromColumns, $toColumns, $preferredVersion);
+    }
+
+    /**
+     * @param DataSheetInterface $baseData
+     * @param array              $failedToFind
+     * @return array
+     * @see DataSheetTracker::getBaseDataForSheet()
+     */
+    protected function getBaseData(DataSheetInterface $baseData, array &$failedToFind) : array
+    {
+        if($this->dataTracker === null) {
+            $failedToFind = $baseData->getRows();
+            return [];
+        }
+        
+        return $this->dataTracker->getBaseDataForSheet(
+            $baseData,
+            $failedToFind,
+            [$this, 'toDisplayRowNumber']
+        );
+    }
+    
     /**
      * @return DataSheetTracker|null
      */
