@@ -345,7 +345,6 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $stopOnError = false;
         $badDataBase = $dataSheet->copy()->removeRows();
         $badData = $badDataBase->copy();
-        $translator = $this->getTranslator();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -392,8 +391,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $e
                 )->enrichWithAffectedData(
                     $baseData,
-                    $failToFindWithRowNrs,
-                    $translator
+                    $failToFindWithRowNrs
                 )->setCountErrors(
                     count($e->getAllErrors())
                 )->takeNote();
@@ -487,30 +485,22 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 }
 
                 StepNote::fromException(
-                    $this->getWorkbench(),
                     $stepData,
                     $e,
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                    false
-                )->setVisibleUserRoles(
+                    false,
                     $visibility
                 )->takeNote();
             }
         }
 
         if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
-            (new StepNote(
-                $this->getWorkbench(),
+            StepNote::fromMessageCode(
                 $stepData,
-                MessageFactory::createFromCode($this->getWorkbench(), '82131JM')->getTitle(),
-                null,
-                MessageTypeDataType::WARNING
-            ))->setMessageCode(
-                '82131JM'
+                '82131JM',
             )->enrichWithAffectedData(
                 $affectedBaseData,
                 $affectedCurrentData,
-                $translator,
                 false
             )->takeNote();
         }
@@ -674,15 +664,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
             
             StepNote::fromException(
-                $columns[0]->getWorkbench(),
                 $stepData,
                 $exception,
-                null,
+                '',
                 false
             )->enrichWithAffectedData(
                 $badData,
                 [],
-                $this->getTranslator()
             )->setMessageType(
                 MessageTypeDataType::WARNING
             )->takeNote();

@@ -383,8 +383,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 NoteInterface::VISIBLE_FOR_EVERYONE
             );
         } else {
-            $translator = $this->getTranslator();
-            
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
@@ -407,13 +405,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 }
 
                 StepNote::fromException(
-                    $this->getWorkbench(),
                     $stepData,
                     $exception
                 )->enrichWithAffectedData(
                     $baseData,
                     $failedToFind,
-                    $translator
                 )->takeNote();
                 
                 throw $exception;
@@ -530,13 +526,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $column->setValuesByExpression($column->getFormula());
                     $column->setFresh(true);
                 } catch (\Throwable $e) {
-                    (new StepNote(
-                        $this->getWorkbench(),
+                    StepNote::fromException(
                         $stepData,
-                        'Cannot load column "' . $column->getName() . '" for base sheet! ' . $e->getMessage(),
                         $e,
+                        'Cannot load column "' . $column->getName() . '" for base sheet!',
+                        true,
+                        NoteInterface::VISIBLE_FOR_SUPERUSER
+                    )->setMessageType(
                         MessageTypeDataType::WARNING
-                    ))->takeNote();
+                    )->takeNote();
                 }
             }
         }
