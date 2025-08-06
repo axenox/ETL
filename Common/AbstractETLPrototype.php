@@ -12,6 +12,7 @@ use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\MessageFactory;
+use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
@@ -345,7 +346,6 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         $stopOnError = false;
         $badDataBase = $dataSheet->copy()->removeRows();
         $badData = $badDataBase->copy();
-        $translator = $this->getTranslator();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -374,10 +374,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $errorRowNrs = $errors->getAllRowNumbers();
 
                 $failToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
+                $baseData = $this->getBaseData(
                     $badDataForCheck, 
-                    $failToFind,
-                    [$this, 'toDisplayRowNumber']
+                    $failToFind
                 );
                 
                 $failToFindWithRowNrs = [];
@@ -392,8 +391,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $e
                 )->enrichWithAffectedData(
                     $baseData,
-                    $failToFindWithRowNrs,
-                    $translator
+                    $failToFindWithRowNrs
                 )->setCountErrors(
                     count($e->getAllErrors())
                 )->takeNote();
@@ -472,10 +470,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
 
                 $failedToFind = [];
-                $baseData = $this->getDataTracker()?->getBaseDataForSheet(
+                $baseData = $this->getBaseData(
                     $saveSheet, 
-                    $failedToFind,
-                    [$this, 'toDisplayRowNumber']
+                    $failedToFind
                 );
                 
                 if(!empty($baseData)) {
@@ -487,30 +484,22 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 }
 
                 StepNote::fromException(
-                    $this->getWorkbench(),
                     $stepData,
                     $e,
                     $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                    false
-                )->setVisibleUserRoles(
+                    false,
                     $visibility
                 )->takeNote();
             }
         }
 
         if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
-            (new StepNote(
-                $this->getWorkbench(),
+            StepNote::fromMessageCode(
                 $stepData,
-                MessageFactory::createFromCode($this->getWorkbench(), '82131JM')->getTitle(),
-                null,
-                MessageTypeDataType::WARNING
-            ))->setMessageCode(
-                '82131JM'
+                '82131JM',
             )->enrichWithAffectedData(
                 $affectedBaseData,
                 $affectedCurrentData,
-                $translator,
                 false
             )->takeNote();
         }
@@ -674,15 +663,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             }
             
             StepNote::fromException(
-                $columns[0]->getWorkbench(),
                 $stepData,
                 $exception,
-                null,
+                '',
                 false
             )->enrichWithAffectedData(
                 $badData,
                 [],
-                $this->getTranslator()
             )->setMessageType(
                 MessageTypeDataType::WARNING
             )->takeNote();
@@ -703,6 +690,38 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return true;
     }
 
+    /**
+     * @param DataColumnInterface[] $fromColumns
+     * @param DataColumnInterface[] $toColumns
+     * @param int   $preferredVersion
+     * @return void
+     * @see DataSheetTracker::recordDataTransform()
+     */
+    protected function recordTransform(array $fromColumns, array $toColumns, int $preferredVersion = -1) : void
+    {
+        $this->dataTracker?->recordDataTransform($fromColumns, $toColumns, $preferredVersion);
+    }
+
+    /**
+     * @param DataSheetInterface $baseData
+     * @param array              $failedToFind
+     * @return array
+     * @see DataSheetTracker::getBaseDataForSheet()
+     */
+    protected function getBaseData(DataSheetInterface $baseData, array &$failedToFind) : array
+    {
+        if($this->dataTracker === null) {
+            $failedToFind = $baseData->getRows();
+            return [];
+        }
+        
+        return $this->dataTracker->getBaseDataForSheet(
+            $baseData,
+            $failedToFind,
+            [$this, 'toDisplayRowNumber']
+        );
+    }
+    
     /**
      * @return DataSheetTracker|null
      */

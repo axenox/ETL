@@ -259,9 +259,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
 
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-
-            yield $msg . PHP_EOL;
-            return $result->setProcessedRowsCounter(0);
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
@@ -372,7 +370,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $result = $mapper->map($data, false);
                     }
                     
-                    $this->getDataTracker()?->recordDataTransform(
+                    $this->recordTransform(
                         $data->getColumns()->getMultiple($fromTrackedAliases),
                         $result->getColumns()->getMultiple($toTrackedAliases)
                     );
@@ -385,12 +383,10 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 NoteInterface::VISIBLE_FOR_EVERYONE
             );
         } else {
-            $translator = $this->getTranslator();
-            
             try {
                 // FIXME recalculate row numbers here as soon as row-bound exceptions support it.
                 $toSheet = $mapper->map($fromSheet, false, $logBook);
-                $this->getDataTracker()?->recordDataTransform(
+                $this->recordTransform(
                     $fromSheet->getColumns()->getMultiple($fromTrackedAliases),
                     $toSheet->getColumns()->getMultiple($toTrackedAliases)
                 );
@@ -400,22 +396,20 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 
                 $prev = $exception->getPrevious();
                 if($prev instanceof DataSheetInvalidValueError) {
-                    $errorSheet = $fromSheet->copy()->removeRows()->addRows($prev->getRowIndexes());
-                    $baseData = $this->getDataTracker()?->getBaseDataForSheet(
+                    $rows = $fromSheet->getRowsByIndex($prev->getRowIndexes());
+                    $errorSheet = $fromSheet->copy()->removeRows()->addRows($rows);
+                    $baseData = $this->getBaseData(
                         $errorSheet, 
-                        $failedToFind,
-                        [$this, 'toDisplayRowNumber']
+                        $failedToFind
                     );
                 }
 
                 StepNote::fromException(
-                    $this->getWorkbench(),
                     $stepData,
                     $exception
                 )->enrichWithAffectedData(
                     $baseData,
                     $failedToFind,
-                    $translator
                 )->takeNote();
                 
                 throw $exception;
@@ -532,13 +526,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                     $column->setValuesByExpression($column->getFormula());
                     $column->setFresh(true);
                 } catch (\Throwable $e) {
-                    (new StepNote(
-                        $this->getWorkbench(),
+                    StepNote::fromException(
                         $stepData,
-                        'Cannot load column "' . $column->getName() . '" for base sheet! ' . $e->getMessage(),
                         $e,
+                        'Cannot load column "' . $column->getName() . '" for base sheet!',
+                        true,
+                        NoteInterface::VISIBLE_FOR_SUPERUSER
+                    )->setMessageType(
                         MessageTypeDataType::WARNING
-                    ))->takeNote();
+                    )->takeNote();
                 }
             }
         }

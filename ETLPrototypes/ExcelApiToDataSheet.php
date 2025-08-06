@@ -163,11 +163,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->isSkipInvalidRows());
 
         if($toSheet->countRows() === 0) {
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
-            yield $msg . PHP_EOL;
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
+            $logBook->addLine('All input rows removed because of invalid or missing data. **Exiting step**.');
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
         }
         
         $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
