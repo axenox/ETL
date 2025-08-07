@@ -61,12 +61,16 @@ class DataCheckWithStepNote extends DataCheck
      * @param DataSheetInterface        $sheet
      * @param LogBookInterface|null     $logBook
      * @param ETLStepDataInterface|null $stepData
-     * @return DataSheetInterface
+     * @param DataSheetInterface|null   $badData
+     * @param bool                      $takeNotes
+     * @return string
      */
     public function check(
         DataSheetInterface $sheet, 
         LogBookInterface $logBook = null,
-        ETLStepDataInterface $stepData = null
+        ETLStepDataInterface $stepData = null,
+        DataSheetInterface $badData = null,
+        bool $takeNotes = true
     ) : string
     {
         $removeInvalidRows = $this->getRemoveInvalidRows();
@@ -74,7 +78,9 @@ class DataCheckWithStepNote extends DataCheck
         $isInValidValue = $this->getIsInvalidValue();
         $isValidAlias = $this->getIsValidAlias();
         
-        if(!empty($isValidAlias)) {
+        $markInvalidRows = !empty($isValidAlias) && !$removeInvalidRows;
+        
+        if($markInvalidRows) {
             if($sheet->getMetaObject()->hasAttribute($isValidAlias)) {
                 $isInValidValue = $sheet->getMetaObject()->getAttribute($isValidAlias)->getDataType()->format($isInValidValue);
             } else if (is_bool($isInValidValue)) {
@@ -84,7 +90,7 @@ class DataCheckWithStepNote extends DataCheck
         
         $checkSheet = $sheet->copy();
         $errors = null;
-        $rowsToRemove = [];
+        $invalidRows = [];
         $conditionJson = $this->getConditionGroupUxon()->toJson();
         
         foreach ($sheet->getRows() as $rowIdx => $row) {
@@ -106,34 +112,34 @@ class DataCheckWithStepNote extends DataCheck
             try {
                 $result = parent::check($checkSheet, $logBook);
             } catch (DataCheckFailedError $e) {
+                
                 $errorMessage = StringDataType::replacePlaceholders($e->getMessage(), $placeHoldersToValues);
+                $badData?->addRow($row, true);
+                $invalidRows[] = $rowIdx;
                 
                 if($removeInvalidRows) {
-                    $rowsToRemove[] = $rowIdx;
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (REMOVED)', $e->getAlias(), $e->getPrevious());
-                } else if(!empty($isValidAlias)) {
-                    $rowsToMark[] = $rowIdx;
+                } else if($markInvalidRows) {
                     $sheet->setCellValue($isValidAlias, $rowIdx, $isInValidValue);
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
                 }
                 
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
-                $errors->appendError($e, $rowIdx + 1);
+                $errors->appendError($e, $rowIdx);
             }
         }
-
-        if(! empty($rowsToRemove)) {
-            $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $rowsToRemove) . '`');
-            $sheet->removeRows($rowsToRemove);
-        }
-
-        if(! empty($rowsToMark)) {
-            $logBook->addLine('Added invalid-mark on row(s) with index: `' . implode('`, `', $rowsToMark) . '`');
+        
+        if(!empty($invalidRows)) {
+            if($removeInvalidRows) {
+                $logBook->addLine('Removed row(s) with index: `' . implode('`, `', $invalidRows) . '`');
+                $sheet->removeRows($invalidRows);
+            } else if($markInvalidRows) {
+                $logBook->addLine('Added invalid-mark on row(s) with index: `' . implode('`, `', $invalidRows) . '`');
+            }
         }
         
         if($errors) {
-            if($noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
-                $noteOnFailure->importCrudCounter($this->getStep()?->getCrudCounter());
+            if($takeNotes && $noteOnFailure = $this->getNoteOnFailure($stepData, $errors)) {
                 $noteOnFailure->setCountErrors(count($errors->getAllErrors()));
                 $noteOnFailure->takeNote();
             }
@@ -141,8 +147,7 @@ class DataCheckWithStepNote extends DataCheck
             throw $errors;
         } 
         
-        if($noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
-            $noteOnSuccess->importCrudCounter($this->getStep()?->getCrudCounter());
+        if($takeNotes && $noteOnSuccess = $this->getNoteOnSuccess($stepData)) {
             $noteOnSuccess->takeNote();
         }
         
