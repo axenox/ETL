@@ -3,10 +3,19 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
+use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataTrackerException;
+use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Factories\MessageFactory;
+use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Log\LoggerInterface;
+use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
@@ -22,14 +31,13 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     use ITakeStepNotesTrait;
     
     const PH_PARAMETER_PREFIX = '~parameter:';
-    
     const PH_LAST_RUN_PREFIX = 'last_run_';
-    
     const PH_LAST_RUN_UID = 'last_run_uid';
-    
     const PH_FLOW_RUN_UID = 'flow_run_uid';
-    
     const PH_STEP_RUN_UID = 'step_run_uid';
+    const IF_DUPLICATES_ERROR = 'error';
+    const IF_DUPLICATES_DISABLE_TRACKER = 'disable_tracker';
+    const IF_DUPLICATES_IGNORE = 'ignore';
     
     private $workbench = null;
     
@@ -52,6 +60,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?UxonObject $fromDataChecksUxon = null;
     private CrudCounter $crudCounter;
     private array $logBooks = [];
+    private ?DataSheetTracker $dataTracker = null;
+    private array $trackedAliases = [];
+    private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -163,6 +174,30 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function setFlowRunUidAttribute(string $value) : AbstractETLPrototype
     {
         $this->flowRunUidAttribtueAlias = $value;
+        return $this;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getIfDuplicatesDetected() : string
+    {
+        return $this->ifDuplicatesDetected;
+    }
+
+    /**
+     * Configure how this step should react, if it detects duplicate entries in its input data.
+     * 
+     * @uxon-property if_duplicates_detected
+     * @uxon-type [error,disable_tracker,ignore]
+     * @uxon-template error
+     * 
+     * @param string $behavior
+     * @return $this
+     */
+    protected function setIfDuplicatesDetected(string $behavior) : AbstractETLPrototype
+    {
+        $this->ifDuplicatesDetected = $behavior;
         return $this;
     }
     
@@ -287,7 +322,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface   $dataSheet
      * @param UxonObject|null      $uxon
-     * @param string               $logbookIntro
+     * @param string               $uxonProperty
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @return void
@@ -309,6 +344,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         $errors = null;
         $stopOnError = false;
+        $badDataBase = $dataSheet->copy()->removeRows();
+        $badData = $badDataBase->copy();
         
         foreach ($uxon as $dataCheckUxon) {
             $check = new DataCheckWithStepNote(
@@ -322,16 +359,56 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 continue;
             }
 
+            $badDataForCheck = $badDataBase->copy();
+            
             try {
-                $check->check($dataSheet, $logBook, $stepData);
+                $check->check($dataSheet, $logBook, $stepData, $badDataForCheck, false);
+                $check->getNoteOnSuccess($stepData)?->takeNote();
             } catch (DataCheckFailedErrorMultiple $e) {
                 $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->merge($e);
-                
+
                 $stopOnError |= $check->getStopOnCheckFailed();
+                
+                $badData->addRows($badDataForCheck->getRows());
+                $errorRowNrs = $errors->getAllRowNumbers();
+
+                $failToFind = [];
+                $baseData = $this->getBaseData(
+                    $badDataForCheck, 
+                    $failToFind
+                );
+                
+                $failToFindWithRowNrs = [];
+                foreach ($failToFind as $rowNr => $data) {
+                    $index = $this->toDisplayRowNumber($rowNr, true);
+                    $rowNr = $this->toDisplayRowNumber($errorRowNrs[$index]);
+                    $failToFindWithRowNrs[$rowNr] = $data;
+                }
+                
+                $check->getNoteOnFailure(
+                    $stepData, 
+                    $e
+                )->enrichWithAffectedData(
+                    $baseData,
+                    $failToFindWithRowNrs
+                )->setCountErrors(
+                    count($e->getAllErrors())
+                )->takeNote();
             }
         }
+        
+        if($badData->countRows() > 0) {
+            $logBook->addDataSheet($uxonProperty . ': Bad Data', $badData);
+        }
 
+        if($dataSheet->countRows() === 0) {
+            $msg = 'All from-rows removed by failed data checks. **Exiting step**.';
+            $logBook->addLine($msg);
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
+        }
+        
         if($errors === null) {
             $logBook->addLine('Data PASSED all checks.');
         } else if ($stopOnError) {
@@ -346,6 +423,95 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     }
 
     /**
+     * Applies a specified transform function row by row to the data sheet.
+     * Whenever a row encounters an error, the error will be logged and the
+     * row discarded.
+     *
+     * @param callable             $transformer
+     * @param DataSheetInterface   $dataSheet
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
+     * @param array                $visibility
+     * @return DataSheetInterface
+     */
+    protected function applyTransformRowByRow(
+        callable $transformer,
+        DataSheetInterface $dataSheet,
+        ETLStepDataInterface $stepData,
+        FlowStepLogBook $logBook,
+        array $visibility
+    ) : DataSheetInterface
+    {
+        $saveSheet = $dataSheet;
+        $resultSheet = null;
+        $translator = $this->getTranslator();
+
+        $affectedBaseData = [];
+        $affectedCurrentData = [];
+
+        foreach ($dataSheet->getRows() as $i => $row) {
+            $saveSheet = $saveSheet->copy();
+            $saveSheet->removeRows();
+            $saveSheet->addRow($row, false, false);
+            try {
+                // Get the resulting data sheet of that single line and add it to the global
+                // result data
+                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
+                //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
+                if ($resultSheet === null) {
+                    $resultSheet = $rowResultSheet;
+                } else {
+                    foreach ($rowResultSheet->getRows() as $resultRow) {
+                        $resultSheet->addRow($resultRow, false, false);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // If anything goes wrong, just continue with the next row.
+                $this->getWorkbench()->getLogger()->logException($e, LoggerInterface::ERROR);
+
+                $failedToFind = [];
+                $baseData = $this->getBaseData(
+                    $saveSheet, 
+                    $failedToFind
+                );
+                
+                if(!empty($baseData)) {
+                    $rowNo = array_key_first($baseData);
+                    $affectedBaseData[$rowNo] = $baseData[$rowNo];
+                } else {
+                    $rowNo = $this->toDisplayRowNumber($i);
+                    $affectedCurrentData[$rowNo] = $failedToFind[0];
+                }
+
+                StepNote::fromException(
+                    $stepData,
+                    $e,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
+                    false,
+                    $visibility
+                )->takeNote();
+            }
+        }
+
+        if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
+            StepNote::fromMessageCode(
+                $stepData,
+                '82131JM',
+            )->enrichWithAffectedData(
+                $affectedBaseData,
+                $affectedCurrentData,
+                false
+            )->takeNote();
+        }
+
+        if($resultSheet === null) {
+            $resultSheet = $dataSheet->copy()->removeRows();
+        }
+
+        return $resultSheet;
+    }
+
+    /**
      * Define a set of data checks to performed on the data RECEIVED by this step. Use the property
      * `stop_on_failed_check` to control, whether a failed check should halt the procedure.
      *
@@ -353,7 +519,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
+     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -382,7 +549,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property to_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"}, "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
+     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -440,5 +608,142 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             return $this->logBooks[0]->createDebugWidget($debug_widget);
         }
         return $this->getLogBook($stepData)->createDebugWidget($debug_widget);
+    }
+
+    /**
+     * Converts a data sheet row number to a display row number that allows humans
+     * to identify this row in their input data.
+     *
+     * For example, in an EXCEL-Import, where the spreadsheet has a title row, the row number
+     * will be shifted up by 2:
+     *
+     * - +1, because EXCEL starts counting from 1.
+     * - +1, to compensate for the title row.
+     *
+     * Row 0 would become row 2 and so on.
+     *
+     * NOTE: This function does not find the index your row had in the original data set!
+     * Use `findDisplayRowNumbers(array)` to find out what index a row had in the from-data.
+     *
+     * @param int  $dataSheetRowIdx
+     * @param bool $inverse
+     * If TRUE, the input will be converted back to an array index.
+     * @return int
+     */
+    public function toDisplayRowNumber(int $dataSheetRowIdx, bool $inverse = false) : int
+    {
+        return $dataSheetRowIdx;
+    }
+
+    /**
+     * Begin tracking transform for the data provided. 
+     * 
+     * @param array                $columns
+     * @param ETLStepDataInterface $stepData
+     * @param FlowStepLogBook      $logBook
+     * @return bool
+     */
+    protected function startTrackingData(array $columns, ETLStepDataInterface $stepData, FlowStepLogBook $logBook) : bool
+    {
+        if($this->dataTracker !== null || empty($columns)) {
+            return false;
+        }
+
+        try {
+            $this->dataTracker = new DataSheetTracker($columns, false);
+        } catch (DataTrackerException $exception) {
+            $badData = $exception->getBadData();
+            $badData = array_combine(
+                array_map([$this, 'toDisplayRowNumber'], array_keys($badData)),
+                $badData
+            );
+            
+            if($this->ifDuplicatesDetected == self::IF_DUPLICATES_IGNORE) {
+                $exception->setAlias('81YKZHB');
+            }
+            
+            StepNote::fromException(
+                $stepData,
+                $exception,
+                '',
+                false
+            )->enrichWithAffectedData(
+                $badData,
+                [],
+            )->setMessageType(
+                MessageTypeDataType::WARNING
+            )->takeNote();
+
+
+            switch ($this->ifDuplicatesDetected) {
+                case self::IF_DUPLICATES_ERROR:
+                    throw new RuntimeException('Process failed.', '81YKTKG');
+                case self::IF_DUPLICATES_IGNORE:
+                    $this->dataTracker = new DataSheetTracker($columns, true);
+                    $logBook->addLine('**WARNING** - Data tracking will be unreliable: ' . $exception->getMessage());
+                    break;
+                default:
+                    $logBook->addLine('**WARNING** - Data tracking not possible: ' . $exception->getMessage());
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+     * @param DataColumnInterface[] $fromColumns
+     * @param DataColumnInterface[] $toColumns
+     * @param int   $preferredVersion
+     * @return void
+     * @see DataSheetTracker::recordDataTransform()
+     */
+    protected function recordTransform(array $fromColumns, array $toColumns, int $preferredVersion = -1) : void
+    {
+        $this->dataTracker?->recordDataTransform($fromColumns, $toColumns, $preferredVersion);
+    }
+
+    /**
+     * @param DataSheetInterface $baseData
+     * @param array              $failedToFind
+     * @return array
+     * @see DataSheetTracker::getBaseDataForSheet()
+     */
+    protected function getBaseData(DataSheetInterface $baseData, array &$failedToFind) : array
+    {
+        if($this->dataTracker === null) {
+            $failedToFind = $baseData->getRows();
+            return [];
+        }
+        
+        return $this->dataTracker->getBaseDataForSheet(
+            $baseData,
+            $failedToFind,
+            [$this, 'toDisplayRowNumber']
+        );
+    }
+    
+    /**
+     * @return DataSheetTracker|null
+     */
+    protected function getDataTracker() : ?DataSheetTracker
+    {
+        return $this->dataTracker;
+    }
+
+    /**
+     * @return array
+     * @see DataSheetTracker::getTrackedAliases()
+     */
+    protected function getTrackedAliases() : array
+    {
+        return $this->dataTracker ? $this->dataTracker->getTrackedAliases() : [];
+    }
+
+    /**
+     * @return TranslationInterface
+     */
+    protected function getTranslator() : TranslationInterface
+    {
+        return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
     }
 }

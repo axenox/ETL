@@ -72,7 +72,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
     	// process flow
 		$routeUID = $routeModel['UID'];
-		$flowAlias = $this->getFlowAlias($routeUID, $routePath);
+		$flowAlias = $this->getFlowAliasWithVersion($routeUID, $routePath);
 		$flowRunUID = RunETLFlow::generateFlowRunUid();
         $this->loggingMiddleware->logRequestProcessing($request, $routeUID, $flowRunUID);
 	    $flowResult = $this->runFlow($flowAlias, $request); // flow data update
@@ -183,10 +183,10 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 		return json_encode($body);
 	}
 
-    protected function getFlowAlias(string $routeUid, string $routePath) : string
+    protected function getFlowAliasWithVersion(string $routeUid, string $routePath) : string
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_flow');
-        $ds->getColumns()->addMultiple(['webservice', 'flow__alias', 'route']);
+        $ds->getColumns()->addMultiple(['webservice', 'flow__alias_with_version', 'route']);
         $ds->getFilters()->addConditionFromString('webservice', $routeUid);
         $ds->dataRead();
 
@@ -196,13 +196,13 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             // Compare routes without leading slashes because people will copy these slashes from
             // the swagger UI and paste them into the route field in the webservice config.
             if (strcasecmp(ltrim($row['route'], '/'), ltrim($routePath,'/')) === 0) {
-                $alias = $row['flow__alias'];
+                $alias = $row['flow__alias_with_version'];
                 return $alias;
             }
         }
 
         if ($alias === null && count($rows) === 1){
-            return $rows[0]['flow__alias'];
+            return $rows[0]['flow__alias_with_version'];
         } else {
             $msg = 'webservice route `' . $routePath . '` (route UID `' . $routeUid . '`)';
             if (count($rows) === 0) {

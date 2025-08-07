@@ -2,9 +2,11 @@
 namespace axenox\ETL\Uxon;
 
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\OpenAPI\OpenApi3Component;
 use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
 use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
 use axenox\ETL\Common\OpenAPI\OpenAPI3Route;
+use cebe\openapi\spec\Components;
 use cebe\openapi\spec\OpenApi;
 use cebe\openapi\spec\PathItem;
 use cebe\openapi\spec\Paths;
@@ -39,10 +41,14 @@ class OpenAPISchema extends UxonSchema
      * requested, the corresponding OpenAPI attributes will be added automatically. If the prototype
      * is an OpenAPI class, properties of the first matching APISchema class will be added too.
      * 
+     * NOTE: All searches are case-sensitive! If auto-suggest doesn't load properly, make sure your
+     * `uxon-property` references the prototype class accurately (i.e. with the same capitalization as `YourClass::class`).
+     * 
      * @var string[]
      */
     const CLASS_MAP = [
         '\\' . OpenAPI3::class => '\\' . OpenApi::class,
+        '\\' . OpenApi3Component::class => '\\' . Components::class,
         // Caution: Object schema and property schema are both JSON schemas
         '\\' . OpenAPI3ObjectSchema::class => '\\' . Schema::class,
         '\\' . OpenAPI3Property::class => '\\' . Schema::class,
