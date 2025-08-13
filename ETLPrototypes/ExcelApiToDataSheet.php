@@ -27,41 +27,53 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
  * AND x-excel-sheet and with x-excel-column for the information where to read the information in the excel
  * like:
+ * 
  * ´´´
  * {
  *     "Activities": {
  *          "type": "object",
- *          "x-object-alias": "full.namespace.object",
+ *          "x-object-alias": "my.App.Activity",
  *          "x-excel-sheet": "Activities",
  *          "properties: {
  *              "Activity_Id" {
  *                  "type": "string",
- *                  "x-attribute-alias": "attribute_alias",
+ *                  "x-attribute-alias": "activity_id",
  *                  "x-excel-column": "Activity_Id"
  *              }
  *          }
  *     }
  * }
- *
+ * 
  * ´´´
+ * 
+ * ## Customizing the resulting data sheet
  *
+ * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
+ * filters, sorters, aggregators, etc. from placeholders available in the flow step.
  *
- * Placeholder and STATIC Formulas can be defined wihtin the configuration.
- * "additional_rows": [
- *      {
- *          "attribute_alias": "ETLFlowRunUID",
- *          "value": "[#flow_run_uid#]"
- *      },
- *      {
- *          "attribute_alias": "RequestId",
- *          "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
- *      },
- *      {
- *          "attribute_alias": "Betreiber",
- *          "value": "SuedLink"
- *      }
- * ]
+ * ### Example: save additional information about the flow run in a staging table
  *
+ * ```
+ * {
+ *  "base_data_sheet": {
+ *      "columns": [
+ *          {
+ *              "attribute_alias": "ETLFlowRunUID",
+ *              "value": "[#flow_run_uid#]"
+ *          },
+ *          {
+ *              "attribute_alias": "RequestId",
+ *              "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
+ *          },
+ *          {
+ *              "attribute_alias": "Betreiber",
+ *              "value": "SuedLink"
+ *          }
+ *      ]
+ * }
+ *
+ * ```
+ * 
  * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
