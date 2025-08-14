@@ -519,8 +519,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property from_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
-     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "message_type":"warning"},"conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
@@ -549,8 +548,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @uxon-property to_data_checks
      * @uxon-type \axenox\etl\Common\DataCheckWithStepNote[]
-     * @uxon-template [{"note_on_failure": {"message":"", "log_level":"warning"},
-     *     "conditions":[{"expression":"","comparator":"==","value":""}]}]
+     * @uxon-template [{"note_on_failure": {"message":"", "message_type":"warning"},"conditions":[{"expression":"","comparator":"==","value":""}]}]
      *
      * @param UxonObject $uxon
      * @return $this
