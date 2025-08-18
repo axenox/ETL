@@ -21,8 +21,8 @@ use exface\Core\Interfaces\DataSheets\DataSheetInterface;
  */
 interface NoteInterface
 {
-    const VISIBLE_FOR_SUPERUSER = ['SUPERUSER'];
-    const VISIBLE_FOR_EVERYONE = ['AUTHENTICATED'];
+    const VISIBLE_FOR_SUPERUSER = ['exface.Core.SUPERUSER'];
+    const VISIBLE_FOR_EVERYONE = ['exface.Core.AUTHENTICATED'];
     
     /**
      * Take this note, adding it to the pending notes to be commited later.
