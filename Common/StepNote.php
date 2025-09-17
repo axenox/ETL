@@ -622,8 +622,8 @@ class StepNote implements NoteInterface
      * @inheritDoc
      * 
      * @uxon-property visible_for_user_roles
-     * @uxon-type metamodel:exface.Core.USER_ROLE:ALIAS[]
-     * @uxon-template ["SUPERUSER"]
+     * @uxon-type metamodel:exface.Core.USER_ROLE:ALIAS_WITH_NS[]
+     * @uxon-template ["exface.Core.SUPERUSER"]
      * 
      * @param array $roles
      * @return NoteInterface

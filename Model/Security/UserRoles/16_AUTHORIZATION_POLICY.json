@@ -83,7 +83,7 @@
         {
             "_EXPORT_SUMMARY": "Optionale StepNotes verbergen",
             "CREATED_ON": "2025-07-25 13:42:09",
-            "MODIFIED_ON": "2025-07-28 10:57:25",
+            "MODIFIED_ON": "2025-08-08 11:24:16",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f0987165a4be9e9871535179db92ca",
@@ -101,13 +101,13 @@
                     "conditions": [
                         {
                             "expression": "visible_for_user_roles",
-                            "comparator": "[",
-                            "value": "=USER('USER_ROLE_USERS__USER_ROLE__ALIAS:LIST')"
+                            "comparator": "][",
+                            "value": "=USER('USER_ROLE_USERS__USER_ROLE__ALIAS_WITH_NS:LIST')"
                         },
                         {
                             "expression": "visible_for_user_roles",
-                            "comparator": "==",
-                            "value": "AUTHENTICATED"
+                            "comparator": "][",
+                            "value": "exface.Core.AUTHENTICATED"
                         }
                     ]
                 }
