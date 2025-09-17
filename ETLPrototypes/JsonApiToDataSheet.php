@@ -9,6 +9,7 @@ use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
+use exface\Core\CommonLogic\DataSheets\Mappings\LookupMapping;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
@@ -20,6 +21,7 @@ use exface\Core\Factories\DataSheetFactory;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use exface\Core\Factories\DataSheetMapperFactory;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\DataSheets\DataMappingInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetMapperInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -338,19 +340,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $toTrackedAliases = [];
         
         foreach ($mapper->getMappings() as $mapping) {
-            // TODO Are there other mappings, where one column might transform into another?
-            if(!$mapping instanceof  DataColumnMapping) {
-                continue;
-            }
-            
-            $fromAlias = $mapping->getFromExpression()->getAttributeAlias();
-            if(key_exists($fromAlias, $fromTrackedAliases)) {
-                $toAlias = $mapping->getToExpression()->getAttributeAlias();
-                $toTrackedAliases[$fromAlias] = $toAlias;
-            }
+            $toTrackedAliases = array_merge(
+                $fromTrackedAliases, 
+                $this->extractTrackedAliases($fromTrackedAliases, $mapping)
+            );
         }
-
-        $toTrackedAliases = array_merge($fromTrackedAliases, $toTrackedAliases);
 
         if($rowByRow) {
             $passLogBook = true;
@@ -417,6 +411,41 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         return $toSheet;
+    }
+
+    /**
+     * Extract tracked aliases from a DataMapping to enable data tracking.
+     * TODO 2025-09-17: List of supported mappings is incomplete.
+     * 
+     * @param array                $trackedAliases
+     * @param DataMappingInterface $mapping
+     * @return array
+     */
+    protected function extractTrackedAliases(array $trackedAliases, DataMappingInterface $mapping) : array
+    {
+        switch (true) {
+            case $mapping instanceof  DataColumnMapping:
+                $fromAlias = $mapping->getFromExpression()->getAttributeAlias();
+                if(key_exists($fromAlias, $trackedAliases)) {
+                    $toAlias = $mapping->getToExpression()->getAttributeAlias();
+                    return [$fromAlias => $toAlias];
+                }
+                break;
+            case $mapping instanceof LookupMapping:
+                $result = [];
+                $toAlias = $mapping->getToExpression()->getAttributeAlias();
+                
+                foreach ($mapping->getMatches() as $match) {
+                    $fromAlias = $match['from'];
+                    if(key_exists($fromAlias, $trackedAliases)) {
+                        $result[$fromAlias] = $toAlias;
+                    }
+                }
+                
+                return $result;
+        }
+        
+        return [];
     }
 
     /**
