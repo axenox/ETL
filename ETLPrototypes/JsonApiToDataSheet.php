@@ -161,15 +161,15 @@ use exface\Core\CommonLogic\DataSheets\DataColumn;
  *      "columns": [
  *          {
  *              "attribute_alias": "ETLFlowRunUID",
- *              "value": "[#flow_run_uid#]"
+ *              "formula": "='[#flow_run_uid#]'"
  *          },
  *          {
  *              "attribute_alias": "RequestId",
- *              "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
+ *              "formula": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
  *          },
  *          {
  *              "attribute_alias": "Betreiber",
- *              "value": "SuedLink"
+ *              "formula": "='SuedLink'"
  *          }
  *      ]
  * }
