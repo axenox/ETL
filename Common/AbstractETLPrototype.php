@@ -3,15 +3,15 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
-use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use exface\Core\CommonLogic\Profiler;
+use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
-use exface\Core\Factories\MessageFactory;
 use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
@@ -38,6 +38,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     const IF_DUPLICATES_ERROR = 'error';
     const IF_DUPLICATES_DISABLE_TRACKER = 'disable_tracker';
     const IF_DUPLICATES_IGNORE = 'ignore';
+    const CFG_TIMEOUT = 'STEP_RUN.TIMEOUT';
+    const CFG_MEMORY_LIMIT = 'STEP_RUN.MEMORY_LIMIT';
     
     private $workbench = null;
     
@@ -63,6 +65,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private ?DataSheetTracker $dataTracker = null;
     private array $trackedAliases = [];
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
+    private float $memoryLimit = 1000000000; // 1GiB
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -75,6 +78,15 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         if ($uxon !== null) {
             $this->importUxonObject($uxon);
+        }
+        
+        $cfg = $this->workbench->getApp('axenox.ETL')?->getConfig();
+        if($cfg->hasOption(self::CFG_MEMORY_LIMIT)) {
+            $this->memoryLimit = $cfg->getOption(self::CFG_MEMORY_LIMIT);
+        }
+        
+        if($cfg->hasOption(self::CFG_TIMEOUT)) {
+            $this->timeout = $cfg->getOption(self::CFG_TIMEOUT);
         }
     }
     
@@ -396,6 +408,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     count($e->getAllErrors())
                 )->takeNote();
             }
+            
+            $this->checkSafeGuards($stepData);
         }
         
         if($badData->countRows() > 0) {
@@ -491,6 +505,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $visibility
                 )->takeNote();
             }
+            
+            $this->checkSafeGuards($stepData);
         }
 
         if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {
@@ -743,5 +759,28 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function getTranslator() : TranslationInterface
     {
         return $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
+    }
+
+    /**
+     * Checks safeguards, such as memory limit and timeout, and throws an error
+     * if any of them are exceeded.
+     *
+     * @param ETLStepDataInterface $stepData
+     * @return void
+     */
+    protected function checkSafeGuards(ETLStepDataInterface $stepData) : void
+    {
+        $profiler = $stepData->getProfiler();
+        $duration = ($profiler->getDurationMs($this) ?? 0) / 1000;
+        if($duration >= $this->timeout) {
+            throw new RuntimeException('Request timed out! (' . $duration . 's)', '82S9T4E');
+        }
+        
+        $memory = $profiler->getMemoryUsageBytes($this) ?? 0;
+        if($memory >= $this->memoryLimit) {
+            $limit = ByteSizeDataType::formatWithScale($this->memoryLimit);
+            $memory = ByteSizeDataType::formatWithScale($memory);
+            throw new RuntimeException('Request memory limit exceeded! Used ' . $memory . ' out of ' . $limit . '.', '82S9VCT');
+        }
     }
 }
