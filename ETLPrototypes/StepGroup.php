@@ -6,6 +6,7 @@ use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\StepNoteTaker;
 use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
@@ -107,7 +108,14 @@ class StepGroup implements DataFlowStepInterface
             } else {
                 yield $indent . $nr . '. ' . $step->getName() . ':' . PHP_EOL;
                 $log = '';
-                $stepData = new ETLStepData($stepData->getTask(), $flowRunUid, $stepRunUid, $prevStepResult, $prevRunResult);
+                $stepData = new ETLStepData(
+                    $stepData->getTask(), 
+                    $flowRunUid, 
+                    $stepRunUid, 
+                    $prevStepResult, 
+                    $prevRunResult,
+                    $stepData->getProfiler()
+                );
                 
                 $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step, $stepData) {
                     if ($event->getStep() !== $step) {
@@ -118,6 +126,7 @@ class StepGroup implements DataFlowStepInterface
                 });
                 
                 try {
+                    $stepData->getProfiler()->start($step);
                     $generator = $step->run($stepData, $nr);
                     foreach ($generator as $msg) {
                         $msg = $indent . $indent . $msg;
@@ -308,6 +317,8 @@ class StepGroup implements DataFlowStepInterface
         string $output,
         ETLStepResultInterface $result = null) : DataSheetInterface
     {
+        $stepData->getProfiler()->stop($step);
+        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -315,7 +326,7 @@ class StepGroup implements DataFlowStepInterface
         $row['result_uxon'] = $result->__toString();
         $row['success_flag'] = true;
         $row['output'] = $output;
-        
+
         if (($result instanceof IncrementalEtlStepResult) && $result->getIncrementValue() !== null) {
             $row['incremental_flag'] = true;
         } else {
@@ -338,6 +349,10 @@ class StepGroup implements DataFlowStepInterface
 
             $note->importCrudCounter($step->getCrudCounter());
             $note->takeNote();
+
+            $this->getMetricsNote(
+                $step, $stepData
+            )->takeNote();
         }
         
         $ds->addRow($row);
@@ -362,6 +377,8 @@ class StepGroup implements DataFlowStepInterface
         ExceptionInterface $exception, 
         string $output = '') : DataSheetInterface
     {
+        $stepData->getProfiler()->stop($step);
+        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -388,11 +405,51 @@ class StepGroup implements DataFlowStepInterface
             )->importCrudCounter(
                 $step->getCrudCounter()
             )->takeNote();
+
+            $this->getMetricsNote(
+                $step, $stepData
+            )->takeNote();
         }
         
         $ds->addRow($row);
         $ds->dataUpdate();
         return $ds;
+    }
+
+    /**
+     * Creates a step note to render certain metrics, such as step-run duration and memory usage.
+     * 
+     * NOTE: By default this note will only be visible to superusers.
+     * 
+     * @param DataFlowStepInterface $step
+     * @param ETLStepDataInterface  $stepData
+     * @return StepNote|null
+     */
+    protected function getMetricsNote(DataFlowStepInterface $step, ETLStepDataInterface $stepData) : ?StepNote
+    {
+        $metrics = [];
+        
+        $duration = $stepData->getProfiler()->getDurationMs($step);
+        if($duration !== null) {
+            $metrics[] = $duration . 'ms';
+        }
+        
+        $memory = $stepData->getProfiler()->getMemoryUsageBytes($step);
+        if($memory !== null) {
+            $metrics[] = ByteSizeDataType::formatWithScale($memory);
+        }
+        
+        if(empty($metrics)) {
+            return null;
+        }
+        
+        return new StepNote(
+            $stepData,
+            implode(', ', $metrics) . '.',
+            null,
+            null,
+            NoteInterface::VISIBLE_FOR_SUPERUSER
+        );
     }
     
     /**
