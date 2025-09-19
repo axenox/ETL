@@ -200,27 +200,25 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     public function run(ETLStepDataInterface $stepData) : \Generator
     {
-        $placeholders = $this->getPlaceholders($stepData);
-    	$result = new UxonEtlStepResult($stepData->getStepRunUid());
-        $task = $stepData->getTask();
         $logBook = $this->getLogBook($stepData);
         $this->getCrudCounter()->reset();
 
+        $task = $stepData->getTask();
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
         }
-        
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
-
+        
         $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
         $requestBody = $requestLogData['http_body'];
+        $msgEmpty = 'No HTTP content found to process.';
 
         if ($requestLogData['http_content_type'] !== 'application/json' || $requestBody === null) {
-            $logBook->addLine($msg = 'No HTTP content found to process.');
-            yield $msg . PHP_EOL;
-            
+            $logBook->addLine($msgEmpty);
+
             $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
+            yield $msgEmpty . PHP_EOL;
+            return (new UxonEtlStepResult($stepData->getStepRunUid()))->setProcessedRowsCounter(0);
         }
 
         $toObject = $this->getToObject();
@@ -234,36 +232,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $logBook->addSection('Reading from-sheet');
+        
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
         $requestData = $routeSchema->parseData($requestBody, $toObject);
         $fromSheet = $this->readJson($requestData, $toObjectSchema);
+        
         $logBook->addLine("Read {$fromSheet->countRows()} rows from JSON into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('JSON data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
-
-        $this->startTrackingData(
-            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
-            $stepData,
-            $logBook
-        );
         
-        // Perform 'from_data_checks'.
-        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
-        $logBook->addDataSheet('From-Sheet', $fromSheet);
-        
-        $logBook->addSection('Filling to-sheet');
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->skipInvalidRows);
-        
-        if($toSheet->countRows() === 0) {
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
-        }
-        
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
-        $logBook->addDataSheet('To-Sheet', $toSheet);
+        $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
         // Saving relations is very complex and not yet supported for OpenApi Imports
         // TODO remove this?
@@ -292,7 +270,51 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
-        return $result->setProcessedRowsCounter($resultSheet->countRows());
+        return (new UxonEtlStepResult($stepData->getStepRunUid()))->setProcessedRowsCounter($resultSheet->countRows());
+    }
+
+    /**
+     * Post-processes the from-sheet and generates a to-sheet, by applying all input mappers.
+     * 
+     * @param ETLStepDataInterface     $stepData
+     * @param DataSheetInterface       $fromSheet
+     * @param APIObjectSchemaInterface $toObjectSchema
+     * @param FlowStepLogBook          $logBook
+     * @return DataSheetInterface
+     * @throws \Throwable
+     */
+    protected function getToSheet(
+        ETLStepDataInterface $stepData,
+        DataSheetInterface $fromSheet,
+        APIObjectSchemaInterface $toObjectSchema,
+        FlowStepLogBook $logBook
+    ) : DataSheetInterface
+    {
+        $this->startTrackingData(
+            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
+            $stepData,
+            $logBook
+        );
+
+        // Perform 'from_data_checks'.
+        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
+        $logBook->addDataSheet('From-Sheet', $fromSheet);
+
+        $logBook->addSection('Filling to-sheet');
+        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
+        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->skipInvalidRows);
+
+        if($toSheet->countRows() === 0) {
+            $logBook->addLine('All input rows removed because of invalid or missing data. **Exiting step**.');
+
+            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
+        }
+
+        $toSheet = $this->mergeBaseSheet($toSheet, $this->getPlaceholders($stepData), $stepData);
+        $logBook->addDataSheet('To-Sheet', $toSheet);
+        
+        return $toSheet;
     }
 
     /**
