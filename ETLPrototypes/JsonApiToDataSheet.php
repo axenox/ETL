@@ -414,6 +414,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 
                 throw $exception;
             }
+            
+            $this->checkSafeGuards($stepData);
         }
 
         return $toSheet;
