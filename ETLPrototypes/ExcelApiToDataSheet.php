@@ -5,6 +5,7 @@ use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -138,50 +139,9 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+
+        $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
-        $this->startTrackingData(
-            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
-            $stepData,
-            $logBook
-        );
-
-        // Validate data in the from-sheet against the JSON schema
-        $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
-        if ($this->isValidatingApiSchema()) {
-            $logBook->addIndent(1);
-            foreach ($fromSheet->getRows() as $i => $row) {
-                $rowErrors = [];
-                try {
-                    $toObjectSchema->validateRow($row);
-                } catch (JsonSchemaValidationError $e) {
-                    $msg = $e->getMessage();
-                    $logBook->addLine($msg);
-                    $rowErrors[$i+1] = $msg;
-                }
-            }
-            $logBook->addIndent(-1);
-            if (count($rowErrors) > 0) {
-                throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
-            }
-        }
-
-        // Perform 'from_data_checks'.
-        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
-        $logBook->addDataSheet('From-Sheet', $fromSheet);
-
-        // Apply the mapper
-        $logBook->addSection('Filling data sheet');
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->isSkipInvalidRows());
-
-        if($toSheet->countRows() === 0) {
-            $logBook->addLine('All input rows removed because of invalid or missing data. **Exiting step**.');
-            throw new RuntimeException('All input rows failed to write or were skipped due to errors!', '81VV7ZF');
-        }
-        
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
-        $logBook->addDataSheet('To-data', $toSheet);
-
         $logBook->addSection('Saving data');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
@@ -206,6 +166,36 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         
         return $result->setProcessedRowsCounter($resultSheet->countRows());
     }
+
+    /**
+     * @inheritDoc
+     * @see JsonApiToDataSheet::getToSheet()
+     */
+    protected function getToSheet(ETLStepDataInterface $stepData, DataSheetInterface $fromSheet, APIObjectSchemaInterface $toObjectSchema, FlowStepLogBook $logBook): DataSheetInterface
+    {
+        // Validate data in the from-sheet against the JSON schema
+        $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
+        if ($this->isValidatingApiSchema()) {
+            $logBook->addIndent(1);
+            $rowErrors = [];
+            foreach ($fromSheet->getRows() as $i => $row) {
+                try {
+                    $toObjectSchema->validateRow($row);
+                } catch (JsonSchemaValidationError $e) {
+                    $msg = $e->getMessage();
+                    $logBook->addLine($msg);
+                    $rowErrors[$i+1] = $msg;
+                }
+            }
+            $logBook->addIndent(-1);
+            if (count($rowErrors) > 0) {
+                throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
+            }
+        }
+        
+        return parent::getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook); 
+    }
+
 
     /**
      * Configure the underlying webservice that provides the OpenApi definition.
