@@ -143,7 +143,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     public function takeNote(NoteInterface $note) : void
     {
         $data = $note->getNoteData();
-        $data['ordering_id'] = self::$currentOrderingIds[get_class()]++;
+        $data['ordering_id'] = ++self::$currentOrderingIds[get_called_class()];
         
         $pending = $this->getPendingNotesInternal();
         $pending->addRow($data);
