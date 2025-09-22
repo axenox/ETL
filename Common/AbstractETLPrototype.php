@@ -66,6 +66,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private array $trackedAliases = [];
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
     private float $memoryLimit = 1000000000; // 1GiB
+    private int $errorGroupingThreshold = 5;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -210,6 +211,25 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function setIfDuplicatesDetected(string $behavior) : AbstractETLPrototype
     {
         $this->ifDuplicatesDetected = $behavior;
+        return $this;
+    }
+
+    /**
+     * If any operation in this step would produce more errors than this threshold,
+     * errors with identical messages will be grouped together.
+     * 
+     * Default value is 5.
+     * 
+     * @uxon-property error_grouping_threshold
+     * @uxon-type integer
+     * @uxon-template 5
+     * 
+     * @param int $threshold
+     * @return $this
+     */
+    protected function setErrorGroupingThreshold(int $threshold) : AbstractETLPrototype
+    {
+        $this->errorGroupingThreshold = $threshold;
         return $this;
     }
     
@@ -505,7 +525,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         }
         
         // Process errors.
-        if($errors->countErrors() <= 5) {
+        if($errors->countErrors() <= $this->errorGroupingThreshold) {
             $affectedRows = [];
             foreach ($errors->getAllErrors($affectedRows) as $i => $error) {
                 StepNote::fromException(
@@ -528,7 +548,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 StepNote::fromException(
                     $stepData,
                     $groupArr[0],
-                    $lineCount,
+                    $lineCount . ':',
                     false,
                     $noteVisibility
                 )->takeNote();
