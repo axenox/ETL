@@ -498,17 +498,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $affectedCurrentData[$rowNo] = $failedToFind[0];
                 }
 
-                if($e instanceof ExceptionInterface) {
-                    $errors->appendError($e, $rowNo);
-                } else {
-                    StepNote::fromException(
-                        $stepData,
-                        $e,
-                        $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                        false,
-                        $noteVisibility
-                    )->takeNote();
-                }
+                $errors->appendError($e, $rowNo);
             }
             
             $this->checkSafeGuards($stepData);
