@@ -1,5 +1,6 @@
 {
 	"ACTION.RUNETLFLOW.NAME": "Flow starten",
+    "NOTE.ROW_COUNT": "Auf %number% Zeile|Auf %number% Zeilen",
     "NOTE.ROWS_SKIPPED": "Zeile %number% ignoriert|Zeilen %number% ignoriert",
 	"SQLDATACHECKER.ERRORS_IN_DATA": "Fehler in Daten:",
 	"WEBSERVICE.STATUS.RECEIVED": "Empfangen",
