@@ -6,14 +6,14 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
-use exface\Core\CommonLogic\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
-use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -66,6 +66,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private array $trackedAliases = [];
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
     private float $memoryLimit = 1000000000; // 1GiB
+    private int $errorGroupingThreshold = 5;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -210,6 +211,25 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function setIfDuplicatesDetected(string $behavior) : AbstractETLPrototype
     {
         $this->ifDuplicatesDetected = $behavior;
+        return $this;
+    }
+
+    /**
+     * If any operation in this step would produce more errors than this threshold,
+     * errors with identical messages will be grouped together.
+     * 
+     * Default value is 5.
+     * 
+     * @uxon-property error_grouping_threshold
+     * @uxon-type integer
+     * @uxon-template 5
+     * 
+     * @param int $threshold
+     * @return $this
+     */
+    protected function setErrorGroupingThreshold(int $threshold) : AbstractETLPrototype
+    {
+        $this->errorGroupingThreshold = $threshold;
         return $this;
     }
     
@@ -376,8 +396,8 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             try {
                 $check->check($dataSheet, $logBook, $stepData, $badDataForCheck, false);
                 $check->getNoteOnSuccess($stepData)?->takeNote();
-            } catch (DataCheckFailedErrorMultiple $e) {
-                $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
+            } catch (DataSheetErrorMultiple $e) {
+                $errors = $errors ?? new DataSheetErrorMultiple('', null, null, $this->getTranslator());
                 $errors->merge($e);
 
                 $stopOnError |= $check->getStopOnCheckFailed();
@@ -445,7 +465,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
-     * @param array                $visibility
+     * @param array                $noteVisibility
      * @return DataSheetInterface
      */
     protected function applyTransformRowByRow(
@@ -453,7 +473,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         DataSheetInterface $dataSheet,
         ETLStepDataInterface $stepData,
         FlowStepLogBook $logBook,
-        array $visibility
+        array $noteVisibility
     ) : DataSheetInterface
     {
         $saveSheet = $dataSheet;
@@ -462,6 +482,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
 
         $affectedBaseData = [];
         $affectedCurrentData = [];
+        $errors = new DataSheetErrorMultiple('', null, null, $this->getTranslator());
 
         foreach ($dataSheet->getRows() as $i => $row) {
             $saveSheet = $saveSheet->copy();
@@ -497,16 +518,41 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $affectedCurrentData[$rowNo] = $failedToFind[0];
                 }
 
-                StepNote::fromException(
-                    $stepData,
-                    $e,
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $rowNo], 1),
-                    false,
-                    $visibility
-                )->takeNote();
+                $errors->appendError($e, $rowNo);
             }
             
             $this->checkSafeGuards($stepData);
+        }
+        
+        // Process errors.
+        if($errors->countErrors() <= $this->errorGroupingThreshold) {
+            $affectedRows = [];
+            foreach ($errors->getAllErrors($affectedRows) as $i => $error) {
+                StepNote::fromException(
+                    $stepData,
+                    $error,
+                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $affectedRows[$i]], 1),
+                    false,
+                    $noteVisibility
+                )->takeNote();
+            }
+        } else {
+            foreach ($errors->getErrorGroups() as $errorGroup) {
+                $groupArr = $errors->getErrorsForGroup($errorGroup);
+                $count = count($groupArr);
+                if($count < 1) {
+                    continue;
+                }
+
+                $lineCount = $translator->translate('NOTE.ROW_COUNT', ['%number%' => $count], $count);
+                StepNote::fromException(
+                    $stepData,
+                    $groupArr[0],
+                    $lineCount . ':',
+                    false,
+                    $noteVisibility
+                )->takeNote();
+            }
         }
 
         if(!empty($affectedBaseData) || !empty($affectedCurrentData)) {

@@ -8,7 +8,7 @@ use exface\Core\CommonLogic\DataSheets\DataCheck;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedError;
-use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -124,7 +124,7 @@ class DataCheckWithStepNote extends DataCheck
                     $e = new DataCheckFailedError($e->getDataSheet(), $errorMessage . ' (Marked as INVALID)', $e->getAlias(), $e->getPrevious());
                 }
                 
-                $errors = $errors ?? new DataCheckFailedErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
+                $errors = $errors ?? new DataSheetErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
                 $errors->appendError($e, $rowIdx);
             }
         }
