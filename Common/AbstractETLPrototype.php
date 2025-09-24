@@ -40,6 +40,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     const IF_DUPLICATES_IGNORE = 'ignore';
     const CFG_TIMEOUT = 'STEP_RUN.TIMEOUT';
     const CFG_MEMORY_LIMIT = 'STEP_RUN.MEMORY_LIMIT';
+    const CFG_RENDER_UNRELIABLE_ROWS = 'STEP_RUN.RENDER_UNRELIABLE_ROWS';
     
     private $workbench = null;
     
@@ -67,6 +68,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
     private float $memoryLimit = 1000000000; // 1GiB
     private int $errorGroupingThreshold = 5;
+    protected bool $renderUnreliableRows = false;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -88,6 +90,10 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         
         if($cfg->hasOption(self::CFG_TIMEOUT)) {
             $this->timeout = $cfg->getOption(self::CFG_TIMEOUT);
+        }
+        
+        if($cfg->hasOption(self::CFG_RENDER_UNRELIABLE_ROWS)) {
+            $this->renderUnreliableRows = $cfg->getOption(self::CFG_RENDER_UNRELIABLE_ROWS);
         }
     }
     
@@ -518,7 +524,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                     $affectedCurrentData[$rowNo] = $failedToFind[0];
                 }
 
-                $errors->appendError($e, $rowNo);
+                $errors->appendError($e, $this->renderUnreliableRows ? $rowNo : -1);
             }
             
             $this->checkSafeGuards($stepData);
@@ -528,10 +534,12 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         if($errors->countErrors() <= $this->errorGroupingThreshold) {
             $affectedRows = [];
             foreach ($errors->getAllErrors($affectedRows) as $i => $error) {
+                $rowNo = $affectedRows[$i];
+                $preamble = $rowNo === null ? '' : $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $affectedRows[$i]], 1);
                 StepNote::fromException(
                     $stepData,
                     $error,
-                    $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $affectedRows[$i]], 1),
+                    $preamble,
                     false,
                     $noteVisibility
                 )->takeNote();
