@@ -50,6 +50,7 @@ class StepNote implements NoteInterface
     private ?int $countWarnings = null;
     private array $contextData = [];
     private array $visibleForUserRoles;
+    private bool $renderUnreliableRows = false;
 
     /**
      * Creates a new step note with the provided parameters.
@@ -84,9 +85,17 @@ class StepNote implements NoteInterface
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
         $this->workbench = $stepData->getTask()->getWorkbench();
-        $this->translator = $this->workbench->getApp('axenox.ETL')->getTranslator();
+        
+        $app = $this->workbench->getApp('axenox.ETL');
+        
+        $this->translator = $app->getTranslator();
         $this->visibleForUserRoles = $visibleForUserRoles;
 
+        $cfg = $app->getConfig();
+        if($cfg->hasOption('STEP_RUN.RENDER_UNTRACKED_ROWS')) {
+            $this->renderUnreliableRows = $cfg->getOption('STEP_RUN.RENDER_UNTRACKED_ROWS');
+        }
+        
         if(!$hasException) {
             $this->messageType = $messageTypeOrException ?? 'info';
         } else {
@@ -545,11 +554,15 @@ class StepNote implements NoteInterface
         $currentRowNrs = array_keys($currentData);
 
         $msgBaseRowNrs = implode(', ', $baseRowNrs);
-        $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
-        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
-        $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
+        $msgCurrentRowNrs = !$this->renderUnreliableRows || empty($currentRowNrs) ?
+            '' : (implode('*, ', $currentRowNrs) . '*');
+        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? 
+            '' : ', ';
+        $msgAllRows = empty($msgBaseRowNrs) && empty($msgCurrentRowNrs) ?
+            '' : '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
         
-        $rowInfo = $this->translator->translate(
+        $rowInfo = empty($msgAllRows) ? '' :
+            $this->translator->translate(
             'NOTE.ROWS_SKIPPED',
             ['%number%' => $msgAllRows],
             count($baseData) + count($currentData)

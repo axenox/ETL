@@ -7,5 +7,11 @@
 		"Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
         "Expires": 0
-	}
+	},
+	
+	"STEP_RUN.TIMEOUT": 300,
+	"STEP_RUN.MEMORY_LIMIT": 500000000,
+	"STEP_RUN.RENDER_UNTRACKED_ROWS": false,
+
+	"NOTE_TAKER.NOTE_LIMIT": 500
 }
