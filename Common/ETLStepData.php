@@ -3,6 +3,7 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
+use exface\Core\CommonLogic\Profiler;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 
 class ETLStepData implements ETLStepDataInterface
@@ -18,6 +19,7 @@ class ETLStepData implements ETLStepDataInterface
 	private ?ETLStepResultInterface $lastResult;
     
     private StepNoteTaker $noteTaker;
+    private Profiler $profiler;
 
     /**
      *
@@ -26,22 +28,25 @@ class ETLStepData implements ETLStepDataInterface
      * @param string|null                 $stepRunUid
      * @param ETLStepResultInterface|null $previousStepResult
      * @param ETLStepResultInterface|null $lastResult
+     * @param Profiler|null               $profiler
      */
     public function __construct(
 		TaskInterface $task,
 		string $flowRunUid,
 		string $stepRunUid = null,
-		ETLStepResultInterface $previousStepResult = null, 
-		ETLStepResultInterface $lastResult = null
+        ETLStepResultInterface $previousStepResult = null,
+        ETLStepResultInterface $lastResult = null,
+        Profiler $profiler = null
     ) 
     {
 		$this->task = $task;
 		$this->flowRunUid = $flowRunUid;
-		$this->stepRunUid = $stepRunUid;
-		$this->previousStepResult = $previousStepResult;
-		$this->lastResult = $lastResult;
+        $this->stepRunUid = $stepRunUid;
+        $this->previousStepResult = $previousStepResult;
+        $this->lastResult = $lastResult;
         $this->noteTaker = new StepNoteTaker($task->getWorkbench());
-	}
+        $this->profiler = $profiler ?? new Profiler($task->getWorkbench());
+    }
 	
 	/**
 	 * 
@@ -111,5 +116,14 @@ class ETLStepData implements ETLStepDataInterface
     public function getNoteTaker() : StepNoteTaker
     {
         return $this->noteTaker;
+    }
+
+    /**
+     * @inheritDoc
+     * @see ETLStepDataInterface::getProfiler()
+     */
+    public function getProfiler() : Profiler
+    {
+        return $this->profiler;
     }
 }

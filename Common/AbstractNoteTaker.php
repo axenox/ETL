@@ -18,6 +18,7 @@ use exface\Core\Interfaces\WorkbenchInterface;
  */
 abstract class AbstractNoteTaker implements NoteTakerInterface
 {
+    protected const CFG_NOTE_LIMIT = 'NOTE_TAKER.NOTE_LIMIT';
     /**
      * @var DataSheetInterface[] 
      */
@@ -26,6 +27,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     private WorkbenchInterface $workbench;
     private MetaObjectInterface $storageObject;
     private TranslationInterface $translator;
+    private int $noteLimit = -1;
 
     /**
      * @param WorkbenchInterface $workbench
@@ -36,6 +38,11 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         $this->storageObject = MetaObjectFactory::createFromString($workbench, $this->getStorageObjectAlias());
         $this->translator = $workbench->getCoreApp()->getTranslator();
         self::$currentOrderingIds[get_class()] = 0;
+        
+        $cfg = $this->workbench->getApp('axenox.ETL')->getConfig();
+        if($cfg->hasOption(self::CFG_NOTE_LIMIT)) {
+            $this->noteLimit = $cfg->getOption(self::CFG_NOTE_LIMIT);
+        }
     }
 
     /**
@@ -136,9 +143,14 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     public function takeNote(NoteInterface $note) : void
     {
         $data = $note->getNoteData();
-        $data['ordering_id'] = self::$currentOrderingIds[get_class()]++;
+        $data['ordering_id'] = ++self::$currentOrderingIds[get_called_class()];
         
-        $this->getPendingNotesInternal()->addRow($data);
+        $pending = $this->getPendingNotesInternal();
+        $pending->addRow($data);
+        
+        if($this->noteLimit > 0 && $pending->countRows() > $this->noteLimit) {
+            $pending->removeRow(0);
+        }
     }
 
     /**
