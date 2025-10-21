@@ -9,7 +9,7 @@ use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
-use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
@@ -202,13 +202,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     {
         $logBook = $this->getLogBook($stepData);
         $this->getCrudCounter()->reset();
-
+        $profiler = $stepData->getProfiler();
+        $profiler->start($this, 'Step ' . $this->getName());
+        
         $task = $stepData->getTask();
         if (! ($task instanceof HttpTaskInterface)){
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($task) . '` received instead.');
         }
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
         
+        $lapId = $profiler->start('Load data for step ' . $this->getName());
         $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
         $requestBody = $requestLogData['http_body'];
         $msgEmpty = 'No HTTP content found to process.';
@@ -239,6 +242,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $logBook->addLine("Read {$fromSheet->countRows()} rows from JSON into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('JSON data', $fromSheet->copy());
+        $profiler->stopLap($lapId);
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
@@ -253,13 +257,15 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
-        
+
+        $lapId = $profiler->start('Write data for step ' . $this->getName());
         $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook
         );
+        $profiler->stopLap($lapId);
         
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
@@ -267,6 +273,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $this->getCrudCounter()->stop();
+        $profiler->stop($this);
 
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
@@ -295,15 +302,21 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $stepData,
             $logBook
         );
+        
+        $profiler = $stepData->getProfiler();
 
         // Perform 'from_data_checks'.
+        $lapId = $profiler->start('From-checks for step ' . $this->getName());
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
+        $profiler->stopLap($lapId);
 
         $logBook->addSection('Filling to-sheet');
+        $lapId = $profiler->start('Filling to-sheet for step ' . $this->getName());
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->skipInvalidRows);
-
+        $profiler->stopLap($lapId);
+        
         if($toSheet->countRows() === 0) {
             $logBook->addLine('All input rows removed because of invalid or missing data. **Exiting step**.');
 
