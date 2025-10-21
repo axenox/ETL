@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\Actions;
 
+use axenox\ETL\Exceptions\DataFlowNotFoundError;
 use exface\Core\CommonLogic\AbstractActionDeferred;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\DataSources\DataTransactionInterface;
@@ -190,6 +191,9 @@ class RunETLFlow extends AbstractActionDeferred implements iCanBeCalledFromCLI, 
                     $flowSheet->dataRead();
                 }
                 foreach ($col->getValues() as $alias) {
+                    if ($alias === null) {
+                        throw new DataFlowNotFoundError('Data flow not found!');
+                    }
                     $flows[] = DataFlowFactory::createFromString($wb, $alias);
                 }
                 break;
