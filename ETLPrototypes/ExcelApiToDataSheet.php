@@ -103,11 +103,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
         $profiler = $stepData->getProfiler();
-        $profiler->start($stepData, 'Step ' . $this->getName());
         $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
-        $lapId = $profiler->start('Load data for step ' . $this->getName());
+        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
         $fileData = $this->getUploadData($stepData);
         $uploadUid = $fileData->getUidColumn()->getValue(0);;
         $placeholders['upload_uid'] = $uploadUid;
@@ -115,8 +114,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
         if ($uploadUid === null) {
-            $profiler->stopLap($lapId);
-            $profiler->stop($stepData);
+            $lap->stop();
             $logBook->addLine($msg = 'No file found in step input');
             yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
@@ -144,32 +142,31 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
-        $profiler->stopLap($lapId);
+        $lap->stop();
 
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
         $logBook->addSection('Saving data');
+        $lap = $profiler->start('Saving data for step ' . $this->getName());
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
 
-        $lapId = $profiler->start('Write data for step ' . $this->getName());
         $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook
         );
-        $profiler->stopLap($lapId);
+        $lap->stop();
 
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
         }
 
-        $profiler->stop($stepData);
         $this->getCrudCounter()->stop();
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
