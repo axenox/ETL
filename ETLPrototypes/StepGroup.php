@@ -5,10 +5,14 @@ use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\StepNoteTaker;
+use axenox\ETL\Interfaces\ETLStepInterface;
 use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\TimeDataType;
+use exface\Core\Events\Behavior\OnBeforeBehaviorAppliedEvent;
+use exface\Core\Events\Behavior\OnBehaviorAppliedEvent;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -67,6 +71,8 @@ class StepGroup implements DataFlowStepInterface
 
     private $log = '';
     
+    private $profilingListeners = [];
+    
     public function __construct(DataFlow $flow, string $name, StepGroup $parentGroup = null, UxonObject $uxon = null)
     {
         $this->flow = $flow;
@@ -115,7 +121,7 @@ class StepGroup implements DataFlowStepInterface
                     $stepRunUid, 
                     $prevStepResult, 
                     $prevRunResult,
-                    $stepData->getProfiler()
+                    null // $stepData->getProfiler()
                 );
                 
                 $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step, $stepData) {
@@ -128,7 +134,7 @@ class StepGroup implements DataFlowStepInterface
                 
                 try {
                     $profiler = $stepData->getProfiler();
-                    $profiler->start($step, 'Step `' . $step->getName() . '`');
+                    $this->startProfiling($step, $profiler);
                     $generator = $step->run($stepData, $nr);
                     foreach ($generator as $msg) {
                         $msg = $indent . $indent . $msg;
@@ -144,10 +150,10 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
-                    $profiler->stop($step);
+                    $this->stopProfiling($step, $profiler);
                     $this->logRunSuccess($step, $logRow, $stepData, $log, $stepResult);
                 } catch (\Throwable $e) {
-                    $profiler->stop($step);
+                    $this->stopProfiling($step, $profiler);
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
                         $log = 'ERROR: one of the steps failed.';
@@ -351,10 +357,11 @@ class StepGroup implements DataFlowStepInterface
 
             $note->importCrudCounter($step->getCrudCounter());
             $note->takeNote();
-
+            /*
             $this->getMetricsNote(
                 $step, $stepData
             )->takeNote();
+            */
         }
         
         $ds->addRow($row);
@@ -673,5 +680,28 @@ class StepGroup implements DataFlowStepInterface
             ])));
         }
         return $debugWidget;
+    }
+    
+    protected function startProfiling(ETLStepInterface $step, Profiler $profiler) : void
+    {
+        $profiler->start($step, 'Step `' . $step->getName() . '`');
+        $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
+            $profiler->start($event->getBehavior(), $event->getSummary());
+        };
+        $stopper = function(OnBehaviorAppliedEvent $event) use ($profiler) {
+            $profiler->stop($event->getBehavior());
+        };
+        $this->profilingListeners[OnBeforeBehaviorAppliedEvent::getEventName()] = $starter;
+        $this->profilingListeners[OnBehaviorAppliedEvent::getEventName()] = $stopper;
+        $this->getWorkbench()->eventManager()->addListener(OnBeforeBehaviorAppliedEvent::getEventName(), $starter);
+        $this->getWorkbench()->eventManager()->addListener(OnBehaviorAppliedEvent::getEventName(), $stopper);
+    }
+
+    protected function stopProfiling(ETLStepInterface $step, Profiler $profiler) : void
+    {
+        foreach ($this->profilingListeners as $event => $listener) {
+            $this->getWorkbench()->eventManager()->removeListener($event, $listener);
+        }
+        $profiler->stop($step);
     }
 }
