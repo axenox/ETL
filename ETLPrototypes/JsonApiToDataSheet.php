@@ -203,7 +203,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook = $this->getLogBook($stepData);
         $this->getCrudCounter()->reset();
         $profiler = $stepData->getProfiler();
-        $profiler->start($this, 'Step ' . $this->getName());
         
         $task = $stepData->getTask();
         if (! ($task instanceof HttpTaskInterface)){
@@ -211,7 +210,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
         
-        $lapId = $profiler->start('Load data for step ' . $this->getName());
+        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
         $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
         $requestBody = $requestLogData['http_body'];
         $msgEmpty = 'No HTTP content found to process.';
@@ -242,7 +241,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         
         $logBook->addLine("Read {$fromSheet->countRows()} rows from JSON into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('JSON data', $fromSheet->copy());
-        $profiler->stopLap($lapId);
+        $lap->stop();
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
@@ -252,20 +251,20 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // $toSheet = $this->removeRelationColumns($toSheet);
 
         $logBook->addSection('Saving data');
+        $lap = $profiler->start('Saving data for step ' . $this->getName());
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
 
-        $lapId = $profiler->start('Write data for step ' . $this->getName());
         $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook
         );
-        $profiler->stopLap($lapId);
+        $lap->stop();
         
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
@@ -273,7 +272,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
 
         $this->getCrudCounter()->stop();
-        $profiler->stop($this);
 
         $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
         
@@ -302,20 +300,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $stepData,
             $logBook
         );
-        
         $profiler = $stepData->getProfiler();
 
         // Perform 'from_data_checks'.
-        $lapId = $profiler->start('From-checks for step ' . $this->getName());
+        $lap = $profiler->start('From-checks for step ' . $this->getName());
         $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
         $logBook->addDataSheet('From-Sheet', $fromSheet);
-        $profiler->stopLap($lapId);
+        $lap->stop();
 
         $logBook->addSection('Filling to-sheet');
-        $lapId = $profiler->start('Filling to-sheet for step ' . $this->getName());
+        $lap = $profiler->start('Filling to-sheet for step ' . $this->getName());
         $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
         $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->skipInvalidRows);
-        $profiler->stopLap($lapId);
+        $lap->stop();
         
         if($toSheet->countRows() === 0) {
             $logBook->addLine('All input rows removed because of invalid or missing data. **Exiting step**.');

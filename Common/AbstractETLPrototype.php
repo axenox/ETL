@@ -824,12 +824,12 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function checkSafeGuards(ETLStepDataInterface $stepData) : void
     {
         $profiler = $stepData->getProfiler();
-        $duration = ($profiler->getDurationMs($this) ?? 0) / 1000;
+        $duration = $profiler->getTimeTotalMs($this) / 1000;
         if($duration >= $this->timeout) {
             throw new RuntimeException('Request timed out! (' . $duration . 's)', '82S9T4E');
         }
         
-        $memory = $profiler->getMemoryUsageBytes($this) ?? 0;
+        $memory = $profiler->getMemoryConsumedBytes($this) ?? 0;
         if($memory >= $this->memoryLimit) {
             $limit = ByteSizeDataType::formatWithScale($this->memoryLimit);
             $memory = ByteSizeDataType::formatWithScale($memory);
