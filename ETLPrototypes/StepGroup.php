@@ -684,9 +684,9 @@ class StepGroup implements DataFlowStepInterface
     
     protected function startProfiling(ETLStepInterface $step, Profiler $profiler) : void
     {
-        $profiler->start($step, 'Step `' . $step->getName() . '`');
+        $profiler->start($step, 'Step `' . $step->getName() . '`', 'Steps');
         $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
-            $profiler->start($event->getBehavior(), $event->getSummary());
+            $profiler->start($event->getBehavior(), $event->getSummary(), 'Behaviors');
         };
         $stopper = function(OnBehaviorAppliedEvent $event) use ($profiler) {
             $profiler->stop($event->getBehavior());
