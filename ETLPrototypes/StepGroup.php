@@ -7,7 +7,6 @@ use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\StepNoteTaker;
 use axenox\ETL\Interfaces\ETLStepInterface;
 use axenox\ETL\Interfaces\NoteInterface;
-use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\TimeDataType;
@@ -44,7 +43,7 @@ use exface\Core\DataTypes\UUIDDataType;
  * 
  * If a group is configured to continue on failure, any error inside the group will
  * skip subsequent steps within it, but the flow will continue with the next step
- * outside of the group. 
+ * outside the group. 
  * 
  * @author Andrej Kabachnik
  *
@@ -129,8 +128,7 @@ class StepGroup implements DataFlowStepInterface
                 });
                 
                 try {
-                    $profiler = $stepData->getProfiler();
-                    $this->startProfiling($step, $profiler);
+                    $step->runPrepare($stepData);
                     $generator = $step->run($stepData, $nr);
                     foreach ($generator as $msg) {
                         $msg = $indent . $indent . $msg;
@@ -146,10 +144,10 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
-                    $this->stopProfiling($step, $profiler);
+                    $step->runTeardown($stepData);
                     $this->logRunSuccess($step, $logRow, $stepData, $log, $stepResult);
                 } catch (\Throwable $e) {
-                    $this->stopProfiling($step, $profiler);
+                    $step->runTeardown($stepData);
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
                         $log = 'ERROR: one of the steps failed.';
@@ -431,6 +429,7 @@ class StepGroup implements DataFlowStepInterface
      */
     protected function getMetricsNote(DataFlowStepInterface $step, ETLStepDataInterface $stepData) : ?StepNote
     {
+        // TODO remove the metrics not in favor of the new profiler tab?
         $metrics = [];
         
         $profilerLine = $stepData->getProfiler()->getLine($step);
@@ -677,30 +676,14 @@ class StepGroup implements DataFlowStepInterface
         }
         return $debugWidget;
     }
-    
-    protected function startProfiling(ETLStepInterface $step, Profiler $profiler) : void
+
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
     {
-        $profiler->start($step, 'Step `' . $step->getName() . '`', 'Steps');
-        /* TODO listening for behaviors causes a enxtreme slowdown for some reason
-        $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
-            $profiler->start($event->getBehavior(), $event->getSummary(), 'Behaviors');
-        };
-        $stopper = function(OnBehaviorAppliedEvent $event) use ($profiler) {
-            $profiler->stop($event->getBehavior());
-        };
-        $this->profilingListeners[OnBeforeBehaviorAppliedEvent::getEventName()] = $starter;
-        $this->profilingListeners[OnBehaviorAppliedEvent::getEventName()] = $stopper;
-        $this->getWorkbench()->eventManager()->addListener(OnBeforeBehaviorAppliedEvent::getEventName(), $starter);
-        $this->getWorkbench()->eventManager()->addListener(OnBehaviorAppliedEvent::getEventName(), $stopper);
-        */
+        return $this;
     }
 
-    protected function stopProfiling(ETLStepInterface $step, Profiler $profiler) : void
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
     {
-        /*
-        foreach ($this->profilingListeners as $event => $listener) {
-            $this->getWorkbench()->eventManager()->removeListener($event, $listener);
-        }*/
-        $profiler->stop($step);
+        return $this;
     }
 }

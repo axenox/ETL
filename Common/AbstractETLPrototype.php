@@ -3,8 +3,11 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
+use axenox\ETL\Interfaces\DataFlowStepInterface;
+use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
+use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\TimeDataType;
@@ -835,5 +838,51 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             $memory = ByteSizeDataType::formatWithScale($memory);
             throw new RuntimeException('Request memory limit exceeded! Used ' . $memory . ' out of ' . $limit . '.', '82S9VCT');
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see DataFlowStepInterface::runPrepare()
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        $this->startProfiling($stepData->getProfiler());
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see DataFlowStepInterface::runTeardown()
+     */
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        $this->stopProfiling($stepData->getProfiler());
+        return $this;
+    }
+
+    protected function startProfiling(Profiler $profiler) : void
+    {
+        $profiler->start($this, 'Step `' . $this->getName() . '`', 'Steps');
+        /* TODO listening for behaviors causes a enxtreme slowdown for some reason
+        $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
+            $profiler->start($event->getBehavior(), $event->getSummary(), 'Behaviors');
+        };
+        $stopper = function(OnBehaviorAppliedEvent $event) use ($profiler) {
+            $profiler->stop($event->getBehavior());
+        };
+        $this->profilingListeners[OnBeforeBehaviorAppliedEvent::getEventName()] = $starter;
+        $this->profilingListeners[OnBehaviorAppliedEvent::getEventName()] = $stopper;
+        $this->getWorkbench()->eventManager()->addListener(OnBeforeBehaviorAppliedEvent::getEventName(), $starter);
+        $this->getWorkbench()->eventManager()->addListener(OnBehaviorAppliedEvent::getEventName(), $stopper);
+        */
+    }
+
+    protected function stopProfiling(Profiler $profiler) : void
+    {
+        /*
+        foreach ($this->profilingListeners as $event => $listener) {
+            $this->getWorkbench()->eventManager()->removeListener($event, $listener);
+        }*/
+        $profiler->stop($this);
     }
 }
