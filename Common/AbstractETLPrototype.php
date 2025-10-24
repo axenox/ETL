@@ -5,9 +5,9 @@ use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
-use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
@@ -824,9 +824,9 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function checkSafeGuards(ETLStepDataInterface $stepData) : void
     {
         $profiler = $stepData->getProfiler();
-        $duration = $profiler->getTimeTotalMs($this) / 1000;
-        if($duration >= $this->timeout) {
-            throw new RuntimeException('Request timed out! (' . $duration . 's)', '82S9T4E');
+        $durationMs = $profiler->getTimeTotalMs();
+        if($durationMs / 1000 >= $this->timeout) {
+            throw new RuntimeException('Flow step timed out after ' . TimeDataType::formatMs($durationMs) . '!', '82S9T4E');
         }
         
         $memory = $profiler->getMemoryConsumedBytes($this) ?? 0;
