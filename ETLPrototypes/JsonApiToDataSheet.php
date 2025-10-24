@@ -2,11 +2,14 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
+use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
+use axenox\ETL\Interfaces\ETLStepInterface;
 use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
 use axenox\ETL\Common\FlowStepLogBook;
@@ -192,6 +195,8 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     private $outputMapperUxon = null;
     private $skipInvalidRows = false;
     
+    private $restoreTimestampingConflictDetections = false;
+    
     /**
      *
      * {@inheritDoc}
@@ -210,7 +215,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         }
         $this->getWorkbench()->eventManager()->dispatch(new OnBeforeETLStepRun($this, $logBook));
         
-        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
+        $lap = $profiler->start('Reading from-sheet', null, 'Read');
         $requestLogData = $this->loadRequestData($stepData, ['http_body', 'http_content_type'])->getRow(0);
         $requestBody = $requestLogData['http_body'];
         $msgEmpty = 'No HTTP content found to process.';
@@ -251,7 +256,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         // $toSheet = $this->removeRelationColumns($toSheet);
 
         $logBook->addSection('Saving data');
-        $lap = $profiler->start('Saving data for step ' . $this->getName());
+        $lap = $profiler->start('Saving data', null, 'Write');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
@@ -901,5 +906,43 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     protected function isSkipInvalidRows() : bool
     {
         return $this->skipInvalidRows;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AbstractETLPrototype::runPrepare()
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        foreach ($this->getToObject()->getBehaviors() as $behavior) {
+            switch (true) {
+                case $behavior instanceof TimeStampingBehavior:
+                    if ($behavior->getCheckForConflictsOnUpdate() === true) {
+                        $behavior->setCheckForConflictsOnUpdate(false);
+                        $this->restoreTimestampingConflictDetections = true;
+                    }
+                    break;
+            }
+        }
+        return parent::runPrepare($stepData);
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AbstractETLPrototype::runTeardown()
+     */
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        foreach ($this->getToObject()->getBehaviors() as $behavior) {
+            switch (true) {
+                case $behavior instanceof TimeStampingBehavior:
+                    if ($this->restoreTimestampingConflictDetections === true) {
+                        $behavior->setCheckForConflictsOnUpdate(true);
+                        $this->restoreTimestampingConflictDetections = false;
+                    }
+                    break;
+            }
+        }
+        return parent::runTeardown($stepData);
     }
 }
