@@ -11,8 +11,6 @@ use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\TimeDataType;
-use exface\Core\Events\Behavior\OnBeforeBehaviorAppliedEvent;
-use exface\Core\Events\Behavior\OnBehaviorAppliedEvent;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -70,8 +68,6 @@ class StepGroup implements DataFlowStepInterface
     private $parentGroup = null;
 
     private $log = '';
-    
-    private $profilingListeners = [];
     
     public function __construct(DataFlow $flow, string $name, StepGroup $parentGroup = null, UxonObject $uxon = null)
     {
@@ -685,6 +681,7 @@ class StepGroup implements DataFlowStepInterface
     protected function startProfiling(ETLStepInterface $step, Profiler $profiler) : void
     {
         $profiler->start($step, 'Step `' . $step->getName() . '`', 'Steps');
+        /* TODO listening for behaviors causes a enxtreme slowdown for some reason
         $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
             $profiler->start($event->getBehavior(), $event->getSummary(), 'Behaviors');
         };
@@ -695,13 +692,15 @@ class StepGroup implements DataFlowStepInterface
         $this->profilingListeners[OnBehaviorAppliedEvent::getEventName()] = $stopper;
         $this->getWorkbench()->eventManager()->addListener(OnBeforeBehaviorAppliedEvent::getEventName(), $starter);
         $this->getWorkbench()->eventManager()->addListener(OnBehaviorAppliedEvent::getEventName(), $stopper);
+        */
     }
 
     protected function stopProfiling(ETLStepInterface $step, Profiler $profiler) : void
     {
+        /*
         foreach ($this->profilingListeners as $event => $listener) {
             $this->getWorkbench()->eventManager()->removeListener($event, $listener);
-        }
+        }*/
         $profiler->stop($step);
     }
 }
