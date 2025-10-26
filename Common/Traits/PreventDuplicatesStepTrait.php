@@ -2,6 +2,9 @@
 namespace axenox\ETL\Common\Traits;
 
 use axenox\ETL\Interfaces\DataFlowStepInterface;
+use exface\Core\CommonLogic\DataSheets\Matcher\DuplicatesMatcher;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Debug\DataLogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Factories\BehaviorFactory;
@@ -35,6 +38,17 @@ trait PreventDuplicatesStepTrait
         return;
     }
     
+    protected function getDuplicatesMatcher(DataSheetInterface $toSheet, DataLogBookInterface $logbook, array $compareAttributes = null) : ?DuplicatesMatcher
+    {
+        $compareAttributes = $compareAttributes ?? $this->getUpdateIfMatchingAttributeAliases();
+        if (empty($compareAttributes)) {
+            return null;
+        }
+        $matcher = new DuplicatesMatcher($toSheet, null, $logbook, true);
+        $matcher->setCompareAttributes($compareAttributes);
+        return $matcher;
+    }
+    
     /**
      * 
      * @return string[]
@@ -56,12 +70,12 @@ trait PreventDuplicatesStepTrait
      * @uxon-type metamodel:attribute[]
      * @uxon-template [""]
      * 
-     * @param UxonObject $uxon
+     * @param UxonObject|array $uxonOrArray
      * @return \axenox\ETL\Interfaces\DataFlowStepInterface
      */
-    protected function setUpdateIfMatchingAttributes(UxonObject $uxon) : DataFlowStepInterface
+    protected function setUpdateIfMatchingAttributes(UxonObject|array $uxonOrArray) : DataFlowStepInterface
     {
-        $this->updateIfMatchingAttributeAliases = $uxon->toArray();
+        $this->updateIfMatchingAttributeAliases = $uxonOrArray instanceof UxonObject ? $uxonOrArray->toArray() : $uxonOrArray;
         return $this;
     }
     

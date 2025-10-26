@@ -469,19 +469,19 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * Whenever a row encounters an error, the error will be logged and the
      * row discarded.
      *
-     * @param callable             $transformer
+     * @param callable             $callback
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param array                $noteVisibility
      * @return DataSheetInterface
      */
-    protected function applyTransformRowByRow(
-        callable $transformer,
-        DataSheetInterface $dataSheet,
+    protected function applyRowByRow(
+        callable             $callback,
+        DataSheetInterface   $dataSheet,
         ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook,
-        array $noteVisibility
+        FlowStepLogBook      $logBook,
+        array                $noteVisibility
     ) : DataSheetInterface
     {
         $saveSheet = $dataSheet;
@@ -499,7 +499,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             try {
                 // Get the resulting data sheet of that single line and add it to the global
                 // result data
-                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
+                $rowResultSheet = call_user_func($callback, $i, $saveSheet);
                 //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
                 if ($resultSheet === null) {
                     $resultSheet = $rowResultSheet;
