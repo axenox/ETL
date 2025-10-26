@@ -10,8 +10,8 @@
     "replaces_page_selector": null,
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2024-09-09 09:21:59",
-    "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
-    "modified_on": "2025-07-22 13:30:53",
+    "modified_by_user_selector": "0x31000000000000000000000000000000",
+    "modified_on": "2025-10-26 13:25:29",
     "contents": {
         "object_alias": "axenox.ETL.file_flow",
         "widget_type": "SplitHorizontal",
@@ -191,25 +191,32 @@
                                                 "hidden": true
                                             },
                                             {
-                                                "attribute_alias": "count_errors"
+                                                "attribute_alias": "count_errors",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_warnings"
+                                                "attribute_alias": "count_warnings",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_reads"
+                                                "attribute_alias": "count_reads",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_writes"
+                                                "attribute_alias": "count_writes",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_creates"
+                                                "attribute_alias": "count_creates",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_updates"
+                                                "attribute_alias": "count_updates",
+                                                "footer": "SUM"
                                             },
                                             {
-                                                "attribute_alias": "count_deletes"
+                                                "attribute_alias": "count_deletes",
+                                                "footer": "SUM"
                                             },
                                             {
                                                 "caption": "Affected Rows",
