@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Upload: Process upload [FileUploadProcess]",
             "CREATED_ON": "2024-09-09 10:43:42",
-            "MODIFIED_ON": "2025-10-21 13:02:55",
+            "MODIFIED_ON": "2025-10-26 13:24:29",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11efab459dfc9a66ab45025041000001",
@@ -81,6 +81,11 @@
                 "input_rows_min": 1,
                 "input_rows_max": 1,
                 "icon": "cogs",
+                "effected_objects": [
+                    "axenox.ETL.flow_run",
+                    "axenox.ETL.step_run",
+                    "axenox.ETL.step_note"
+                ],
                 "input_invalid_if": [
                     {
                         "error_text": "Cannot find data flow for this upload ",
