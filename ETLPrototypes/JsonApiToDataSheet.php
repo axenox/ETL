@@ -9,6 +9,7 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\ETLStepInterface;
 use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\Behaviors\PreventDuplicatesBehavior;
 use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\Mappings\DataColumnMapping;
@@ -188,8 +189,10 @@ use exface\Core\CommonLogic\DataSheets\DataColumn;
 class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 {
     use PreventDuplicatesStepTrait;
+    
+    const OPERATION_UPDATE = 'update';
+    const OPERATION_CREATE = 'create';
 
-    private $additionalColumns = null;
     private $schemaName = null;
     private $propertiesMapperUxon = null;
     private $outputMapperUxon = null;
@@ -232,12 +235,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toObject, $this->getSchemaName());
 
-        if ($this->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($this->getToObject());
-        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
-        }
-
         $logBook->addSection('Reading from-sheet');
         
         $routeSchema = $apiSchema->getRouteForRequest($task->getHttpRequest());
@@ -250,13 +247,12 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
+        if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
+        }
         
-        // Saving relations is very complex and not yet supported for OpenApi Imports
-        // TODO remove this?
-        // $toSheet = $this->removeRelationColumns($toSheet);
-
         $logBook->addSection('Saving data');
-        $lap = $profiler->start('Saving data', null, 'Write');
+        $lap = $profiler->start('Saving data');
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' from JSON web service request.';
         $logBook->addLine($msg);
         yield $msg;
@@ -269,6 +265,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $stepData,
             $logBook
         );
+        
         $lap->stop();
         
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
@@ -391,7 +388,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 
         if($rowByRow) {
             $passLogBook = true;
-            $toSheet = $this->applyTransformRowByRow(
+            $toSheet = $this->applyRowByRow(
                 function ($i, $data) use (
                     $mapper, 
                     $logBook, 
@@ -462,54 +459,72 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      * @param DataSheetInterface   $toSheet
      * @param CrudCounter          $crudCounter
      * @param ETLStepDataInterface $stepData
-     * @param FlowStepLogBook      $logBook
+     * @param FlowStepLogBook      $logbook
      * @return DataSheetInterface
      * @throws \Throwable
      */
     protected function writeData(
-        DataSheetInterface $toSheet,
-        CrudCounter        $crudCounter, 
+        DataSheetInterface   $toSheet,
+        CrudCounter          $crudCounter, 
         ETLStepDataInterface $stepData, 
-        FlowStepLogBook $logBook) : DataSheetInterface
+        FlowStepLogBook      $logbook
+    ) : DataSheetInterface
     {
         $crudCounter->addObject($toSheet->getMetaObject());
-
-        if ($this->skipInvalidRows) {
-            // Apply output mappers.
-            foreach ($this->getOutputMappers() as $mapper) {
-                $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook,true);
-            }
-
-            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
-            // writes for each row, so it will end up here anyway.
-            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-            }
-            
-            // Perform write.
-            $resultSheet = $this->applyTransformRowByRow(
-                function ($i, $data) {
-                    return $this->performWrite($data);
-                },
-                $toSheet,
-                $stepData,
-                $logBook,
-                NoteInterface::VISIBLE_FOR_SUPERUSER
-            );
-            
-        } else {
-            foreach($this->getOutputMappers() as $mapper) {
-                $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logBook, false);
-            }
-
-            // Perform 'to_data_checks' only in regular mode. Per-row-mode (see above) will perform regular
-            // writes for each row, so it will end up here anyway
-            if (null !== $checksUxon = $this->getToDataChecksUxon()) {
-                $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logBook);
-            }
-            
-            $resultSheet = $this->performWrite($toSheet);
+        $rowByRow = $this->skipInvalidRows;
+        
+        // Apply output mappers.
+        foreach ($this->getOutputMappers() as $mapper) {
+            $toSheet = $this->applyDataSheetMapper($mapper, $toSheet, $stepData, $logbook, $rowByRow);
         }
+
+        // Perform 'to_data_checks' defined in the step
+        if (null !== $checksUxon = $this->getToDataChecksUxon()) {
+            $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logbook);
+        }
+        
+        // Separate CREATEs from UPDATEs
+        if (null !== $matcher = $this->getDuplicatesMatcher($toSheet, $logbook)) {
+            $logbook->addSection('Finding existing data (duplicates)');
+            $lap = $stepData->getProfiler()->start('Finding existing data (duplicates)');
+            $matchCollection = $matcher->getMatchesToUpdate($logbook);
+            $lap->stop();
+
+            if (! $matcher->hasMatches()) {
+                $createSheet = $toSheet;
+            } else {
+                $updateSheet = $matchCollection->getCompareDataSheet();
+                $createSheet = $toSheet->extractRows($matcher->getRowIndexesToCreate());
+            }
+            
+            if ($updateSheet && ! $updateSheet->isEmpty()) {
+                $logbook->addLine('UPDATING ' . $updateSheet->countRows() . ' rows');
+                $resultSheet = $resultSheet = $this->writeDataOperation(self::OPERATION_UPDATE, $updateSheet, $stepData, $logbook);
+            }
+            
+            if (! $createSheet->isEmpty()) {
+                $logbook->addLine('CREATING ' . $createSheet->countRows() . ' rows');
+                $resultCreate = $this->writeDataOperation(
+                    self::OPERATION_CREATE,
+                    $createSheet,
+                    $stepData,
+                    $logbook,
+                );
+                if (! $resultSheet) {
+                    $resultSheet = $resultCreate;
+                } else {
+                    foreach ($resultCreate->getRows() as $row) {
+                        $resultSheet->addRow($row, false, false);
+                    }
+                }
+            } else {
+                $logbook->addLine('CREATING skipped because no valid create-rows found');
+            }
+
+        } else {
+            $resultSheet = $this->writeDataSave(self::OPERATION_CREATE, $toSheet, $crudCounter, $stepData, $logbook);
+        }
+        
         // If no row actually worked, nothing was written, and we will report a failed step.
         if ($resultSheet->countRows() === 0) {
             throw new RuntimeException('All input rows failed to write or skipped due to errors!', '81VV7ZF');
@@ -518,12 +533,42 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $resultSheet;
     }
 
+    protected function writeDataOperation(
+        string               $operation,
+        DataSheetInterface   $toSheet,
+        ETLStepDataInterface $stepData,
+        FlowStepLogBook      $logbook
+    ) : DataSheetInterface
+    {
+        $this->modifyToObjectBehaviors($toSheet);
+        
+        if ($this->skipInvalidRows) {
+            // Write each row in a separate transaction
+            $resultSheet = $this->applyRowByRow(
+                function ($i, $data) use ($operation) {
+                    return $this->writeTransaction($operation, $data);
+                },
+                $toSheet,
+                $stepData,
+                $logbook,
+                NoteInterface::VISIBLE_FOR_SUPERUSER
+            );
+        } else {
+            $resultSheet = $this->writeTransaction($operation, $toSheet);
+        }
+        
+        $this->restoreToObjectBehaviors($toSheet);
+        
+        return $resultSheet;
+    }
+
     /**
      * @param DataSheetInterface $data
      * @return DataSheetInterface
      */
-    protected function performWrite(
-        DataSheetInterface   $data,
+    protected function writeTransaction(
+        string              $operation,
+        DataSheetInterface  $data,
     ) : DataSheetInterface
     {
         if ($data->isEmpty()) {
@@ -533,9 +578,13 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $transaction = $this->getWorkbench()->data()->startTransaction();
 
         try {
-            // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
-            // that can be used to update known entire
-            $data->dataCreate(false, $transaction);
+            if ($operation === self::OPERATION_UPDATE) {
+                $data->dataUpdate(false, $transaction);
+            } else {
+                // we only create new data in import, either there is an import table or a PreventDuplicatesBehavior
+                // that can be used to update known entire
+                $data->dataCreate(false, $transaction);
+            }
         } catch (\Throwable $e) {
             throw $e;
         }
@@ -907,14 +956,22 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     {
         return $this->skipInvalidRows;
     }
-
-    /**
-     * {@inheritDoc}
-     * @see AbstractETLPrototype::runPrepare()
-     */
-    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    
+    protected function modifyToObjectBehaviors(DataSheetInterface $toSheet) : ETLStepInterface
     {
-        foreach ($this->getToObject()->getBehaviors() as $behavior) {
+        $this->modifyBehaviors($this->getToObject());
+        foreach ($toSheet->getColumns() as $col) {
+            if ($col->isNestedData()) {
+                $rel = $toSheet->getMetaObject()->getRelation($col->getAttributeAlias());
+                $this->modifyBehaviors($rel->getRightObject());
+            }
+        }
+        return $this;
+    }
+    
+    protected function modifyBehaviors(MetaObjectInterface $object) : ETLStepInterface
+    {
+        foreach ($object->getBehaviors() as $behavior) {
             switch (true) {
                 case $behavior instanceof TimeStampingBehavior:
                     if ($behavior->getCheckForConflictsOnUpdate() === true) {
@@ -922,18 +979,29 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $this->restoreTimestampingConflictDetections = true;
                     }
                     break;
+                case $behavior instanceof PreventDuplicatesBehavior:
+                    $behavior->setDisabled(true);
+                    break;
             }
         }
-        return parent::runPrepare($stepData);
+        return $this;
     }
 
-    /**
-     * {@inheritDoc}
-     * @see AbstractETLPrototype::runTeardown()
-     */
-    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    protected function restoreToObjectBehaviors(DataSheetInterface $toSheet) : ETLStepInterface
     {
-        foreach ($this->getToObject()->getBehaviors() as $behavior) {
+        $this->restoreBehaviors($this->getToObject());
+        foreach ($toSheet->getColumns() as $col) {
+            if ($col->isNestedData()) {
+                $rel = $toSheet->getMetaObject()->getRelation($col->getAttributeAlias());
+                $this->restoreBehaviors($rel->getRightObject());
+            }
+        }
+        return $this;
+    }
+    
+    protected function restoreBehaviors(MetaObjectInterface $object) : ETLStepInterface
+    {
+        foreach ($object->getBehaviors() as $behavior) {
             switch (true) {
                 case $behavior instanceof TimeStampingBehavior:
                     if ($this->restoreTimestampingConflictDetections === true) {
@@ -941,8 +1009,11 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                         $this->restoreTimestampingConflictDetections = false;
                     }
                     break;
+                case $behavior instanceof PreventDuplicatesBehavior:
+                    $behavior->setDisabled(false);
+                    break;
             }
         }
-        return parent::runTeardown($stepData);
+        return $this;
     }
 }
