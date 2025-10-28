@@ -4,7 +4,6 @@ namespace axenox\ETL\Common;
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\DataFlowStepInterface;
-use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
 use exface\Core\CommonLogic\Debugger\Profiler;
@@ -45,32 +44,30 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     const CFG_RENDER_UNRELIABLE_ROWS = 'STEP_RUN.RENDER_UNRELIABLE_ROWS';
     
     private $workbench = null;
-    
     private $uxon = null;
     
     private $stepRunUidAttributeAlias = null;
-    
     private $flowRunUidAttribtueAlias = null;
-    
-    private $fromObject = null;
-    
-    private $toObject = null;
-    
     private $name = null;
-    
     private $disabled = null;
-    
+    private $fromObject = null;
+    private $toObject = null;
     private $timeout = 30;
+    private float $memoryLimit = 1000000000; // 1GiB
+    
     private ?UxonObject $toDataChecksUxon = null;
     private ?UxonObject $fromDataChecksUxon = null;
+    
     private CrudCounter $crudCounter;
     private array $logBooks = [];
     private ?DataSheetTracker $dataTracker = null;
     private array $trackedAliases = [];
+    
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
-    private float $memoryLimit = 1000000000; // 1GiB
     private int $errorGroupingThreshold = 5;
     protected bool $renderUnreliableRows = false;
+    
+    private ?UxonObject $profilerConfig = null;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -860,29 +857,53 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return $this;
     }
 
+    /**
+     * @param Profiler $profiler
+     * @return void
+     */
     protected function startProfiling(Profiler $profiler) : void
     {
-        $profiler->start($this, 'Step `' . $this->getName() . '`', 'Steps');
-        /* TODO listening for behaviors causes a enxtreme slowdown for some reason
-        $starter = function(OnBeforeBehaviorAppliedEvent $event) use ($profiler) {
-            $profiler->start($event->getBehavior(), $event->getSummary(), 'Behaviors');
-        };
-        $stopper = function(OnBehaviorAppliedEvent $event) use ($profiler) {
-            $profiler->stop($event->getBehavior());
-        };
-        $this->profilingListeners[OnBeforeBehaviorAppliedEvent::getEventName()] = $starter;
-        $this->profilingListeners[OnBehaviorAppliedEvent::getEventName()] = $stopper;
-        $this->getWorkbench()->eventManager()->addListener(OnBeforeBehaviorAppliedEvent::getEventName(), $starter);
-        $this->getWorkbench()->eventManager()->addListener(OnBehaviorAppliedEvent::getEventName(), $stopper);
-        */
+        if (null !== $config = $this->getProfilerUxon()) {
+            $profiler->importUxonObject($config);
+        }
+        $profiler->start($this, 'Step `' . $this->getName() . '`', 'Steps');        
     }
 
+    /**
+     * @param Profiler $profiler
+     * @return void
+     */
     protected function stopProfiling(Profiler $profiler) : void
     {
-        /*
         foreach ($this->profilingListeners as $event => $listener) {
             $this->getWorkbench()->eventManager()->removeListener($event, $listener);
-        }*/
+        }
         $profiler->stop($this);
+    }
+
+    /**
+     * Customize the configuration of the profiler for this flow step - e.g. make it track behaviors
+     * 
+     * @uxon-property profiler
+     * @uxon-type \exface\Core\CommonLogic\Debugger\Profiler
+     * @uxon-template {"track_behaviors":"false"}
+     * 
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    protected function setProfiler(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->profilerConfig = $uxon;
+        return $this;
+    }
+
+    /**
+     * @return UxonObject|null
+     */
+    protected function getProfilerUxon() : ?UxonObject
+    {
+        return $this->profilerConfig ?? new UxonObject([
+            'track_behaviors' => true
+        ]);
     }
 }

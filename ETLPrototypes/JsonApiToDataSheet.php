@@ -2,7 +2,6 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
-use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
@@ -198,7 +197,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     private $outputMapperUxon = null;
     private $skipInvalidRows = false;
     
-    private $restoreTimestampingConflictDetections = false;
+    private array $restoreBehaviors = [];
     
     /**
      *
@@ -504,12 +503,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             
             if (! $createSheet->isEmpty()) {
                 $logbook->addLine('CREATING ' . $createSheet->countRows() . ' rows');
-                $resultCreate = $this->writeDataOperation(
-                    self::OPERATION_CREATE,
-                    $createSheet,
-                    $stepData,
-                    $logbook,
-                );
+                $resultCreate = $this->writeDataOperation(self::OPERATION_CREATE, $createSheet, $stepData, $logbook);
                 if (! $resultSheet) {
                     $resultSheet = $resultCreate;
                 } else {
@@ -522,7 +516,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             }
 
         } else {
-            $resultSheet = $this->writeDataSave(self::OPERATION_CREATE, $toSheet, $crudCounter, $stepData, $logbook);
+            $resultSheet = $this->writeDataOperation(self::OPERATION_CREATE, $toSheet, $stepData, $logbook);
         }
         
         // If no row actually worked, nothing was written, and we will report a failed step.
@@ -957,6 +951,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         return $this->skipInvalidRows;
     }
     
+    
     protected function modifyToObjectBehaviors(DataSheetInterface $toSheet) : ETLStepInterface
     {
         $this->modifyBehaviors($this->getToObject());
@@ -966,6 +961,16 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 $this->modifyBehaviors($rel->getRightObject());
             }
         }
+        
+        if ($this->willUpdateViaPreventDuplicatesBehavior() === true) {
+            $behavior = $this->addDuplicatePreventingBehavior($toSheet->getMetaObject());
+            $this->restoreBehaviors[] = [
+                'behavior' => $behavior,
+                'method' => 'setDisabled',
+                'arguments' => [true]
+            ];
+        }
+        
         return $this;
     }
     
@@ -976,11 +981,22 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
                 case $behavior instanceof TimeStampingBehavior:
                     if ($behavior->getCheckForConflictsOnUpdate() === true) {
                         $behavior->setCheckForConflictsOnUpdate(false);
-                        $this->restoreTimestampingConflictDetections = true;
+                        $this->restoreBehaviors[] = [
+                            'behavior' => $behavior,
+                            'method' => 'setCheckForConflictsOnUpdate',
+                            'arguments' => [true]
+                        ];
                     }
                     break;
                 case $behavior instanceof PreventDuplicatesBehavior:
-                    $behavior->setDisabled(true);
+                    if ($this->willUpdateIfMatchingAttributes() === true) {
+                        $behavior->setDisabled(true);
+                        $this->restoreBehaviors[] = [
+                            'behavior' => $behavior,
+                            'method' => 'setDisabled',
+                            'arguments' => [false]
+                        ];
+                    }
                     break;
             }
         }
@@ -1001,17 +1017,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     
     protected function restoreBehaviors(MetaObjectInterface $object) : ETLStepInterface
     {
-        foreach ($object->getBehaviors() as $behavior) {
-            switch (true) {
-                case $behavior instanceof TimeStampingBehavior:
-                    if ($this->restoreTimestampingConflictDetections === true) {
-                        $behavior->setCheckForConflictsOnUpdate(true);
-                        $this->restoreTimestampingConflictDetections = false;
-                    }
-                    break;
-                case $behavior instanceof PreventDuplicatesBehavior:
-                    $behavior->setDisabled(false);
-                    break;
+        foreach ($this->restoreBehaviors as $undo) {
+            if ($undo['behavior']->getObject() === $object) {
+                call_user_func_array([$undo['behavior'], $undo['method']], $undo['arguments']);
             }
         }
         return $this;
