@@ -126,7 +126,7 @@
         {
             "_EXPORT_SUMMARY": "Upload: Upload [FileUploadDialog]",
             "CREATED_ON": "2024-09-09 10:48:53",
-            "MODIFIED_ON": "2024-09-11 17:01:18",
+            "MODIFIED_ON": "2025-11-04 18:06:05",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11efa70557b2b2b0a705025041000001",
@@ -155,7 +155,18 @@
                                     "hidden": true
                                 },
                                 {
-                                    "attribute_alias": "file_flow"
+                                    "attribute_alias": "file_flow",
+                                    "widget_type": "InputComboTable",
+                                    "table": {
+                                        "object_alias": "axenox.ETL.file_flow",
+                                        "filters": [
+                                            {
+                                                "attribute_alias": "enabled_flag",
+                                                "comparator": "==",
+                                                "value": 1
+                                            }
+                                        ]
+                                    }
                                 },
                                 {
                                     "attribute_alias": "comment",
