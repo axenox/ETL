@@ -114,6 +114,8 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
         $profiler = $stepData->getProfiler();
