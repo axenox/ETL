@@ -91,6 +91,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     private int $firstRowIndex = 2;
 
     /**
+     * Summary of getPlaceholders
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @return string[]
+     */
+    protected function getPlaceholders(ETLStepDataInterface $stepData) : array
+    {
+    	$phs = parent::getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
+        $phs['upload_uid'] = $uploadUid;
+        return $phs;
+    }
+
+    /**
      *
      * {@inheritDoc}
      * @throws JSONPathException|\Throwable
@@ -107,13 +121,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
         // Read the upload info (in particular the UID) into a data sheet
         $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
-        $fileData = $this->getUploadData($stepData);
-        $uploadUid = $fileData->getUidColumn()->getValue(0);;
-        $placeholders['upload_uid'] = $uploadUid;
 
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
-        if ($uploadUid === null) {
+        if ($placeholders['upload_uid'] === null) {
             $lap->stop();
             $logBook->addLine($msg = 'No file found in step input');
             yield $msg . PHP_EOL;
