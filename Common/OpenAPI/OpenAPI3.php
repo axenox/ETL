@@ -2,6 +2,7 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
+use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -16,6 +17,7 @@ use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
+use JsonPath\JsonObject;
 use Psr\Http\Message\ServerRequestInterface;
 use Flow\JSONPath\JSONPath;
 use stdClass;
@@ -168,17 +170,16 @@ class OpenAPI3 implements APISchemaInterface
     {
         return $this->openAPIJsonArray['components'];
     }
-    
+
     /**
-     * 
-     * 
-     * @return array|null
+     *
+     * @return array
      */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
     }
-
+    
     public function __tostring()
     {
         return JsonDataType::encodeJson($this->openAPIJsonObj, true);
@@ -198,10 +199,17 @@ class OpenAPI3 implements APISchemaInterface
      */
     protected function enhanceSchema(array $json) : array
     {
+        $jsonPath = new JsonObject($json);
+        
         if ($this->apiVersion !== null) {
-             $json['info']['version'] = $this->apiVersion;
+             $jsonPath->set('$.info.version', $this->apiVersion);
         }
         
+        $examplesToGenerate = $this->extractExamplesGenerators($json);
+        
+        // Object schemas.
+        $schemaPath = '$.components.schemas';
+        $examplePath = '$.components.examples';
         foreach ($json['components']['schemas'] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
@@ -209,10 +217,41 @@ class OpenAPI3 implements APISchemaInterface
             }
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            $json['components']['schemas'][$schemaName] = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
+            $schema = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
+            $jsonPath->set($schemaPath . '.' . $schemaName, $schema);
+            
+            foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
+                $exampleName = $schemaName . '_' . $exampleName;
+                $path = $examplePath . '.' . $exampleName;
+
+                if(!empty($jsonPath->get($path))){
+                    continue;
+                }
+
+                $exampleJson = $this->generateExampleFromSchema($object, $schema, $exampleSchema);
+                $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
+
+                // We have to add a reference to the example in "paths", but getting the correct path
+                // is not trivial. The Path reference may be named differently than the component it
+                // represents. To identify the correct path, we need to match object aliases, which would
+                // be difficult with array accessors, which is why we use JSONPath.
+                //
+                // The path searches for all paths that have a property "content" anywhere in their structure
+                // that matches these conditions:
+                // - It has a child named "examples". 
+                // - It has a child named "schema" with a property "x-attribute-alias".
+                // - Said property is equal to the object alias of our $object.
+                $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                $reference = '#/components/examples/' . $exampleName;
+                $jsonPath->add(
+                    "$.paths..content{$schemaFilter}.examples", 
+                    [ '$ref' => $reference ],
+                    $exampleName
+                );
+            }
         }
-        
-        return $json;
+
+        return $jsonPath->getValue();
     }
 
     public function publish(string $baseUrl) : string
@@ -302,4 +341,109 @@ class OpenAPI3 implements APISchemaInterface
 			$data = (new JSONPath($this->openAPIJsonObj))->find($jsonPath)->getData()[0] ?? null;
 			return is_object($data) ? get_object_vars($data) : $data;
 	}
+
+    /**
+     * Extracts example generators from a given OpenAPI JSON and returns an array
+     * containing those definitions as well as some basic example generators.
+     * 
+     * The following properties mark an example as a generator:
+     * - `x-attribute-group-alias`
+     * - `x-required`
+     * 
+     * @param array $openApiJson
+     * @return array
+     */
+    protected function extractExamplesGenerators(array &$openApiJson) : array
+    {
+        $examples = $openApiJson['components']['examples'];
+
+        foreach ($examples as $example => $schema) {
+            if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $schema) ||
+                key_exists('x-required', $schema)) {
+                unset($openApiJson['components']['examples'][$example]);
+            } else {
+                unset($examples[$example]);
+            }
+        }
+
+        $examples['Minimum'] = [
+            OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
+            'x-required' => true
+        ];
+
+        $examples['Full'] = [
+            OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL'
+        ];
+
+        return $examples;
+    }
+
+    /**
+     * @param MetaObjectInterface $object
+     * @param array               $objectSchema
+     * @param array               $exampleSchema
+     * @return array
+     */
+    protected function generateExampleFromSchema(
+        MetaObjectInterface $object, 
+        array $objectSchema, 
+        array $exampleSchema
+    ) : array
+    {
+        $objectSchema = new OpenAPI3ObjectSchema($this, $objectSchema);
+        $requiredFilter = $exampleSchema['x-required'];
+        
+        $groupFilter = null;
+        if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $exampleSchema)) {
+            $groupFilter = $object->getAttributeGroup($exampleSchema[OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS]);
+        }
+        
+        $values = [];
+        $loadedValues = MetaModelSchemaBuilder::loadExamples($object);
+        
+        foreach ($objectSchema->getProperties() as $name => $property) {
+            $exampleValue = null;
+            
+            // Filter for property optionality, if the example schema contains such a filter.
+            if($requiredFilter !== null &&
+                $property->isRequired() !== $requiredFilter
+            ) {
+                continue;
+            }
+            
+            // Filter for attribute groups, if the example schema contains such a filter.
+            if($groupFilter !== null &&
+                $property->isBoundToAttribute() &&
+                !$property->isBoundToCalculation()
+            ) {
+                $attribute = $property->getAttribute();
+                
+                try {
+                    $groupFilter->getByAttributeId($attribute->getId());
+                } catch (\Throwable) {
+                    continue;
+                }
+                
+                $exampleValue = 
+                    $loadedValues[$attribute->getAlias()] ?? 
+                    $attribute->getDataType()->getValue();
+            }
+
+            try {
+                $exampleValue = 
+                    $property->getExampleValue() ?? 
+                    $exampleValue ?? 
+                    $property->getPropertyType();
+                
+                $decoded = json_decode($exampleValue);
+                $exampleValue = $decoded ?? $exampleValue;
+            } catch (\Throwable) {
+                
+            }
+            
+            $values[$name] = $exampleValue;
+        }
+        
+        return ['value' => [$values]]; 
+    }
 }
