@@ -413,8 +413,7 @@ class OpenAPI3 implements APISchemaInterface
             
             // Filter for attribute groups, if the example schema contains such a filter.
             if($groupFilter !== null &&
-                $property->isBoundToAttribute() &&
-                !$property->isBoundToCalculation()
+                $property->isBoundToAttribute()
             ) {
                 $attribute = $property->getAttribute();
                 
@@ -424,9 +423,11 @@ class OpenAPI3 implements APISchemaInterface
                     continue;
                 }
                 
-                $exampleValue = 
-                    $loadedValues[$attribute->getAlias()] ?? 
-                    $attribute->getDataType()->getValue();
+                if(!$property->isBoundToCalculation()) {
+                    $exampleValue = $loadedValues[$attribute->getAlias()];
+                }
+                
+                $exampleValue = $exampleValue ?? $attribute->getDataType()->getValue();
             }
 
             try {
