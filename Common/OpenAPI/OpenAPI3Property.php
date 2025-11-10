@@ -516,4 +516,12 @@ class OpenAPI3Property implements APIPropertyInterface
     {
         return $this->objectSchema->isRequiredProperty($this);
     }
+
+    /**
+     * @inheritDoc
+     */
+    public function getExampleValue() : mixed
+    {
+        return $this->jsonSchema['example'];
+    }
 }
