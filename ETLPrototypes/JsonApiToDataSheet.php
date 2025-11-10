@@ -2,7 +2,9 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
+use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\StepNote;
+use axenox\ETL\Common\Traits\BypassDataAuthorizationStepTrait;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
@@ -188,6 +190,7 @@ use exface\Core\CommonLogic\DataSheets\DataColumn;
 class JsonApiToDataSheet extends AbstractAPISchemaPrototype
 {
     use PreventDuplicatesStepTrait;
+    use BypassDataAuthorizationStepTrait;
     
     const OPERATION_UPDATE = 'update';
     const OPERATION_CREATE = 'create';
@@ -326,6 +329,28 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $logBook->addDataSheet('To-Sheet', $toSheet);
         
         return $toSheet;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AbstractETLPrototype::runPrepare()
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        parent::runPrepare($stepData);
+        $this->disableDataAuthorization($this->getLogBook($stepData));
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see AbstractETLPrototype::runTeardown()
+     */
+    public function runTeardown(ETLStepDataInterface $stepData): ETLStepInterface
+    {
+        parent::runTeardown($stepData); 
+        $this->restoreDataAuthorizationPoint($this->getLogBook($stepData));
+        return $this;
     }
 
     /**
