@@ -180,6 +180,10 @@ class MetaModelSchemaBuilder
         if ($ds->hasUidColumn()){
             $rowWithRelations = self::getRowWithTheLeastNullValues($ds);
             
+            if($rowWithRelations === null) {
+                return null;
+            }
+            
             $rowHideRelations = [];
             foreach ($columns as $shortAlias => $fullAlias) {
                 $rowHideRelations[$shortAlias] = $rowWithRelations[$fullAlias] ?? $rowWithRelations[$shortAlias];
