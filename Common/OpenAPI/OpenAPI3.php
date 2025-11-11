@@ -487,19 +487,21 @@ class OpenAPI3 implements APISchemaInterface
             ) {
                 continue;
             }
-            
-            // Filter for attribute groups, if the example schema contains such a filter.
-            if($groupFilter !== null &&
-                $property->isBoundToAttribute()
-            ) {
+
+            if($property->isBoundToAttribute()) {
                 $attribute = $property->getAttribute();
-                
-                try {
-                    $groupFilter->getByAttributeId($attribute->getId());
-                } catch (\Throwable) {
-                    continue;
+
+                // Filter for attribute groups, if the example schema contains such a filter.
+                if($groupFilter !== null) {
+                    try {
+                        $groupFilter->getByAttributeId($attribute->getId());
+                    } catch (\Throwable) {
+                        continue;
+                    }
                 }
                 
+                // We cannot trust the loaded value, if the property has a calculation,
+                // since that might have transformed it in some unrecognizable way.
                 if(!$property->isBoundToCalculation()) {
                     $exampleValue = $loadedValues[$attribute->getAlias()];
                 }
