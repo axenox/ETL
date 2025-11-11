@@ -25,10 +25,74 @@ use stdClass;
 /**
  * API schema for OpenAPI 3.0 allowing additional `x-` attributes to bind to the meta model
  * 
+ * ## Writing Examples
+ * 
+ * Power-UI automagically generates two API examples for every object schema: "Minimum" (only required properties) and
+ * "Full" (all properties). You can expand upon these, by either writing additional manual examples or by
+ * adding more example generators. 
+ * 
+ * ### Manual Examples
+ * 
+ * To create a new example, you need to add a new property under `components > examples`. Its name will be displayed as 
+ * the title of your example, make it descriptive. Manual examples must have the following structure:
+ * 
+ * ```
+ *  
+ *  "examples" : [
+ *      "Your_Example": {
+ *          "value": [
+ *              {
+ *                  "PropertyName": "Value",
+ *                  "PropertyName": "Value",
+ *                  ...
+ *              }
+ *          ]
+ *      }
+ *  ]
+ *  
+ * ```
+ * 
+ * This example will then be available for any user as a template. Use the property names as they are displayed in 
+ * your schema and use meaningful example values to help users understand how to format their data. Finally, you need
+ * to add a reference to your example to each `paths` endpoint you want to apply it to. Navigate to 
+ * `paths > /YourPath > post > requestBody > content > application/json > examples` and add 
+ * "#/components/examples/Your_Example".
+ * 
+ * ### Example Generators
+ * 
+ * Writing manual examples is a lot of hard work and there is a high risk of producing typos or forgetting
+ * properties. And whenever the schema needs to be updated, you also have to update all of its examples.
+ * Generators solve all these issues, by allowing you to automatically generate examples for a well-defined
+ * subset of all properties in a given schema.
+ * 
+ * To create a generator, simply add a new entry under `components > examples` and give it a descriptive name.
+ * Any example that has either of these properties, will be treated as a generator:
+ * 
+ * - `x-attribute-group-alias`: Filters all properties, based on which attribute groups they belong to. Properties
+ * that are not bound to an attribute will always be included.
+ * - `x-required-for-api`: Filters all properties, based on whether they have been declared as required by your 
+ * API-Definition. This filter does not check the underlying attributes.
+ * 
+ * For example, a generator that only shows required properties with their attributes visible would look like this 
+ * (note that you don't need to add the "value" property):
+ * 
+ * ```
+ * 
+ *  "examples": [
+ *      "Your_Generator":{
+ *          "x-attribute-group-alias": "~VISIBLE",
+ *          "x-required-for-api": true
+ *      }
+ *  ]
+ * 
+ * ```
+ * 
  * @author Andrej Kabachnik
  */
 class OpenAPI3 implements APISchemaInterface
 {
+    public const X_REQUIRED_FOR_API = 'x-required-for-api';
+    
     use OpenAPI3UxonTrait;
 
     private ?Workbench $workbench;
@@ -210,6 +274,10 @@ class OpenAPI3 implements APISchemaInterface
         // Object schemas.
         $schemaPath = '$.components.schemas';
         $examplePath = '$.components.examples';
+        if(empty($jsonPath->get($examplePath))) {
+            $jsonPath->add('$.components', [], 'examples');
+        }
+        
         foreach ($json['components']['schemas'] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
@@ -242,9 +310,17 @@ class OpenAPI3 implements APISchemaInterface
                 // - It has a child named "schema" with a property "x-attribute-alias".
                 // - Said property is equal to the object alias of our $object.
                 $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                $referencePath = "$.paths..content{$schemaFilter}";
+                
+                // Ensure folder.
+                if(empty($jsonPath->get($referencePath . ".examples"))) {
+                    $jsonPath->add($referencePath, [], 'examples');
+                }
+                
+                // Add reference.
                 $reference = '#/components/examples/' . $exampleName;
                 $jsonPath->add(
-                    "$.paths..content{$schemaFilter}.examples", 
+                    $referencePath . ".examples", 
                     [ '$ref' => $reference ],
                     $exampleName
                 );
@@ -348,7 +424,7 @@ class OpenAPI3 implements APISchemaInterface
      * 
      * The following properties mark an example as a generator:
      * - `x-attribute-group-alias`
-     * - `x-required`
+     * - `x-required-for-api`
      * 
      * @param array $openApiJson
      * @return array
@@ -359,7 +435,7 @@ class OpenAPI3 implements APISchemaInterface
 
         foreach ($examples as $example => $schema) {
             if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $schema) ||
-                key_exists('x-required', $schema)) {
+                key_exists(self::X_REQUIRED_FOR_API, $schema)) {
                 unset($openApiJson['components']['examples'][$example]);
             } else {
                 unset($examples[$example]);
@@ -368,7 +444,7 @@ class OpenAPI3 implements APISchemaInterface
 
         $examples['Minimum'] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
-            'x-required' => true
+            self::X_REQUIRED_FOR_API => true
         ];
 
         $examples['Full'] = [
@@ -383,6 +459,7 @@ class OpenAPI3 implements APISchemaInterface
      * @param array               $objectSchema
      * @param array               $exampleSchema
      * @return array
+     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     protected function generateExampleFromSchema(
         MetaObjectInterface $object, 
@@ -391,7 +468,7 @@ class OpenAPI3 implements APISchemaInterface
     ) : array
     {
         $objectSchema = new OpenAPI3ObjectSchema($this, $objectSchema);
-        $requiredFilter = $exampleSchema['x-required'];
+        $requiredFilter = $exampleSchema[self::X_REQUIRED_FOR_API];
         
         $groupFilter = null;
         if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $exampleSchema)) {
