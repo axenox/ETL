@@ -330,7 +330,7 @@ class OpenAPI3 implements APISchemaInterface
                 }
             } catch (\Throwable $e) {
                 $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
-                    'Failed to generate examples for API definition!', 0, $e
+                    'Failed to generate examples for API definition!', '83K3MPU', $e
                 ));
             }
 
