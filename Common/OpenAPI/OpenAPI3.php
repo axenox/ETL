@@ -13,6 +13,7 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
@@ -274,9 +275,6 @@ class OpenAPI3 implements APISchemaInterface
         // Object schemas.
         $schemaPath = '$.components.schemas';
         $examplePath = '$.components.examples';
-        if(empty($jsonPath->get($examplePath))) {
-            $jsonPath->add('$.components', [], 'examples');
-        }
         
         foreach ($json['components']['schemas'] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
@@ -287,44 +285,55 @@ class OpenAPI3 implements APISchemaInterface
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
             $schema = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
             $jsonPath->set($schemaPath . '.' . $schemaName, $schema);
-            
-            foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
-                $exampleName = $schemaName . '_' . $exampleName;
-                $path = $examplePath . '.' . $exampleName;
 
-                if(!empty($jsonPath->get($path))){
-                    continue;
+            try {
+                foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
+                    $exampleName = $schemaName . '_' . $exampleName;
+                    $path = $examplePath . '.' . $exampleName;
+
+                    if(!empty($jsonPath->get($path))){
+                        continue;
+                    }
+
+                    $exampleJson = $this->generateExampleFromSchema($object, $schema, $exampleSchema);
+                    
+                    if(empty($jsonPath->get($examplePath))) {
+                        $jsonPath->add('$.components', [], 'examples');
+                    }
+                    $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
+
+                    // We have to add a reference to the example in "paths", but getting the correct path
+                    // is not trivial. The Path reference may be named differently than the component it
+                    // represents. To identify the correct path, we need to match object aliases, which would
+                    // be difficult with array accessors, which is why we use JSONPath.
+                    //
+                    // The path searches for all paths that have a property "content" anywhere in their structure
+                    // that matches these conditions:
+                    // - It has a child named "examples". 
+                    // - It has a child named "schema" with a property "x-attribute-alias".
+                    // - Said property is equal to the object alias of our $object.
+                    $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                    $referencePath = "$.paths..content{$schemaFilter}";
+
+                    // Ensure folder.
+                    if(empty($jsonPath->get($referencePath . ".examples"))) {
+                        $jsonPath->add($referencePath, [], 'examples');
+                    }
+
+                    // Add reference.
+                    $reference = '#/components/examples/' . $exampleName;
+                    $jsonPath->add(
+                        $referencePath . ".examples",
+                        [ '$ref' => $reference ],
+                        $exampleName
+                    );
                 }
-
-                $exampleJson = $this->generateExampleFromSchema($object, $schema, $exampleSchema);
-                $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
-
-                // We have to add a reference to the example in "paths", but getting the correct path
-                // is not trivial. The Path reference may be named differently than the component it
-                // represents. To identify the correct path, we need to match object aliases, which would
-                // be difficult with array accessors, which is why we use JSONPath.
-                //
-                // The path searches for all paths that have a property "content" anywhere in their structure
-                // that matches these conditions:
-                // - It has a child named "examples". 
-                // - It has a child named "schema" with a property "x-attribute-alias".
-                // - Said property is equal to the object alias of our $object.
-                $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
-                $referencePath = "$.paths..content{$schemaFilter}";
-                
-                // Ensure folder.
-                if(empty($jsonPath->get($referencePath . ".examples"))) {
-                    $jsonPath->add($referencePath, [], 'examples');
-                }
-                
-                // Add reference.
-                $reference = '#/components/examples/' . $exampleName;
-                $jsonPath->add(
-                    $referencePath . ".examples", 
-                    [ '$ref' => $reference ],
-                    $exampleName
-                );
+            } catch (\Throwable $e) {
+                $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
+                    'Failed to generate examples for API definition!', 0, $e
+                ));
             }
+
         }
 
         return $jsonPath->getValue();
@@ -459,7 +468,6 @@ class OpenAPI3 implements APISchemaInterface
      * @param array               $objectSchema
      * @param array               $exampleSchema
      * @return array
-     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     protected function generateExampleFromSchema(
         MetaObjectInterface $object, 
