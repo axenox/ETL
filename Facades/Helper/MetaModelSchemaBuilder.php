@@ -222,7 +222,7 @@ class MetaModelSchemaBuilder
             
             $fromCache = $cache->get($cacheKey);
         } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
-            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
         }
 
         if($fromCache['expires'] < time()) {
@@ -254,7 +254,7 @@ class MetaModelSchemaBuilder
                 ]
             );
         } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
-            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
         }
     }
 
