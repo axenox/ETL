@@ -9,6 +9,7 @@ use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\HexadecimalNumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\TimeDataType;
+use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Factories\AttributeListFactory;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataSorterFactory;
@@ -88,7 +89,15 @@ class MetaModelSchemaBuilder
         }
 
         if ($this->loadExamples) {
-            $richestRow = self::loadExamples($metaObject);
+            try {
+                $richestRow = self::loadExamples($metaObject);
+            } catch (\Throwable $exception) {
+                $metaObject->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
+                    'Could not load example data for "' . $metaObject->getAliasWithNamespace() . '".',
+                    null,
+                    $exception
+                ));
+            }
         }
 
         $properties = [];
@@ -148,7 +157,6 @@ class MetaModelSchemaBuilder
      * @param MetaObjectInterface $metaObject
      * @param bool                $hideRelations
      * @return array|null
-     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     public static function loadExamples(MetaObjectInterface $metaObject, bool $hideRelations = true) : ?array 
     {
@@ -201,18 +209,22 @@ class MetaModelSchemaBuilder
      * @param MetaObjectInterface $metaObject
      * @param bool                $hideRelations
      * @return array|null
-     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     private static function loadExamplesFromCache(MetaObjectInterface $metaObject, bool $hideRelations) : ?array
     {
         $cacheKey = self::getCacheKey($metaObject);
         $cache = $metaObject->getWorkbench()->getCache();
         
-        if(!$cache->has($cacheKey)) {
-            return null;
+        try {
+            if (!$cache->has($cacheKey)) {
+                return null;
+            }
+            
+            $fromCache = $cache->get($cacheKey);
+        } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
+            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
         }
-        
-        $fromCache = $cache->get($cacheKey);
+
         if($fromCache['expires'] < time()) {
             return null;
         }
@@ -225,7 +237,6 @@ class MetaModelSchemaBuilder
      * @param array               $rowHideRelations
      * @param array               $rowWithRelations
      * @return void
-     * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     private static function storeExamplesInCache(
         MetaObjectInterface $metaObject, 
@@ -233,14 +244,18 @@ class MetaModelSchemaBuilder
         array $rowWithRelations
     ) : void
     {
-        $metaObject->getWorkbench()->getCache()->set(
-            self::getCacheKey($metaObject),
-            [
-                'expires' => time() + 3600,
-                'rowHideRelations' => $rowHideRelations,
-                'rowWithRelations' => $rowWithRelations
-            ]
-        );
+        try {
+            $metaObject->getWorkbench()->getCache()->set(
+                self::getCacheKey($metaObject),
+                [
+                    'expires' => time() + 3600,
+                    'rowHideRelations' => $rowHideRelations,
+                    'rowWithRelations' => $rowWithRelations
+                ]
+            );
+        } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
+            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
+        }
     }
 
     /**
