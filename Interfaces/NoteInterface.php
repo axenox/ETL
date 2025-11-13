@@ -2,10 +2,8 @@
 
 namespace axenox\ETL\Interfaces;
 
-use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\AbstractNoteTaker;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\Interfaces\WorkbenchDependantInterface;
 
 /**
  * A note is a simple data package: It contains a message, logging level and optionally, 
@@ -18,24 +16,20 @@ use exface\Core\Interfaces\WorkbenchDependantInterface;
  * the calling context is shut down (i.e. on `__destruct()`). In addition, you can commit all pending notes 
  * manually via `NoteTaker::commitPendingNotesAll()`.
  * 
- * @see NoteTaker
- * @see NoteTaker::commitPendingNotesAll()
+ * @see AbstractNoteTaker
+ * @see AbstractNoteTaker::commitPendingNotesAll()
  */
-interface NoteInterface extends WorkbenchDependantInterface
+interface NoteInterface
 {
+    const VISIBLE_FOR_SUPERUSER = ['exface.Core.SUPERUSER'];
+    const VISIBLE_FOR_EVERYONE = ['exface.Core.AUTHENTICATED'];
+    
     /**
      * Take this note, adding it to the pending notes to be commited later.
      * 
      * @return void
      */
     function takeNote() : void;
-
-    /**
-     * The storage object determines how and where this note will ultimately end up being stored.
-     * 
-     * @return MetaObjectInterface
-     */
-    function getStorageObject() : MetaObjectInterface;
 
     /**
      * Generate array of all data contained in this note. The resulting array can be added as a row 
@@ -56,9 +50,9 @@ interface NoteInterface extends WorkbenchDependantInterface
     function setMessage(string $message) : NoteInterface;
 
     /**
-     * @return string|null
+     * @return string
      */
-    function getMessage() : ?string;
+    function getMessage() : string;
 
     /**
      * @return string|null
@@ -112,4 +106,52 @@ interface NoteInterface extends WorkbenchDependantInterface
      * @return array
      */
     function getContextData() : array;
+
+    /**
+     * Returns an array with `exface.Core.USER_ROLE` aliases that this note
+     * should be visible for. 
+     * 
+     * @return array
+     */
+    function getVisibleForUserRoles() : array;
+
+    /**
+     * Set which `exface.Core.USER_ROLE` aliases this note should be visible for.
+     * Default is `AUTHENTICATED` (visible for everyone).
+     *
+     * @param string|array $roles
+     * @return NoteInterface
+     */
+    function setVisibleUserRoles(string|array $roles) : NoteInterface;
+
+    /**
+     * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
+     * adding a row summary to the message.
+     *
+     * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
+     *
+     * @param array                     $baseData
+     * @param array                     $currentData
+     * @param bool                      $prepend
+     * @return $this
+     */
+    public function enrichWithAffectedData(
+        array $baseData,
+        array $currentData,
+        bool $prepend = true
+    ) : NoteInterface;
+
+    /**
+     * Reformats this note with an exception.
+     * 
+     * @param \Throwable  $exception
+     * @param string|null $preamble
+     * @param bool        $showRowNumbers
+     * @return mixed
+     */
+    public function enrichWithException(
+        \Throwable $exception,
+        string $preamble = null,
+        bool $showRowNumbers = true
+    ) : NoteInterface;
 }

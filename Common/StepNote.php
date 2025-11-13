@@ -10,11 +10,10 @@ use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\LogLevelDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\StringDataType;
-use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Factories\MessageFactory;
 use exface\Core\Interfaces\Exceptions\DataSheetValueExceptionInterface;
 use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
-use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use Throwable;
@@ -31,11 +30,12 @@ class StepNote implements NoteInterface
 {
     use ImportUxonObjectTrait;
     
+    private ETLStepDataInterface $stepData;
     private WorkbenchInterface $workbench;
-    private MetaObjectInterface $storageObject;
+    private TranslationInterface $translator;
     private string $flowRunUid;
     private string $stepRunUid;
-    private ?string $message = null;
+    private string $message;
     private ?string $messageCode = null;
     private ?string $messageType = null;
     private bool $exceptionFlag = false;
@@ -49,151 +49,126 @@ class StepNote implements NoteInterface
     private ?int $countErrors = null;
     private ?int $countWarnings = null;
     private array $contextData = [];
+    private array $visibleForUserRoles;
+    private bool $renderUnreliableRows = false;
 
     /**
-     * @param WorkbenchInterface   $workbench
-     * @param ETLStepDataInterface $stepData
-     * @param string               $message
-     * @param Throwable|null       $exception
-     * @param string|null          $logLevel
+     * Creates a new step note with the provided parameters.
+     * 
+     * Parameters will be applied in the following order:
+     * 
+     * 1. `$message`
+     * 2. `$messageTypeOrException`
+     * 3. `$uxon`
+     * 
+     * With the last parameter having the highest priority. For example, if you pass an exception and a UXON
+     * and both contain a message, the UXON message will be used over the exception message.
+     * 
+     * @param ETLStepData           $stepData
+     * @param string                $message
+     * @param Throwable|string|null $messageTypeOrException
+     * @param UxonObject|null       $uxon
+     * @param array                 $visibleForUserRoles
      */
     public function __construct(
-        WorkbenchInterface $workbench,
-        ETLStepDataInterface $stepData,
-        string $message = "",
-        Throwable $exception = null,
-        string $logLevel = null,
+        ETLStepData         $stepData,
+        string              $message,
+        Throwable|string    $messageTypeOrException = null,
+        ?UxonObject         $uxon = null,
+        array               $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
     )
     {
-        $this->workbench = $workbench;
-        $this->storageObject = MetaObjectFactory::createFromString($workbench,'axenox.ETL.step_note');
+        $hasException = $messageTypeOrException !== null && !is_string($messageTypeOrException);
+
+        $this->stepData = $stepData;
         $this->flowRunUid = $stepData->getFlowRunUid();
         $this->stepRunUid = $stepData->getStepRunUid();
         $this->message = $message;
-        $this->messageType = $logLevel ?? ($exception ? 'error' : 'info');
+        $this->workbench = $stepData->getTask()->getWorkbench();
         
-        if($this->exceptionFlag = $exception !== null) {
-            $this->exceptionMessage = $exception->getMessage();
-            
-            if($exception instanceof ExceptionInterface) {
-                $this->exceptionLogId = $exception->getId();
-                
-                if(empty($this->messageCode)) {
-                    $this->messageCode = $exception->getAlias();
-                }
-                
-                if ($this->message === "") {
-                    switch (true) {
-                        /* TODO Create DataSheetValueExceptionInterface and implement it
-                        * - DataSheetMissingRequiredValueError
-                        * - DataSheetInvalidValueError
-                        * - LATER in DataSheetDuplicatesError, which currently does not have any information about rows
-                        * other than in its message
-                        case $exception instanceof DataSheetValueExceptionInterface:
-                        case $exception instanceof DataSheetInvalidValueError:
-                            $this->message = $exception->getMessageWithoutRowNumbers();*/
-                        default:
-                            $this->message = $exception->getMessageModel($this->getWorkbench())->getTitle();
-                    }
-                }
-            }
+        $app = $this->workbench->getApp('axenox.ETL');
+        
+        $this->translator = $app->getTranslator();
+        $this->visibleForUserRoles = $visibleForUserRoles;
+
+        $cfg = $app->getConfig();
+        if($cfg->hasOption('STEP_RUN.RENDER_UNTRACKED_ROWS')) {
+            $this->renderUnreliableRows = $cfg->getOption('STEP_RUN.RENDER_UNTRACKED_ROWS');
+        }
+        
+        if(!$hasException) {
+            $this->messageType = $messageTypeOrException ?? 'info';
+        } else {
+            $this->enrichWithException($messageTypeOrException, $message);
+        }
+        
+        if($uxon !== null) {
+            $this->importUxonObject($uxon);
         }
     }
 
     /**
-     * Create a new step note instance, using a UXON config.
-     *
-     * @param WorkbenchInterface   $workbench
+     * Create a new step note from a UXON object.
+     * 
      * @param ETLStepDataInterface $stepData
      * @param UxonObject           $uxon
-     * @param Throwable|null       $exception
      * @return StepNote
      */
-    public static function FromUxon(
-        WorkbenchInterface $workbench,
-        ETLStepDataInterface $stepData,
-        UxonObject $uxon,
-        Throwable $exception = null,
-    ) : StepNote 
+    public static function fromUxon(ETLStepDataInterface $stepData, UxonObject $uxon) : StepNote
     {
-        $note = new StepNote($workbench, $stepData);
-        $note->importUxonObject($uxon);
-        $note->setException($exception);
-        return $note;
+        return new StepNote($stepData, '', null, $uxon);
     }
 
     /**
-     * Instantiates a note from a given exception
-     *
-     * @param WorkbenchInterface   $workbench
+     * Create a new step note based on a message code.
+     * 
      * @param ETLStepDataInterface $stepData
-     * @param \Throwable           $exception
-     * @param string|null          $preamble
+     * @param string               $messageCode
+     * @param array                $visibleForUserRoles
+     * @return StepNote
+     */
+    public static function fromMessageCode(
+        ETLStepDataInterface $stepData, 
+        string $messageCode, 
+        array $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
+    ) : StepNote
+    {
+        $msg = MessageFactory::createFromCode($stepData->getTask()->getWorkbench(), $messageCode);
+        return new StepNote($stepData, $msg->getTitle(), $msg->getType(), null, $visibleForUserRoles);
+    }
+
+    /**
+     * Create a new step note based on an exception.
+     * 
+     * @param ETLStepDataInterface $stepData
+     * @param Throwable            $exception
+     * @param string               $preamble
      * @param bool                 $showRowNumbers
+     * @param array                $visibleForUserRoles
      * @return StepNote
      */
     public static function fromException(
-        WorkbenchInterface $workbench, 
-        ETLStepDataInterface $stepData, 
-        \Throwable $exception, 
-        string $preamble = null, 
-        bool $showRowNumbers = true
+        ETLStepDataInterface $stepData,
+        Throwable            $exception,
+        string               $preamble = '',
+        bool                 $showRowNumbers = true,
+        array                $visibleForUserRoles = NoteInterface::VISIBLE_FOR_EVERYONE
     ) : StepNote
     {
-        if ($exception instanceof ExceptionInterface) {
-            $logLevel = $exception->getLogLevel();
-            if (LogLevelDataType::compareLogLevels($logLevel, LoggerInterface::ERROR) < 0) {
-                $msgType = MessageTypeDataType::WARNING;
-            } else {
-                $msgType = MessageTypeDataType::ERROR;
-            }
-            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
-                $text = $exception->getMessageTitleWithoutLocation();
-            } else {
-                $text = $exception->getMessageModel($workbench)->getTitle();
-            }
-            $code = $exception->getAlias();
-        } else {
-            $msgType = MessageTypeDataType::ERROR;
-            $text = $exception->getMessage();
-            $code = null;
-        }
-
-        if ($preamble !== null) {
-            $text = StringDataType::endSentence($preamble) . ' ' . $text;
-        }
-
-        $note = new StepNote(
-            $workbench,
-            $stepData,
-            $text,
-            $exception,
-            $msgType
+        return (new StepNote(
+            $stepData, '', null, null, $visibleForUserRoles
+        ))->enrichWithException(
+            $exception, $preamble, $showRowNumbers
         );
-        
-        if($code !== null) {
-            $note->setMessageCode($code);
-        }
-
-        return $note;
     }
 
     /**
-     * @inheritdoc 
+     * @inheritDoc
      * @see NoteInterface::takeNote()
      */
     public function takeNote() : void
     {
-        NoteTaker::takeNote($this);
-    }
-
-    /**
-     * @inheritdoc
-     * @see NoteInterface::getStorageObject()
-     */
-    public function getStorageObject(): MetaObjectInterface
-    {
-        return $this->storageObject;
+        $this->stepData->getNoteTaker()->takeNote($this);
     }
 
     /**
@@ -218,16 +193,9 @@ class StepNote implements NoteInterface
             'count_deletes' => $this->getCountDeletes(),
             'count_errors' => $this->getCountErrors(),
             'count_warnings' => $this->getCountWarnings(),
-            'context_data' => $this->getContextData()
+            'context_data' => $this->getContextData(),
+            'visible_for_user_roles' => implode(',',$this->getVisibleForUserRoles())
         ];
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function getWorkbench() : WorkbenchInterface
-    {
-        return $this->workbench;
     }
 
     /**
@@ -266,7 +234,7 @@ class StepNote implements NoteInterface
      * @inheritdoc
      * @see NoteInterface::getMessage()
      */
-    public function getMessage(): ?string
+    public function getMessage(): string
     {
         return $this->message;
     }
@@ -281,7 +249,7 @@ class StepNote implements NoteInterface
     }
 
     /**
-     * Link a message from the meta model by message code
+     * Link a message from the metamodel by message code
      *
      * @uxon-property message_code
      * @uxon-type metamodel:exface.Core.MESSAGE:CODE
@@ -556,7 +524,7 @@ class StepNote implements NoteInterface
      *  will overwrite any data stored under that key.
      * @return $this
      */
-    public function addRowsAsContext(
+    protected function addRowsAsContext(
         array $rows = [],
         array $rowNumbers = [],
         string $key = 'affected_rows'
@@ -573,21 +541,12 @@ class StepNote implements NoteInterface
     }
 
     /**
-     * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
-     * adding a row summary to the message.
-     * 
-     * NOTE: Notes from the `$currentData` set will be marked with `*` in the message.
-     * 
-     * @param array                $baseData
-     * @param array                $currentData
-     * @param TranslationInterface $translator
-     * @param bool                 $prepend
-     * @return $this
+     * @inheritDoc
+     * @see NoteInterface::enrichWithAffectedData()
      */
     public function enrichWithAffectedData(
         array $baseData,
         array $currentData,
-        TranslationInterface $translator,
         bool $prepend = true
     ) : StepNote
     {
@@ -595,15 +554,27 @@ class StepNote implements NoteInterface
         $currentRowNrs = array_keys($currentData);
 
         $msgBaseRowNrs = implode(', ', $baseRowNrs);
-        $msgCurrentRowNrs = implode('*, ', $currentRowNrs) . (empty($currentRowNrs) ?  '' : '*');
-        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? '' : ', ';
-        $msgAllRows = '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
-        $msg = $translator->translate('NOTE.ROWS_SKIPPED', ['%number%' => $msgAllRows], count($baseData) + count($currentData));
+        $msgCurrentRowNrs = !$this->renderUnreliableRows || empty($currentRowNrs) ?
+            '' : (implode('*, ', $currentRowNrs) . '*');
+        $separator = empty($baseRowNrs) || empty($currentRowNrs) ? 
+            '' : ', ';
+        $msgAllRows = empty($msgBaseRowNrs) && empty($msgCurrentRowNrs) ?
+            '' : '(' . $msgBaseRowNrs . $separator . $msgCurrentRowNrs . ')';
+        
+        $rowInfo = empty($msgAllRows) ? '' :
+            $this->translator->translate(
+            'NOTE.ROWS_SKIPPED',
+            ['%number%' => $msgAllRows],
+            count($baseData) + count($currentData)
+        );
 
+        $rowInfo = $this->endSentence($rowInfo);
+        $msg = $this->endSentence($this->getMessage());
+        
         if($prepend) {
-            $this->setMessage($msg . ' ' . $this->getMessage());
+            $this->setMessage($rowInfo . (empty($rowInfo) ? '' : ' ') . $msg);
         } else {
-            $this->setMessage($this->getMessage() . ' ' . $msg);
+            $this->setMessage($msg . (empty($msg) ? '' : ' ') . $rowInfo);
         }
 
         $baseData = array_slice($baseData, 0, 10, true);
@@ -613,5 +584,91 @@ class StepNote implements NoteInterface
         $this->addRowsAsContext($currentData, $currentRowNrs, 'affected_rows_current');
         
         return $this;
+    }
+
+    /**
+     * @inheritDoc
+     * @see NoteInterface::enrichWithException()
+     */
+    public function enrichWithException(
+        \Throwable $exception,
+        string $preamble = null,
+        bool $showRowNumbers = true
+    ) : StepNote
+    {
+        if ($exception instanceof ExceptionInterface) {
+            $logLevel = $exception->getLogLevel();
+            if (LogLevelDataType::compareLogLevels($logLevel, LoggerInterface::ERROR) < 0) {
+                $msgType = MessageTypeDataType::WARNING;
+            } else {
+                $msgType = MessageTypeDataType::ERROR;
+            }
+            if ($showRowNumbers === false && $exception instanceof DataSheetValueExceptionInterface) {
+                $text = $exception->getMessageTitleWithoutLocation();
+            } else {
+                $text = $exception->getMessageModel($this->workbench)->getTitle();
+            }
+            $code = $exception->getAlias();
+        } else {
+            $msgType = MessageTypeDataType::ERROR;
+            $text = $exception->getMessage();
+            $code = null;
+        }
+
+        if ($preamble !== null) {
+            $text = $this->endSentence($preamble) . (empty($preamble) ? '' : ' ') . $text;
+        }
+
+        $this->setMessage($text);
+        $this->setMessageType($msgType);
+        $this->setException($exception);
+
+        if($code !== null) {
+            $this->setMessageCode($code);
+        }
+
+        return $this;
+    }
+
+
+    /**
+     * @inheritDoc
+     * 
+     * @uxon-property visible_for_user_roles
+     * @uxon-type metamodel:exface.Core.USER_ROLE:ALIAS_WITH_NS[]
+     * @uxon-template ["exface.Core.SUPERUSER"]
+     * 
+     * @param array $roles
+     * @return NoteInterface
+     */
+    public function setVisibleUserRoles(array|string $roles) : NoteInterface
+    {
+        if(is_string($roles)) {
+            $roles = [$roles];
+        }
+        
+        $this->visibleForUserRoles = $roles;
+        return $this;
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getVisibleForUserRoles(): array
+    {
+        return $this->visibleForUserRoles;
+    }
+
+    /**
+     * @param string $sentence
+     * @return string
+     */
+    protected function endSentence(string $sentence) : string
+    {
+        if(empty($sentence)) {
+            return $sentence;
+        }
+        
+        return StringDataType::endSentence($sentence);
     }
 }

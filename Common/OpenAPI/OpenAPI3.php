@@ -2,7 +2,7 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
+use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -330,7 +330,7 @@ class OpenAPI3 implements APISchemaInterface
                 }
             } catch (\Throwable $e) {
                 $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
-                    'Failed to generate examples for API definition!', 0, $e
+                    'Failed to generate examples for API definition!', '83K3MPU', $e
                 ));
             }
 
@@ -485,7 +485,7 @@ class OpenAPI3 implements APISchemaInterface
         }
         
         $values = [];
-        $loadedValues = MetaModelSchemaBuilder::loadExamples($object);
+        $loadedValues = OpenAPI3MetaModelSchemaBuilder::loadExamples($object);
         
         foreach ($objectSchema->getProperties() as $name => $property) {
             $exampleValue = null;

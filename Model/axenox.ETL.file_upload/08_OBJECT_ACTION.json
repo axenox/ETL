@@ -67,9 +67,9 @@
         {
             "_EXPORT_SUMMARY": "Upload: Process upload [FileUploadProcess]",
             "CREATED_ON": "2024-09-09 10:43:42",
-            "MODIFIED_ON": "2024-12-02 17:23:04",
+            "MODIFIED_ON": "2025-10-26 13:24:29",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11efab459dfc9a66ab45025041000001",
             "OBJECT": "0x11ef97055df83b389705025041000001",
             "ACTION_PROTOTYPE": "exface/Core/Actions/ActionChain.php",
@@ -81,6 +81,24 @@
                 "input_rows_min": 1,
                 "input_rows_max": 1,
                 "icon": "cogs",
+                "effected_objects": [
+                    "axenox.ETL.flow_run",
+                    "axenox.ETL.step_run",
+                    "axenox.ETL.step_note"
+                ],
+                "input_invalid_if": [
+                    {
+                        "error_text": "Cannot find data flow for this upload ",
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "expression": "file_flow__flow",
+                                "comparator": "==",
+                                "value": ""
+                            }
+                        ]
+                    }
+                ],
                 "actions": [
                     {
                         "alias": "exface.Core.UpdateData",
@@ -108,7 +126,7 @@
         {
             "_EXPORT_SUMMARY": "Upload: Upload [FileUploadDialog]",
             "CREATED_ON": "2024-09-09 10:48:53",
-            "MODIFIED_ON": "2024-09-11 17:01:18",
+            "MODIFIED_ON": "2025-11-04 18:06:05",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11efa70557b2b2b0a705025041000001",
@@ -137,7 +155,18 @@
                                     "hidden": true
                                 },
                                 {
-                                    "attribute_alias": "file_flow"
+                                    "attribute_alias": "file_flow",
+                                    "widget_type": "InputComboTable",
+                                    "table": {
+                                        "object_alias": "axenox.ETL.file_flow",
+                                        "filters": [
+                                            {
+                                                "attribute_alias": "enabled_flag",
+                                                "comparator": "==",
+                                                "value": 1
+                                            }
+                                        ]
+                                    }
                                 },
                                 {
                                     "attribute_alias": "comment",
