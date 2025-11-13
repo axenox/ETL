@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\Actions;
 
+use axenox\ETL\Exceptions\DataFlowNotFoundError;
 use exface\Core\CommonLogic\AbstractActionDeferred;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\DataSources\DataTransactionInterface;
@@ -85,16 +86,8 @@ use axenox\ETL\Factories\DataFlowFactory;
  *
  */
 class RunETLFlow extends AbstractActionDeferred implements iCanBeCalledFromCLI, iModifyData
-{
-    private $stepsLoaded = [];
-    
-    private $stepsPerFlowUid = [];
-    
-    private $flowStoppers = [];
-    
+{    
     private $flowToRun = null;
-    
-    private $flowRunUid = null;
     
     private $inputFlowAlias = null;
     
@@ -117,6 +110,12 @@ class RunETLFlow extends AbstractActionDeferred implements iCanBeCalledFromCLI, 
      */
     protected function performDeferred(TaskInterface $task = null, array $flows = []) : \Generator
     {
+        // Disable event tracking inside the action logbook. Step logbooks are much more detailed, while the
+        // action logbook would become overfilled especially during row-by-row steps. It might also prevent
+        // the garbage collector to get rid of some of the event objects.
+        $this->getLogBook($task)->stopLoggingEvents();
+        
+        // Run every flow
         foreach ($flows as $uid => $flow) {
             yield from $this->runFlow($flow, $uid, $task);
         }
@@ -190,6 +189,9 @@ class RunETLFlow extends AbstractActionDeferred implements iCanBeCalledFromCLI, 
                     $flowSheet->dataRead();
                 }
                 foreach ($col->getValues() as $alias) {
+                    if ($alias === null) {
+                        throw new DataFlowNotFoundError('Data flow not found!');
+                    }
                     $flows[] = DataFlowFactory::createFromString($wb, $alias);
                 }
                 break;

@@ -5,6 +5,7 @@ use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -27,41 +28,53 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
  * AND x-excel-sheet and with x-excel-column for the information where to read the information in the excel
  * like:
+ * 
  * ´´´
  * {
  *     "Activities": {
  *          "type": "object",
- *          "x-object-alias": "full.namespace.object",
+ *          "x-object-alias": "my.App.Activity",
  *          "x-excel-sheet": "Activities",
  *          "properties: {
  *              "Activity_Id" {
  *                  "type": "string",
- *                  "x-attribute-alias": "attribute_alias",
+ *                  "x-attribute-alias": "activity_id",
  *                  "x-excel-column": "Activity_Id"
  *              }
  *          }
  *     }
  * }
- *
+ * 
  * ´´´
+ * 
+ * ## Customizing the resulting data sheet
  *
+ * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
+ * filters, sorters, aggregators, etc. from placeholders available in the flow step.
  *
- * Placeholder and STATIC Formulas can be defined wihtin the configuration.
- * "additional_rows": [
- *      {
- *          "attribute_alias": "ETLFlowRunUID",
- *          "value": "[#flow_run_uid#]"
- *      },
- *      {
- *          "attribute_alias": "RequestId",
- *          "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
- *      },
- *      {
- *          "attribute_alias": "Betreiber",
- *          "value": "SuedLink"
- *      }
- * ]
+ * ### Example: save additional information about the flow run in a staging table
  *
+ * ```
+ * {
+ *  "base_data_sheet": {
+ *      "columns": [
+ *          {
+ *              "attribute_alias": "ETLFlowRunUID",
+ *              "formula": "='[#flow_run_uid#]'"
+ *          },
+ *          {
+ *              "attribute_alias": "RequestId",
+ *              "formula": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
+ *          },
+ *          {
+ *              "attribute_alias": "Betreiber",
+ *              "formula": "='SuedLink'"
+ *          }
+ *      ]
+ * }
+ *
+ * ```
+ * 
  * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
@@ -78,6 +91,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     private int $firstRowIndex = 2;
 
     /**
+     * Summary of getPlaceholders
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @return string[]
+     */
+    protected function getPlaceholders(ETLStepDataInterface $stepData) : array
+    {
+    	$phs = parent::getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
+        $phs['upload_uid'] = $uploadUid;
+        return $phs;
+    }
+
+    /**
      *
      * {@inheritDoc}
      * @throws JSONPathException|\Throwable
@@ -87,18 +114,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
+        $profiler = $stepData->getProfiler();
         $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
-        $fileData = $this->getUploadData($stepData);
-        $uploadUid = $fileData->getUidColumn()->getValue(0);;
-        $placeholders['upload_uid'] = $uploadUid;
+        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
 
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
-        if ($uploadUid === null) {
+        if ($placeholders['upload_uid'] === null) {
+            $lap->stop();
             $logBook->addLine($msg = 'No file found in step input');
             yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
@@ -114,31 +143,58 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
-        
-        if ($this->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($this->getToObject());
-        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
-        }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+        if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
+        }
 
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+        $lap->stop();
+
+        $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
-        $this->startTrackingData(
-            $this->getUidColumnsFromSchema($toObjectSchema, $fromSheet),
+        $logBook->addSection('Saving data');
+        $lap = $profiler->start('Saving data for step ' . $this->getName());
+        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
+        $logBook->addLine($msg);
+        yield $msg;
+
+        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
+
+        $resultSheet = $this->writeData(
+            $toSheet, 
+            $this->getCrudCounter(), 
             $stepData,
             $logBook
         );
+        $lap->stop();
 
+        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
+        if ($toSheet !== $resultSheet) {
+            $logBook->addDataSheet('To-data as saved', $resultSheet);
+        }
+
+        $this->getCrudCounter()->stop();
+        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
+        
+        return $result->setProcessedRowsCounter($resultSheet->countRows());
+    }
+
+    /**
+     * @inheritDoc
+     * @see JsonApiToDataSheet::getToSheet()
+     */
+    protected function getToSheet(ETLStepDataInterface $stepData, DataSheetInterface $fromSheet, APIObjectSchemaInterface $toObjectSchema, FlowStepLogBook $logBook): DataSheetInterface
+    {
         // Validate data in the from-sheet against the JSON schema
         $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
             $logBook->addIndent(1);
+            $rowErrors = [];
             foreach ($fromSheet->getRows() as $i => $row) {
-                $rowErrors = [];
                 try {
                     $toObjectSchema->validateRow($row);
                 } catch (JsonSchemaValidationError $e) {
@@ -152,51 +208,10 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
                 throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
             }
         }
-
-        // Perform 'from_data_checks'.
-        $this->performDataChecks($fromSheet, $this->getFromDataChecksUxon(), 'from_data_checks', $stepData, $logBook);
-        $logBook->addDataSheet('From-Sheet', $fromSheet);
-
-        // Apply the mapper
-        $logBook->addSection('Filling data sheet');
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook, $this->isSkipInvalidRows());
-
-        if($toSheet->countRows() === 0) {
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data. **Exiting step**.');
-            yield $msg . PHP_EOL;
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-            return $result->setProcessedRowsCounter(0);
-        }
         
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders, $stepData);
-        $logBook->addDataSheet('To-data', $toSheet);
-
-        $logBook->addSection('Saving data');
-        $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
-        $logBook->addLine($msg);
-        yield $msg;
-
-        $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
-        
-        $resultSheet = $this->writeData(
-            $toSheet, 
-            $this->getCrudCounter(), 
-            $stepData,
-            $logBook
-        );
-
-        $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
-        if ($toSheet !== $resultSheet) {
-            $logBook->addDataSheet('To-data as saved', $resultSheet);
-        }
-
-        $this->getCrudCounter()->stop();
-        $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-        
-        return $result->setProcessedRowsCounter($resultSheet->countRows());
+        return parent::getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook); 
     }
+
 
     /**
      * Configure the underlying webservice that provides the OpenApi definition.

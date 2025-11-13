@@ -2,9 +2,14 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
-use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
+use axenox\ETL\Common\StepNoteTaker;
+use axenox\ETL\Interfaces\ETLStepInterface;
+use axenox\ETL\Interfaces\NoteInterface;
+use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -38,7 +43,7 @@ use exface\Core\DataTypes\UUIDDataType;
  * 
  * If a group is configured to continue on failure, any error inside the group will
  * skip subsequent steps within it, but the flow will continue with the next step
- * outside of the group. 
+ * outside the group. 
  * 
  * @author Andrej Kabachnik
  *
@@ -105,7 +110,14 @@ class StepGroup implements DataFlowStepInterface
             } else {
                 yield $indent . $nr . '. ' . $step->getName() . ':' . PHP_EOL;
                 $log = '';
-                $stepData = new ETLStepData($stepData->getTask(), $flowRunUid, $stepRunUid, $prevStepResult, $prevRunResult);
+                $stepData = new ETLStepData(
+                    $stepData->getTask(), 
+                    $flowRunUid, 
+                    $stepRunUid, 
+                    $prevStepResult, 
+                    $prevRunResult,
+                    null // $stepData->getProfiler()
+                );
                 
                 $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step, $stepData) {
                     if ($event->getStep() !== $step) {
@@ -116,6 +128,7 @@ class StepGroup implements DataFlowStepInterface
                 });
                 
                 try {
+                    $step->runPrepare($stepData);
                     $generator = $step->run($stepData, $nr);
                     foreach ($generator as $msg) {
                         $msg = $indent . $indent . $msg;
@@ -131,8 +144,10 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
+                    $step->runTeardown($stepData);
                     $this->logRunSuccess($step, $logRow, $stepData, $log, $stepResult);
                 } catch (\Throwable $e) {
+                    $step->runTeardown($stepData);
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
                         $log = 'ERROR: one of the steps failed.';
@@ -150,7 +165,7 @@ class StepGroup implements DataFlowStepInterface
                         . ' on line ' . $el->getLine();
                     }
                     if ($this->getStopFlowOnError($step)) {
-                        NoteTaker::commitPendingNotesAll();
+                        StepNoteTaker::commitPendingNotes();
                         throw $e;
                     } else {
                         yield PHP_EOL . '✗ ERROR: ' . $e->getMessage();
@@ -163,7 +178,7 @@ class StepGroup implements DataFlowStepInterface
             $prevStepResult = $stepResult;
         }
         
-        NoteTaker::commitPendingNotesAll();
+        AbstractNoteTaker::commitPendingNotesAll();
         return $result;
     }
     
@@ -305,7 +320,7 @@ class StepGroup implements DataFlowStepInterface
         ETLStepDataInterface $stepData,
         string $output,
         ETLStepResultInterface $result = null) : DataSheetInterface
-    {
+    {        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -313,7 +328,7 @@ class StepGroup implements DataFlowStepInterface
         $row['result_uxon'] = $result->__toString();
         $row['success_flag'] = true;
         $row['output'] = $output;
-        
+
         if (($result instanceof IncrementalEtlStepResult) && $result->getIncrementValue() !== null) {
             $row['incremental_flag'] = true;
         } else {
@@ -326,18 +341,21 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         if($step instanceof AbstractETLPrototype && $result->countProcessedRows() > 0) {
-            $note = $step->getNoteOnSuccess($stepData) ?? new StepNote(
-                $this->getWorkbench(),
+            $note = $step->getNoteOnSuccess($stepData) ?? (new StepNote(
                 $stepData,
                 $step->getName() . ': Done.',
+                MessageTypeDataType::SUCCESS,
                 null,
-                MessageTypeDataType::SUCCESS
-            );
-            
-            if ($note !== null) {
-                $note->importCrudCounter($step->getCrudCounter());
-                $note->takeNote();
-            }
+                NoteInterface::VISIBLE_FOR_SUPERUSER
+            ));
+
+            $note->importCrudCounter($step->getCrudCounter());
+            $note->takeNote();
+            /*
+            $this->getMetricsNote(
+                $step, $stepData
+            )->takeNote();
+            */
         }
         
         $ds->addRow($row);
@@ -361,7 +379,7 @@ class StepGroup implements DataFlowStepInterface
         ETLStepDataInterface $stepData,
         ExceptionInterface $exception, 
         string $output = '') : DataSheetInterface
-    {
+    {        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -383,16 +401,59 @@ class StepGroup implements DataFlowStepInterface
         }
         
         if($step instanceof AbstractETLPrototype) {
-            $note = $step->getNoteOnFailure($stepData, $exception);
-            if($note !== null) {
-                $note->importCrudCounter($step->getCrudCounter());
-                $note->takeNote();
-            }
+            $step->getNoteOnFailure(
+                $stepData, $exception
+            )->importCrudCounter(
+                $step->getCrudCounter()
+            )->takeNote();
+            /* TODO remove metrics note in favor of the new profiler tab
+            $this->getMetricsNote(
+                $step, $stepData
+            )->takeNote();
+            */
         }
         
         $ds->addRow($row);
         $ds->dataUpdate();
         return $ds;
+    }
+
+    /**
+     * Creates a step note to render certain metrics, such as step-run duration and memory usage.
+     * 
+     * NOTE: By default this note will only be visible to superusers.
+     * 
+     * @param DataFlowStepInterface $step
+     * @param ETLStepDataInterface  $stepData
+     * @return StepNote|null
+     */
+    protected function getMetricsNote(DataFlowStepInterface $step, ETLStepDataInterface $stepData) : ?StepNote
+    {
+        // TODO remove the metrics not in favor of the new profiler tab?
+        $metrics = [];
+        
+        $profilerLine = $stepData->getProfiler()->getLine($step);
+        $duration = $profilerLine->getTimeTotalMs();
+        if($duration !== null) {
+            $metrics[] = TimeDataType::formatMs($duration);
+        }
+        
+        $memory = $profilerLine->getMemoryConsumedBytes();
+        if($memory !== null) {
+            $metrics[] = ByteSizeDataType::formatWithScale($memory);
+        }
+        
+        if(empty($metrics)) {
+            return null;
+        }
+        
+        return new StepNote(
+            $stepData,
+            implode(', ', $metrics) . '.',
+            null,
+            null,
+            NoteInterface::VISIBLE_FOR_SUPERUSER
+        );
     }
     
     /**
@@ -614,5 +675,15 @@ class StepGroup implements DataFlowStepInterface
             ])));
         }
         return $debugWidget;
+    }
+
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        return $this;
+    }
+
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        return $this;
     }
 }

@@ -1,5 +1,5 @@
 <?php
-namespace axenox\ETL\Facades\Helper;
+namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\SqlColumnMapping;
 use exface\Core\Behaviors\TimeStampingBehavior;
@@ -35,7 +35,7 @@ use function Sodium\add;
  * @author miriam.seitz
  *
  */
-class MetaModelSchemaBuilder
+class OpenAPI3MetaModelSchemaBuilder
 {
     private bool $onlyReturnProperties;
 
@@ -222,7 +222,7 @@ class MetaModelSchemaBuilder
             
             $fromCache = $cache->get($cacheKey);
         } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
-            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
         }
 
         if($fromCache['expires'] < time()) {
@@ -254,7 +254,7 @@ class MetaModelSchemaBuilder
                 ]
             );
         } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
-            throw new MetaModelLoadingFailedError($e->getMessage(), null, $e);
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
         }
     }
 
