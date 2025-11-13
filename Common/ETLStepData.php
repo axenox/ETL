@@ -3,7 +3,7 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
-use exface\Core\CommonLogic\Profiler;
+use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 
 class ETLStepData implements ETLStepDataInterface

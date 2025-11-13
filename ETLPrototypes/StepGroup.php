@@ -5,9 +5,11 @@ use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\StepNoteTaker;
+use axenox\ETL\Interfaces\ETLStepInterface;
 use axenox\ETL\Interfaces\NoteInterface;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Widgets\DebugMessage;
@@ -41,7 +43,7 @@ use exface\Core\DataTypes\UUIDDataType;
  * 
  * If a group is configured to continue on failure, any error inside the group will
  * skip subsequent steps within it, but the flow will continue with the next step
- * outside of the group. 
+ * outside the group. 
  * 
  * @author Andrej Kabachnik
  *
@@ -114,7 +116,7 @@ class StepGroup implements DataFlowStepInterface
                     $stepRunUid, 
                     $prevStepResult, 
                     $prevRunResult,
-                    $stepData->getProfiler()
+                    null // $stepData->getProfiler()
                 );
                 
                 $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step, $stepData) {
@@ -126,7 +128,7 @@ class StepGroup implements DataFlowStepInterface
                 });
                 
                 try {
-                    $stepData->getProfiler()->start($step);
+                    $step->runPrepare($stepData);
                     $generator = $step->run($stepData, $nr);
                     foreach ($generator as $msg) {
                         $msg = $indent . $indent . $msg;
@@ -142,8 +144,10 @@ class StepGroup implements DataFlowStepInterface
                         $log = 'Ran ' . $step->countSteps() . ' steps';
                     }
                     $stepResult = $generator->getReturn();
+                    $step->runTeardown($stepData);
                     $this->logRunSuccess($step, $logRow, $stepData, $log, $stepResult);
                 } catch (\Throwable $e) {
+                    $step->runTeardown($stepData);
                     if ($step instanceof StepGroup) {
                         $nr += $step->countSteps();
                         $log = 'ERROR: one of the steps failed.';
@@ -316,9 +320,7 @@ class StepGroup implements DataFlowStepInterface
         ETLStepDataInterface $stepData,
         string $output,
         ETLStepResultInterface $result = null) : DataSheetInterface
-    {
-        $stepData->getProfiler()->stop($step);
-        
+    {        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -349,10 +351,11 @@ class StepGroup implements DataFlowStepInterface
 
             $note->importCrudCounter($step->getCrudCounter());
             $note->takeNote();
-
+            /*
             $this->getMetricsNote(
                 $step, $stepData
             )->takeNote();
+            */
         }
         
         $ds->addRow($row);
@@ -376,9 +379,7 @@ class StepGroup implements DataFlowStepInterface
         ETLStepDataInterface $stepData,
         ExceptionInterface $exception, 
         string $output = '') : DataSheetInterface
-    {
-        $stepData->getProfiler()->stop($step);
-        
+    {        
         $time = DateTimeDataType::now();
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         $row['end_time'] = $time;
@@ -405,10 +406,11 @@ class StepGroup implements DataFlowStepInterface
             )->importCrudCounter(
                 $step->getCrudCounter()
             )->takeNote();
-
+            /* TODO remove metrics note in favor of the new profiler tab
             $this->getMetricsNote(
                 $step, $stepData
             )->takeNote();
+            */
         }
         
         $ds->addRow($row);
@@ -427,14 +429,16 @@ class StepGroup implements DataFlowStepInterface
      */
     protected function getMetricsNote(DataFlowStepInterface $step, ETLStepDataInterface $stepData) : ?StepNote
     {
+        // TODO remove the metrics not in favor of the new profiler tab?
         $metrics = [];
         
-        $duration = $stepData->getProfiler()->getDurationMs($step);
+        $profilerLine = $stepData->getProfiler()->getLine($step);
+        $duration = $profilerLine->getTimeTotalMs();
         if($duration !== null) {
-            $metrics[] = $duration . 'ms';
+            $metrics[] = TimeDataType::formatMs($duration);
         }
         
-        $memory = $stepData->getProfiler()->getMemoryUsageBytes($step);
+        $memory = $profilerLine->getMemoryConsumedBytes();
         if($memory !== null) {
             $metrics[] = ByteSizeDataType::formatWithScale($memory);
         }
@@ -671,5 +675,15 @@ class StepGroup implements DataFlowStepInterface
             ])));
         }
         return $debugWidget;
+    }
+
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        return $this;
+    }
+
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        return $this;
     }
 }

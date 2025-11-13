@@ -9,7 +9,7 @@ use axenox\ETL\Interfaces\OpenApiFacadeInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use GuzzleHttp\Psr7\Response;
 use exface\Core\Factories\MetaObjectFactory;
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
+use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 
 /**
  * This middleware creates a valid OpenApi JSON from the request and webservice parameter.
@@ -72,7 +72,7 @@ final class OpenApiMiddleware implements MiddlewareInterface
     		if (array_key_exists('Metamodel Informationen', $swaggerSchema)) {
     			$objectsInJsonSchema = array_keys($swaggerSchema['Metamodel Informationen']['properties']);
     			foreach ($objectsInJsonSchema as $metaobjectAlias){
-    				$metaObjectSchema = (new MetaModelSchemaBuilder($objectsInJsonSchema))->transformIntoJsonSchema(
+    				$metaObjectSchema = (new OpenAPI3MetaModelSchemaBuilder($objectsInJsonSchema))->transformIntoJsonSchema(
     					MetaObjectFactory::createFromString($this->getWorkbench(), $metaobjectAlias));
 
                     $swaggerSchema['Metamodel Informationen']['properties'][$metaobjectAlias] = $metaObjectSchema[$metaobjectAlias];

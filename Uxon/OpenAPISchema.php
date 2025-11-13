@@ -22,7 +22,7 @@ use exface\Core\Uxon\UxonSchema;
 use exface\Core\DataTypes\SortingDirectionsDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\DataTypes\ComparatorDataType;
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
+use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
@@ -102,7 +102,7 @@ class OpenAPISchema extends UxonSchema
                 'ALIAS_WITH_NS'
             ]);
             $objectSheet->dataRead(50);
-            $schemaBuilder = new MetaModelSchemaBuilder(onlyReturnProperties: true, forceSchema: true, loadExamples: true);
+            $schemaBuilder = new OpenAPI3MetaModelSchemaBuilder(onlyReturnProperties: true, forceSchema: true, loadExamples: true);
             $allAttrRows = [];
             $editbaleAttrRows = [];
             foreach ($objectSheet->getRows() as $objRow) {

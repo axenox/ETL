@@ -2,7 +2,7 @@
 namespace axenox\ETL\Interfaces;
 
 use axenox\ETL\Common\StepNoteTaker;
-use exface\Core\CommonLogic\Profiler;
+use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 
 interface ETLStepDataInterface
