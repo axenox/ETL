@@ -1,13 +1,15 @@
 <?php
-namespace axenox\ETL\Facades\Helper;
+namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\SqlColumnMapping;
+use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\CommonLogic\DataSheets\DataColumn;
 use exface\Core\CommonLogic\Model\Attribute;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\HexadecimalNumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\TimeDataType;
+use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Factories\AttributeListFactory;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\DataSorterFactory;
@@ -33,7 +35,7 @@ use function Sodium\add;
  * @author miriam.seitz
  *
  */
-class MetaModelSchemaBuilder
+class OpenAPI3MetaModelSchemaBuilder
 {
     private bool $onlyReturnProperties;
 
@@ -87,22 +89,14 @@ class MetaModelSchemaBuilder
         }
 
         if ($this->loadExamples) {
-            $ds = DataSheetFactory::createFromObject($metaObject);
-            $columns = [];
-            foreach ($metaObject->getAttributes()->getAll() as $attr) {
-                $columns[] = $attr->getAlias();
-            }
-
-            $ds->getColumns()->addMultiple($columns);
-
-            if (($tsBehavior = $metaObject->getBehaviors()->getByPrototypeClass(TimeStampingBehavior::class)->getFirst()) != null){
-                $oderingAttribute = $tsBehavior->getUpdatedOnAttribute();
-                $ds->getSorters()->addFromString($oderingAttribute, 'DESC');
-            }
-
-            if ($ds->hasUidColumn()){
-                $ds->dataRead(1);
-                $richestRow = $this->getRowWithTheLeastNullValues($ds);
+            try {
+                $richestRow = self::loadExamples($metaObject);
+            } catch (\Throwable $exception) {
+                $metaObject->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
+                    'Could not load example data for "' . $metaObject->getAliasWithNamespace() . '".',
+                    null,
+                    $exception
+                ));
             }
         }
 
@@ -155,28 +149,152 @@ class MetaModelSchemaBuilder
     }
 
     /**
-     * @param \exface\Core\Interfaces\DataSheets\DataSheetInterface|\exface\Core\CommonLogic\DataSheets\DataSheet $ds
-     * @return mixed|null
+     * Loads example values for all attributes in a given MetaObject.
+     *
+     * NOTE: Results will be stored in cache and are kept for up to one hour.
+     * If you wish to refresh your examples sooner than that, clear the cache.
+     *
+     * @param MetaObjectInterface $metaObject
+     * @param bool                $hideRelations
+     * @return array|null
      */
-    private function getRowWithTheLeastNullValues(DataSheetInterface $ds) : mixed
+    public static function loadExamples(MetaObjectInterface $metaObject, bool $hideRelations = true) : ?array 
     {
-        $row = $ds->getRow();
-        foreach ($row as $col=>$value) {
-            if ($value === null) {
-                $ds->getFilters()->addConditionFromString(
-                    $col,
-                    EXF_LOGICAL_NULL,
-                    ComparatorDataType::IS_NOT);
-                $ds->dataRead(1);
-                $newRow = $ds->getRow();
-
-                if ($newRow != null){
-                    $this->getRowWithTheLeastNullValues($ds);
-                }
+        $fromCache = self::loadExamplesFromCache($metaObject, $hideRelations);
+        if($fromCache !== null) {
+            return $fromCache;
+        }
+        
+        $ds = DataSheetFactory::createFromObject($metaObject);
+        $columns = [];
+        foreach ($metaObject->getAttributes()->getAll() as $attr) {
+            if($attr->isRelation()) {
+                $rightObj = $attr->getRelation()->getRightObject();
+                $alias = $attr->getAliasWithRelationPath() . ($rightObj->hasLabelAttribute() ? '__LABEL' : '');
+            } else {
+                $alias = $attr->getAlias();
             }
+            
+            $columns[$attr->getAlias()] = $alias;
         }
 
-        return $newRow ?? $row;
+        $ds->getColumns()->addMultiple($columns);
+
+        if (($tsBehavior = $metaObject->getBehaviors()->getByPrototypeClass(TimeStampingBehavior::class)->getFirst()) != null){
+            $orderingAttribute = $tsBehavior->getUpdatedOnAttribute();
+            $ds->getSorters()->addFromString($orderingAttribute->getAlias(), 'DESC');
+        }
+
+        if ($ds->hasUidColumn()){
+            $rowWithRelations = self::getRowWithTheLeastNullValues($ds);
+            
+            if($rowWithRelations === null) {
+                return null;
+            }
+            
+            $rowHideRelations = [];
+            foreach ($columns as $shortAlias => $fullAlias) {
+                $rowHideRelations[$shortAlias] = $rowWithRelations[$fullAlias] ?? $rowWithRelations[$shortAlias];
+            }
+            
+            self::storeExamplesInCache($metaObject, $rowHideRelations, $rowWithRelations);
+            
+            return $hideRelations ? $rowHideRelations : $rowWithRelations;
+        }
+        
+        return null;
+    }
+
+    /**
+     * @param MetaObjectInterface $metaObject
+     * @param bool                $hideRelations
+     * @return array|null
+     */
+    private static function loadExamplesFromCache(MetaObjectInterface $metaObject, bool $hideRelations) : ?array
+    {
+        $cacheKey = self::getCacheKey($metaObject);
+        $cache = $metaObject->getWorkbench()->getCache();
+        
+        try {
+            if (!$cache->has($cacheKey)) {
+                return null;
+            }
+            
+            $fromCache = $cache->get($cacheKey);
+        } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
+        }
+
+        if($fromCache['expires'] < time()) {
+            return null;
+        }
+        
+        return $hideRelations ? $fromCache['rowHideRelations'] : $fromCache['rowWithRelations'];
+    }
+
+    /**
+     * @param MetaObjectInterface $metaObject
+     * @param array               $rowHideRelations
+     * @param array               $rowWithRelations
+     * @return void
+     */
+    private static function storeExamplesInCache(
+        MetaObjectInterface $metaObject, 
+        array               $rowHideRelations, 
+        array $rowWithRelations
+    ) : void
+    {
+        try {
+            $metaObject->getWorkbench()->getCache()->set(
+                self::getCacheKey($metaObject),
+                [
+                    'expires' => time() + 3600,
+                    'rowHideRelations' => $rowHideRelations,
+                    'rowWithRelations' => $rowWithRelations
+                ]
+            );
+        } catch (\Psr\SimpleCache\InvalidArgumentException $e) {
+            throw new MetaModelLoadingFailedError($e->getMessage(), '83K3MPU', $e);
+        }
+    }
+
+    /**
+     * @param MetaObjectInterface $metaObject
+     * @return string
+     */
+    private static function getCacheKey(MetaObjectInterface $metaObject) : string
+    {
+        return 'SchemaExamples__' . str_replace('.', '_', $metaObject->getAliasWithNamespace());
+    }
+
+    /**
+     * @param DataSheetInterface $ds
+     * @return mixed|null
+     */
+    private static function getRowWithTheLeastNullValues(DataSheetInterface $ds) : ?array
+    {
+        $ds->dataRead(1);
+        $row = $ds->getRow();
+        
+        if($row === null) {
+            return null;
+        }
+        
+        foreach ($row as $col=>$value) {
+            if ($value !== null) {
+                continue;
+            }
+            
+            $ds->getFilters()->addConditionFromString(
+                $col,
+                EXF_LOGICAL_NULL,
+                ComparatorDataType::IS_NOT
+            );
+            
+            return self::getRowWithTheLeastNullValues($ds) ?? $row;
+        }
+        
+        return $row;
     }
 
     /**

@@ -5,7 +5,7 @@ use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
-use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
@@ -91,6 +91,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     private int $firstRowIndex = 2;
 
     /**
+     * Summary of getPlaceholders
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @return string[]
+     */
+    protected function getPlaceholders(ETLStepDataInterface $stepData) : array
+    {
+    	$phs = parent::getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
+        $phs['upload_uid'] = $uploadUid;
+        return $phs;
+    }
+
+    /**
      *
      * {@inheritDoc}
      * @throws JSONPathException|\Throwable
@@ -100,18 +114,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
+        $profiler = $stepData->getProfiler();
         $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
-        $fileData = $this->getUploadData($stepData);
-        $uploadUid = $fileData->getUidColumn()->getValue(0);;
-        $placeholders['upload_uid'] = $uploadUid;
+        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
 
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
-        if ($uploadUid === null) {
+        if ($placeholders['upload_uid'] === null) {
+            $lap->stop();
             $logBook->addLine($msg = 'No file found in step input');
             yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
@@ -127,34 +143,34 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
-        
-        if ($this->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($this->getToObject());
-        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
-        }
 
         $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+        if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
+        }
 
         $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
         $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+        $lap->stop();
 
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
         $logBook->addSection('Saving data');
+        $lap = $profiler->start('Saving data for step ' . $this->getName());
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
-        
+
         $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
             $logBook
         );
+        $lap->stop();
 
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {

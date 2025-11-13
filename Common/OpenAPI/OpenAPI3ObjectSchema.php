@@ -1,7 +1,6 @@
 <?php
 namespace axenox\ETL\Common\OpenAPI;
 
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
@@ -154,7 +153,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                         // Determine data type
                         if (empty($attrProp['type'] ?? null)) {
                             try {
-                                $typeProp = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
+                                $typeProp = OpenAPI3MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
                                 $attrProp = array_merge($attrProp, $typeProp);
                             } catch (InvalidArgumentException $e) {
                                 $object->getWorkbench()->getLogger()->logException($e);

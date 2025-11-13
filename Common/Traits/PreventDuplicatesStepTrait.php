@@ -1,7 +1,11 @@
 <?php
 namespace axenox\ETL\Common\Traits;
 
+use axenox\ETL\ETLPrototypes\JsonApiToDataSheet;
 use axenox\ETL\Interfaces\DataFlowStepInterface;
+use exface\Core\CommonLogic\DataSheets\Matcher\DuplicatesMatcher;
+use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Debug\DataLogBookInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Factories\BehaviorFactory;
@@ -16,6 +20,7 @@ use exface\Core\Behaviors\PreventDuplicatesBehavior;
 trait PreventDuplicatesStepTrait
 {   
     private $updateIfMatchingAttributeAliases = [];
+    private $updateIfMatchingAttributesViaBehavior = false;
     
     /**
      * 
@@ -23,7 +28,7 @@ trait PreventDuplicatesStepTrait
      * @param array $compareAttributes
      * @return void
      */
-    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object, array $compareAttributes = null) : void
+    protected function addDuplicatePreventingBehavior(MetaObjectInterface $object, array $compareAttributes = null) : PreventDuplicatesBehavior
     {
         $compareAttributes = $compareAttributes ?? $this->getUpdateIfMatchingAttributeAliases();
         $behavior = BehaviorFactory::createFromUxon($object, PreventDuplicatesBehavior::class, new UxonObject([
@@ -32,7 +37,21 @@ trait PreventDuplicatesStepTrait
             'on_duplicate_single_row' => PreventDuplicatesBehavior::ON_DUPLICATE_UPDATE
         ]));
         $object->getBehaviors()->add($behavior);
-        return;
+        return $behavior;
+    }
+    
+    protected function getDuplicatesMatcher(DataSheetInterface $toSheet, DataLogBookInterface $logbook) : ?DuplicatesMatcher
+    {
+        if (! $this->willUpdateViaDuplicatesMatcher()) {
+            return null;
+        }
+        $compareAttributes = $this->getUpdateIfMatchingAttributeAliases();
+        if (empty($compareAttributes)) {
+            return null;
+        }
+        $matcher = new DuplicatesMatcher($toSheet, null, $logbook, true);
+        $matcher->setCompareAttributes($compareAttributes);
+        return $matcher;
     }
     
     /**
@@ -56,12 +75,12 @@ trait PreventDuplicatesStepTrait
      * @uxon-type metamodel:attribute[]
      * @uxon-template [""]
      * 
-     * @param UxonObject $uxon
+     * @param UxonObject|array $uxonOrArray
      * @return \axenox\ETL\Interfaces\DataFlowStepInterface
      */
-    protected function setUpdateIfMatchingAttributes(UxonObject $uxon) : DataFlowStepInterface
+    protected function setUpdateIfMatchingAttributes(UxonObject|array $uxonOrArray) : DataFlowStepInterface
     {
-        $this->updateIfMatchingAttributeAliases = $uxon->toArray();
+        $this->updateIfMatchingAttributeAliases = $uxonOrArray instanceof UxonObject ? $uxonOrArray->toArray() : $uxonOrArray;
         return $this;
     }
     
@@ -72,5 +91,36 @@ trait PreventDuplicatesStepTrait
     protected function isUpdateIfMatchingAttributes() : bool
     {
         return empty($this->updateIfMatchingAttributeAliases) === false;
+    }
+
+    /**
+     * Set to TRUE to add a temporary PreventDuplicatesBehavior to the to-object instead of separating CREATEs and UPDATEs inside the step.
+     * 
+     * @uxon-property update_if_matching_attributes_via_behavior
+     * @uxon-type boolean
+     * @uxon-default false
+     * 
+     * @param bool $trueOrFalse
+     * @return JsonApiToDataSheet
+     */
+    protected function setUpdateIfMatchingAttributesViaBehavior(bool $trueOrFalse) : JsonApiToDataSheet
+    {
+        $this->updateIfMatchingAttributesViaBehavior = $trueOrFalse;
+        return $this;
+    }
+    
+    protected function willUpdateIfMatchingAttributes() : bool
+    {
+        return ! empty($this->updateIfMatchingAttributeAliases);
+    }
+
+    protected function willUpdateViaPreventDuplicatesBehavior() : bool
+    {
+        return $this->willUpdateIfMatchingAttributes() && $this->updateIfMatchingAttributesViaBehavior === true;
+    }
+
+    protected function willUpdateViaDuplicatesMatcher() : bool
+    {
+        return $this->willUpdateIfMatchingAttributes() && $this->updateIfMatchingAttributesViaBehavior === false;
     }
 }

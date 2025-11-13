@@ -113,4 +113,9 @@ interface APIPropertyInterface
      * @return bool
      */
     public function isRequired() : bool;
+    
+    /**
+     * @return mixed
+     */
+    public function getExampleValue() : mixed;
 }

@@ -18,6 +18,18 @@ interface DataFlowStepInterface extends WorkbenchDependantInterface, iCanBeConve
      * @return \Generator|string[]|ETLStepResultInterface
      */
     public function run(ETLStepDataInterface $stepData) : \Generator;
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @return DataFlowStepInterface
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : DataFlowStepInterface;
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @return DataFlowStepInterface
+     */
+    public function runTeardown(ETLStepDataInterface $stepData) : DataFlowStepInterface;
     
     public function isDisabled() : bool;
     

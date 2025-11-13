@@ -3,17 +3,18 @@ namespace axenox\ETL\Common;
 
 use axenox\ETL\Common\Traits\ITakeStepNotesTrait;
 use axenox\ETL\Events\Flow\OnAfterETLStepRun;
+use axenox\ETL\Interfaces\DataFlowStepInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\DataSheets\DataSheetTracker;
-use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
+use exface\Core\CommonLogic\Debugger\Profiler;
 use exface\Core\DataTypes\ByteSizeDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTrackerException;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Interfaces\DataSheets\DataColumnInterface;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\Exceptions\ExceptionInterface;
 use exface\Core\Interfaces\Log\LoggerInterface;
 use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -43,32 +44,30 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     const CFG_RENDER_UNRELIABLE_ROWS = 'STEP_RUN.RENDER_UNRELIABLE_ROWS';
     
     private $workbench = null;
-    
     private $uxon = null;
     
     private $stepRunUidAttributeAlias = null;
-    
     private $flowRunUidAttribtueAlias = null;
-    
-    private $fromObject = null;
-    
-    private $toObject = null;
-    
     private $name = null;
-    
     private $disabled = null;
-    
+    private $fromObject = null;
+    private $toObject = null;
     private $timeout = 30;
+    private float $memoryLimit = 1000000000; // 1GiB
+    
     private ?UxonObject $toDataChecksUxon = null;
     private ?UxonObject $fromDataChecksUxon = null;
+    
     private CrudCounter $crudCounter;
     private array $logBooks = [];
     private ?DataSheetTracker $dataTracker = null;
     private array $trackedAliases = [];
+    
     private string $ifDuplicatesDetected = self::IF_DUPLICATES_ERROR;
-    private float $memoryLimit = 1000000000; // 1GiB
     private int $errorGroupingThreshold = 5;
     protected bool $renderUnreliableRows = false;
+    
+    private ?UxonObject $profilerConfig = null;
 
     public function __construct(string $name, MetaObjectInterface $toObject, MetaObjectInterface $fromObject = null, UxonObject $uxon = null)
     {
@@ -467,19 +466,19 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * Whenever a row encounters an error, the error will be logged and the
      * row discarded.
      *
-     * @param callable             $transformer
+     * @param callable             $callback
      * @param DataSheetInterface   $dataSheet
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @param array                $noteVisibility
      * @return DataSheetInterface
      */
-    protected function applyTransformRowByRow(
-        callable $transformer,
-        DataSheetInterface $dataSheet,
+    protected function applyRowByRow(
+        callable             $callback,
+        DataSheetInterface   $dataSheet,
         ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook,
-        array $noteVisibility
+        FlowStepLogBook      $logBook,
+        array                $noteVisibility
     ) : DataSheetInterface
     {
         $saveSheet = $dataSheet;
@@ -497,7 +496,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             try {
                 // Get the resulting data sheet of that single line and add it to the global
                 // result data
-                $rowResultSheet = call_user_func($transformer, $i, $saveSheet);
+                $rowResultSheet = call_user_func($callback, $i, $saveSheet);
                 //$rowResultSheet = $this->$transformFuncName($saveSheet, $stepData, $logBook);
                 if ($resultSheet === null) {
                     $resultSheet = $rowResultSheet;
@@ -825,16 +824,86 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     protected function checkSafeGuards(ETLStepDataInterface $stepData) : void
     {
         $profiler = $stepData->getProfiler();
-        $duration = ($profiler->getDurationMs($this) ?? 0) / 1000;
-        if($duration >= $this->timeout) {
-            throw new RuntimeException('Request timed out! (' . $duration . 's)', '82S9T4E');
+        $durationMs = $profiler->getTimeTotalMs();
+        if($durationMs / 1000 >= $this->timeout) {
+            throw new RuntimeException('Flow step timed out after ' . TimeDataType::formatMs($durationMs) . '!', '82S9T4E');
         }
         
-        $memory = $profiler->getMemoryUsageBytes($this) ?? 0;
+        $memory = $profiler->getMemoryConsumedBytes($this) ?? 0;
         if($memory >= $this->memoryLimit) {
             $limit = ByteSizeDataType::formatWithScale($this->memoryLimit);
             $memory = ByteSizeDataType::formatWithScale($memory);
             throw new RuntimeException('Request memory limit exceeded! Used ' . $memory . ' out of ' . $limit . '.', '82S9VCT');
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see DataFlowStepInterface::runPrepare()
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        $this->startProfiling($stepData->getProfiler());
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see DataFlowStepInterface::runTeardown()
+     */
+    public function runTeardown(ETLStepDataInterface $stepData) : ETLStepInterface
+    {
+        $this->stopProfiling($stepData->getProfiler());
+        return $this;
+    }
+
+    /**
+     * @param Profiler $profiler
+     * @return void
+     */
+    protected function startProfiling(Profiler $profiler) : void
+    {
+        if (null !== $config = $this->getProfilerUxon()) {
+            $profiler->importUxonObject($config);
+        }
+        $profiler->start($this, 'Step `' . $this->getName() . '`', 'Steps');        
+    }
+
+    /**
+     * @param Profiler $profiler
+     * @return void
+     */
+    protected function stopProfiling(Profiler $profiler) : void
+    {
+        foreach ($this->profilingListeners as $event => $listener) {
+            $this->getWorkbench()->eventManager()->removeListener($event, $listener);
+        }
+        $profiler->stop($this);
+    }
+
+    /**
+     * Customize the configuration of the profiler for this flow step - e.g. make it track behaviors
+     * 
+     * @uxon-property profiler
+     * @uxon-type \exface\Core\CommonLogic\Debugger\Profiler
+     * @uxon-template {"track_behaviors":"false"}
+     * 
+     * @param UxonObject $uxon
+     * @return $this
+     */
+    protected function setProfiler(UxonObject $uxon) : AbstractETLPrototype
+    {
+        $this->profilerConfig = $uxon;
+        return $this;
+    }
+
+    /**
+     * @return UxonObject|null
+     */
+    protected function getProfilerUxon() : ?UxonObject
+    {
+        return $this->profilerConfig ?? new UxonObject([
+            'track_behaviors' => true
+        ]);
     }
 }
