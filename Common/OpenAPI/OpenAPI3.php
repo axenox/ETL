@@ -2,7 +2,6 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
-use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -93,6 +92,8 @@ use stdClass;
 class OpenAPI3 implements APISchemaInterface
 {
     public const X_REQUIRED_FOR_API = 'x-required-for-api';
+    private const CFG_EXAMPLE_REQUIRED = 'API_EXAMPLES.REQUIRED';
+    private const CFG_EXAMPLE_FULL = 'API_EXAMPLES.FULL';
     
     use OpenAPI3UxonTrait;
 
@@ -451,12 +452,22 @@ class OpenAPI3 implements APISchemaInterface
             }
         }
 
-        $examples['Minimum'] = [
+        $cfg = $this->workbench->getApp('axenox.ETL')->getConfig();
+
+        $exampleKey = $cfg->hasOption(self::CFG_EXAMPLE_REQUIRED) ?
+            $cfg->getOption(self::CFG_EXAMPLE_REQUIRED) : 
+            'Required';
+        
+        $examples[$exampleKey] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
             self::X_REQUIRED_FOR_API => true
         ];
 
-        $examples['Full'] = [
+        $exampleKey = $cfg->hasOption(self::CFG_EXAMPLE_FULL) ?
+            $cfg->getOption(self::CFG_EXAMPLE_FULL) : 
+            'Full';
+
+        $examples[$exampleKey] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL'
         ];
 
@@ -479,6 +490,7 @@ class OpenAPI3 implements APISchemaInterface
         $requiredFilter = $exampleSchema[self::X_REQUIRED_FOR_API];
         
         $groupFilter = null;
+        $customAttributes = $object->getAttributeGroup('~CUSTOM');
         if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $exampleSchema)) {
             $groupFilter = $object->getAttributeGroup($exampleSchema[OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS]);
         }
@@ -488,14 +500,8 @@ class OpenAPI3 implements APISchemaInterface
         
         foreach ($objectSchema->getProperties() as $name => $property) {
             $exampleValue = null;
+            $attribute = null;
             
-            // Filter for property optionality, if the example schema contains such a filter.
-            if($requiredFilter !== null &&
-                $property->isRequired() !== $requiredFilter
-            ) {
-                continue;
-            }
-
             if($property->isBoundToAttribute()) {
                 $attribute = $property->getAttribute();
 
@@ -507,16 +513,32 @@ class OpenAPI3 implements APISchemaInterface
                         continue;
                     }
                 }
-                
+
                 // We cannot trust the loaded value, if the property has a calculation,
                 // since that might have transformed it in some unrecognizable way.
                 if(!$property->isBoundToCalculation()) {
                     $exampleValue = $loadedValues[$attribute->getAlias()];
                 }
-                
+
                 $exampleValue = $exampleValue ?? $attribute->getDataType()->getValue();
             }
 
+            // Filter for property optionality, if the example schema contains such a filter.
+            if($requiredFilter !== null) {
+                try {
+                    $customAttributes->getByAttributeId($attribute->getId());
+                    $isCustom = true;
+                } catch (\Throwable) {
+                    $isCustom = false;
+                }
+
+                $isRequired = $isCustom ? $attribute->isRequired() : $property->isRequired();
+                
+                if($isRequired !== $requiredFilter) {
+                    continue;
+                }
+            }
+            
             try {
                 $exampleValue = 
                     $property->getExampleValue() ?? 
