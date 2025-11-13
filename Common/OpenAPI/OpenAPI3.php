@@ -2,7 +2,6 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
-use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -93,6 +92,8 @@ use stdClass;
 class OpenAPI3 implements APISchemaInterface
 {
     public const X_REQUIRED_FOR_API = 'x-required-for-api';
+    private const CFG_EXAMPLE_REQUIRED = 'API_EXAMPLES.REQUIRED';
+    private const CFG_EXAMPLE_FULL = 'API_EXAMPLES.FULL';
     
     use OpenAPI3UxonTrait;
 
@@ -451,12 +452,22 @@ class OpenAPI3 implements APISchemaInterface
             }
         }
 
-        $examples['Minimum'] = [
+        $cfg = $this->workbench->getApp('axenox.ETL')->getConfig();
+
+        $exampleKey = $cfg->hasOption(self::CFG_EXAMPLE_REQUIRED) ?
+            $cfg->getOption(self::CFG_EXAMPLE_REQUIRED) : 
+            'Required';
+        
+        $examples[$exampleKey] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
             self::X_REQUIRED_FOR_API => true
         ];
 
-        $examples['Full'] = [
+        $exampleKey = $cfg->hasOption(self::CFG_EXAMPLE_FULL) ?
+            $cfg->getOption(self::CFG_EXAMPLE_FULL) : 
+            'Full';
+
+        $examples[$exampleKey] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL'
         ];
 
