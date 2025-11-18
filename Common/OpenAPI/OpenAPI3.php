@@ -496,7 +496,28 @@ class OpenAPI3 implements APISchemaInterface
         }
         
         $values = [];
-        $loadedValues = OpenAPI3MetaModelSchemaBuilder::loadExamples($object);
+        $attributesToLoad = [];
+        
+        foreach ($objectSchema->getProperties() as $property) {
+            if(!$property->isBoundToAttribute() || $property->isBoundToCalculation()) {
+                continue;
+            }
+            
+            $attribute = $property->getAttribute();
+
+            // Filter for attribute groups, if the example schema contains such a filter.
+            if($groupFilter !== null) {
+                try {
+                    $groupFilter->getByAttributeId($attribute->getId());
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+
+            $attributesToLoad[] = $attribute;
+        }
+        
+        $loadedValues = OpenAPI3MetaModelSchemaBuilder::loadExamples($object, $attributesToLoad);
         
         foreach ($objectSchema->getProperties() as $name => $property) {
             $exampleValue = null;
@@ -504,23 +525,9 @@ class OpenAPI3 implements APISchemaInterface
             
             if($property->isBoundToAttribute()) {
                 $attribute = $property->getAttribute();
-
-                // Filter for attribute groups, if the example schema contains such a filter.
-                if($groupFilter !== null) {
-                    try {
-                        $groupFilter->getByAttributeId($attribute->getId());
-                    } catch (\Throwable) {
-                        continue;
-                    }
-                }
-
-                // We cannot trust the loaded value, if the property has a calculation,
-                // since that might have transformed it in some unrecognizable way.
-                if(!$property->isBoundToCalculation()) {
-                    $exampleValue = $loadedValues[$attribute->getAlias()];
-                }
-
-                $exampleValue = $exampleValue ?? $attribute->getDataType()->getValue();
+                $exampleValue = 
+                    $loadedValues[$attribute->getAlias()] ?? 
+                    $attribute->getDataType()->getValue();
             }
 
             // Filter for property optionality, if the example schema contains such a filter.

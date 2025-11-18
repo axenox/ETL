@@ -90,7 +90,7 @@ class OpenAPI3MetaModelSchemaBuilder
 
         if ($this->loadExamples) {
             try {
-                $richestRow = self::loadExamples($metaObject);
+                $richestRow = self::loadExamples($metaObject, $metaObject->getAttributes()->getAll());
             } catch (\Throwable $exception) {
                 $metaObject->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
                     'Could not load example data for "' . $metaObject->getAliasWithNamespace() . '".',
@@ -155,10 +155,11 @@ class OpenAPI3MetaModelSchemaBuilder
      * If you wish to refresh your examples sooner than that, clear the cache.
      *
      * @param MetaObjectInterface $metaObject
+     * @param array               $attributes
      * @param bool                $hideRelations
      * @return array|null
      */
-    public static function loadExamples(MetaObjectInterface $metaObject, bool $hideRelations = true) : ?array 
+    public static function loadExamples(MetaObjectInterface $metaObject, array $attributes, bool $hideRelations = true) : ?array 
     {
         $fromCache = self::loadExamplesFromCache($metaObject, $hideRelations);
         if($fromCache !== null) {
@@ -167,7 +168,7 @@ class OpenAPI3MetaModelSchemaBuilder
         
         $ds = DataSheetFactory::createFromObject($metaObject);
         $columns = [];
-        foreach ($metaObject->getAttributes()->getAll() as $attr) {
+        foreach ($attributes as $attr) {
             if($attr->isRelation()) {
                 $rightObj = $attr->getRelation()->getRightObject();
                 $alias = $attr->getAliasWithRelationPath() . ($rightObj->hasLabelAttribute() ? '__LABEL' : '');
@@ -185,24 +186,28 @@ class OpenAPI3MetaModelSchemaBuilder
             $ds->getSorters()->addFromString($orderingAttribute->getAlias(), 'DESC');
         }
 
-        if ($ds->hasUidColumn()){
-            $rowWithRelations = self::getRowWithTheLeastNullValues($ds);
-            
-            if($rowWithRelations === null) {
+        if(!$ds->hasUidColumn()) {
+            if($metaObject->hasUidAttribute()) {
+                $ds->getColumns()->addFromAttribute($metaObject->getUidAttribute());
+            } else {
                 return null;
             }
-            
-            $rowHideRelations = [];
-            foreach ($columns as $shortAlias => $fullAlias) {
-                $rowHideRelations[$shortAlias] = $rowWithRelations[$fullAlias] ?? $rowWithRelations[$shortAlias];
-            }
-            
-            self::storeExamplesInCache($metaObject, $rowHideRelations, $rowWithRelations);
-            
-            return $hideRelations ? $rowHideRelations : $rowWithRelations;
         }
-        
-        return null;
+
+        $rowWithRelations = self::getRowWithTheLeastNullValues($ds);
+
+        if($rowWithRelations === null) {
+            return null;
+        }
+
+        $rowHideRelations = [];
+        foreach ($columns as $shortAlias => $fullAlias) {
+            $rowHideRelations[$shortAlias] = $rowWithRelations[$fullAlias] ?? $rowWithRelations[$shortAlias];
+        }
+
+        self::storeExamplesInCache($metaObject, $rowHideRelations, $rowWithRelations);
+
+        return $hideRelations ? $rowHideRelations : $rowWithRelations;
     }
 
     /**
