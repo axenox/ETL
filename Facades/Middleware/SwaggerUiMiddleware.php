@@ -10,13 +10,15 @@ use exface\Core\Interfaces\WorkbenchInterface;
 use GuzzleHttp\Psr7\Response;
 
 /**
- * This middleware creates a SwaggerUi html as an test enviornment.
+ * This middleware creates a SwaggerUi html as a test environment.
  * 
  * @author miriam.seitz
  *
  */
 final class SwaggerUiMiddleware implements MiddlewareInterface
 {
+    private const CFG_ALLOW_TRY_IT_OUT = 'SWAGGER_UI.ALLOW_TRY_IT_OUT';
+    
     private $facade = null;
     private $headers;
     private $routePattern;
@@ -59,6 +61,12 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
     	{
             $siteRoot = $this->facade->getWorkbench()->getUrl();
     		$swaggerUI = $siteRoot . 'vendor/npm-asset/swagger-ui-dist';
+            
+            $cfg = $this->getWorkbench()->getApp('axenox.ETL')->getConfig();
+            $supportedSubmitMethods = '';
+            if($cfg->hasOption(self::CFG_ALLOW_TRY_IT_OUT)) {
+                $supportedSubmitMethods = 'supportedSubmitMethods:' . $cfg->getOption(self::CFG_ALLOW_TRY_IT_OUT)->toJson();
+            }
     		
     		return <<<HTML
         <!-- HTML for static distribution bundle build -->
@@ -83,19 +91,20 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
                 
                 // the following lines will be replaced by docker/configurator, when it runs in a docker-container
                 window.ui = SwaggerUIBundle({
-                    url: '{$openapiUrl}',
-                    dom_id: '#swagger-ui',
-                    deepLinking: true,
-     				defaultModelsExpandDepth: 4,
-     				showExtensions: true,
-                    presets: [
-                        SwaggerUIBundle.presets.apis,
-                        SwaggerUIStandalonePreset
-                    ],
-                    plugins: [
-                        SwaggerUIBundle.plugins.DownloadUrl
-                    ],
-                    layout: 'StandaloneLayout'
+                        url: '{$openapiUrl}',
+                        dom_id: '#swagger-ui',
+                        deepLinking: true,
+                        defaultModelsExpandDepth: 4,
+                        showExtensions: true,
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIStandalonePreset
+                        ],
+                        plugins: [
+                            SwaggerUIBundle.plugins.DownloadUrl
+                        ],
+                        layout: 'StandaloneLayout',
+                        {$supportedSubmitMethods}
                     });
                     
                     //</editor-fold>
