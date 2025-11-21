@@ -17,7 +17,7 @@
 	
 	"API_EXAMPLES.SUFFIX.REQUIRED": "Required",
 	"API_EXAMPLES.SUFFIX.FULL": "Full",
-	"API_EXAMPLES.HIDE": true,
+	"API_EXAMPLES.SCRAMBLE": false,
 	
 	"SWAGGER_UI.ALLOW_TRY_IT_OUT": ["get", "put", "post", "delete", "options", "head", "patch", "trace"]
 }

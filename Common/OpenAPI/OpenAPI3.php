@@ -11,10 +11,12 @@ use cebe\openapi\spec\OpenApi;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\JsonDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\ConfigurationInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use JsonPath\InvalidJsonException;
@@ -34,14 +36,15 @@ use stdClass;
  * 
  * ## Config Options
  * 
- * You can configure examples for your environment by adjusting your `axenox.ETL.config.json`. The following options are
+ * You can configure examples for your environment by adjusting your `axenox.ETL.config.json`. The following options
+ * are
  * available:
  * 
- * - `API_EXAMPLES.SUFFIX.REQUIRED`: Customize the suffix for the default example that contains only REQUIRED properties. 
- * Default value is `"Required"`.
- * - `API_EXAMPLES.SUFFIX.FULL`: Customize the suffix for the default example that contains ALL properties. Default value is `"Full"`.
- * - `API_EXAMPLES.HIDE`: Hide certain types of examples or disable them altogether. Possible values are: 
- * `false` (show all examples), `true` (hide all examples), `"Manual"` (hide manual examples), `"Generated"` (hide generated examples).
+ * - `API_EXAMPLES.SUFFIX.REQUIRED`: Customize the suffix for the default example that contains only REQUIRED
+ * properties.  Default value is `"Required"`.
+ * - `API_EXAMPLES.SUFFIX.FULL`: Customize the suffix for the default example that contains ALL properties. Default
+ * value is `"Full"`.
+ * - `API_EXAMPLES.SCRAMBLE`: Scramble example values to obfuscate them. This will result in nonsensical data. 
  * Default value is `false`.
  * - `SWAGGER_UI.ALLOW_TRY_IT_OUT`: List all HTTP operations for which you wish to enable the "Try it out" feature of 
  * SwaggerUI. Default value is `["get", "put", "post", "delete", "options", "head", "patch", "trace"]`
@@ -54,7 +57,7 @@ use stdClass;
  * 
  * ### Manual Examples
  * 
- * To create a new example, you need to add a new property under `components > examples`. Its name will be displayed as 
+ * To create a new example, you need to add a new property under `components > examples`. Its name will be displayed as
  * the title of your example, make it descriptive. Manual examples must have the following structure:
  * 
  * ```
@@ -115,7 +118,8 @@ class OpenAPI3 implements APISchemaInterface
     public const X_REQUIRED_FOR_API = 'x-required-for-api';
     private const CFG_EXAMPLE_REQUIRED = 'API_EXAMPLES.SUFFIX.REQUIRED';
     private const CFG_EXAMPLE_FULL = 'API_EXAMPLES.SUFFIX.FULL';
-    private const CFG_HIDE_EXAMPLES = 'API_EXAMPLES.HIDE';
+    private const CFG_EXAMPLE_SAMPLE_COUNT = 'API_EXAMPLES.SAMPLE_COUNT';
+    private const CFG_SCRAMBLE_EXAMPLES = 'API_EXAMPLES.SCRAMBLE';
     
     use OpenAPI3UxonTrait;
 
@@ -289,15 +293,23 @@ class OpenAPI3 implements APISchemaInterface
     protected function enhanceSchema(array $json) : array
     {
         $jsonPath = new JsonObject($json);
-
+        $title = $json['info']['title'] ?? '';
+        
         if ($this->apiVersion !== null) {
             $jsonPath->set('$.info.version', $this->apiVersion);
         }
 
         $schemaPath = '$.components.schemas';
         $examplePath = '$.components.examples';
-        $examplesToGenerate = $this->extractExamplesGenerators($jsonPath, $examplePath);
+        $config = $this->getWorkbench()->getApp('axenox.ETL')->getConfig();
+        $examplesToGenerate = $this->extractExamplesGenerators($config, $jsonPath, $examplePath);
 
+        if($config->hasOption(self::CFG_EXAMPLE_SAMPLE_COUNT)) {
+            $sampleCount = $config->getOption(self::CFG_EXAMPLE_SAMPLE_COUNT);
+        } else {
+            $sampleCount = 40;
+        }
+        
         foreach ($jsonPath->get($schemaPath)[0] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
@@ -309,52 +321,85 @@ class OpenAPI3 implements APISchemaInterface
             $jsonPath->set($schemaPath . '.' . $schemaName, $schema);
 
             try {
+                $exampleNameFull = $this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config);
                 foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
+                    $fillExampleValues = $exampleName === $exampleNameFull;
                     $exampleName = $schemaName . '_' . $exampleName;
                     $path = $examplePath . '.' . $exampleName;
-
-                    if(!empty($jsonPath->get($path))){
+                    $injectExample = empty($jsonPath->get($path));
+                    
+                    if(!$injectExample && !$fillExampleValues){
                         continue;
                     }
 
-                    $exampleJson = $this->generateExampleFromSchema($object, $schema, $exampleSchema);
-                    
-                    if(empty($jsonPath->get($examplePath))) {
-                        $jsonPath->add('$.components', [], 'examples');
-                    }
-                    $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
-
-                    // We have to add a reference to the example in "paths", but getting the correct path
-                    // is not trivial. The Path reference may be named differently than the component it
-                    // represents. To identify the correct path, we need to match object aliases, which would
-                    // be difficult with array accessors, which is why we use JSONPath.
-                    //
-                    // The path searches for all paths that have a property "content" anywhere in their structure
-                    // that matches these conditions:
-                    // - It has a child named "examples". 
-                    // - It has a child named "schema" with a property "x-attribute-alias".
-                    // - Said property is equal to the object alias of our $object.
-                    $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
-                    $referencePath = "$.paths..content{$schemaFilter}";
-
-                    // Ensure folder.
-                    if(empty($jsonPath->get($referencePath . ".examples"))) {
-                        $jsonPath->add($referencePath, [], 'examples');
-                    }
-
-                    // Add reference.
-                    $reference = '#/components/examples/' . $exampleName;
-                    $jsonPath->add(
-                        $referencePath . ".examples",
-                        [ '$ref' => $reference ],
-                        $exampleName
+                    $exampleJson = $this->generateExampleFromSchema(
+                        $object, 
+                        '[' . $title . ']' . $exampleName, 
+                        $schema, 
+                        $exampleSchema,
+                        $sampleCount
                     );
+                    
+                    // Inject example into definition.
+                    if($injectExample) {
+                        // Ensure folder.
+                        if(empty($jsonPath->get($examplePath))) {
+                            $jsonPath->add('$.components', [], 'examples');
+                        }
+                        $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
+
+                        // We have to add a reference to the example in "paths", but getting the correct path
+                        // is not trivial. The Path reference may be named differently than the component it
+                        // represents. To identify the correct path, we need to match object aliases, which would
+                        // be difficult with array accessors, which is why we use JSONPath.
+                        //
+                        // The path searches for all paths that have a property "content" anywhere in their structure
+                        // that matches these conditions:
+                        // - It has a child named "examples". 
+                        // - It has a child named "schema" with a property "x-attribute-alias".
+                        // - Said property is equal to the object alias of our $object.
+                        $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                        $referencePath = "$.paths..content{$schemaFilter}";
+
+                        // Ensure folder.
+                        if(empty($jsonPath->get($referencePath . ".examples"))) {
+                            $jsonPath->add($referencePath, [], 'examples');
+                        }
+
+                        // Add reference.
+                        $reference = '#/components/examples/' . $exampleName;
+                        $jsonPath->add(
+                            $referencePath . ".examples",
+                            [ '$ref' => $reference ],
+                            $exampleName
+                        );
+                    }
+                    
+                    // Fill missing example values.
+                    if($fillExampleValues) {
+                        $path = "$.components.schemas.{$schemaName}.properties";
+                        foreach ($exampleJson['value'][0] as $property => $example) {
+                            if($example === null) {
+                                continue;
+                            }
+                            
+                            $propertyPath = $path . '.' . $property;
+                            if(empty($jsonPath->get($propertyPath . '.example'))) {
+                                $jsonPath->add($propertyPath, $example, 'example');
+                            }
+                        }
+                    }
                 }
             } catch (\Throwable $e) {
                 $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
                     'Failed to generate examples for API definition!', '83K3MPU', $e
                 ));
             }
+        }
+
+        if($config->hasOption(self::CFG_SCRAMBLE_EXAMPLES) &&
+            $config->getOption(self::CFG_SCRAMBLE_EXAMPLES) === true) {
+            $this->scrambleExampleValues($jsonPath);
         }
 
         return $jsonPath->getValue();
@@ -452,43 +497,21 @@ class OpenAPI3 implements APISchemaInterface
      * Extracts example generators from a given OpenAPI JSON and returns an array
      * containing those definitions as well as some basic example generators.
      *
-     * NOTE: This function also checks and executes config display options.
-     *
      * The following properties mark an example as a generator:
      * - `x-attribute-group-alias`
      * - `x-required-for-api`
      *
-     * @param JsonObject $jsonPath
-     * @param string     $examplePath
+     * @param ConfigurationInterface $config
+     * @param JsonObject             $jsonPath
+     * @param string                 $examplePath
      * @return array
      */
-    protected function extractExamplesGenerators(JsonObject &$jsonPath, string $examplePath) : array
+    protected function extractExamplesGenerators(
+        ConfigurationInterface $config,
+        JsonObject &$jsonPath, 
+        string $examplePath
+    ) : array
     {
-        $config = $this->workbench->getApp('axenox.ETL')->getConfig();
-
-        // Check for example display settings.
-        if($config->hasOption(self::CFG_HIDE_EXAMPLES)) {
-            $hideExamples = $config->getOption(self::CFG_HIDE_EXAMPLES);
-            if(is_string($hideExamples)) {
-                $hideAll = 'TRUE' === $hideExamples;
-                $hideManual = $hideAll || 'MANUAL' === $hideExamples;
-                $hideGenerated = $hideAll || 'GENERATED' === $hideExamples;
-            } else {
-                $hideManual = $hideGenerated = $hideExamples;
-            }
-            
-            // Remove manual examples to hide them.
-            if($hideManual) {
-                $jsonPath->remove('$.components', 'examples');
-                $jsonPath->remove('$.paths..content.*', 'examples');
-            }
-            
-            // Return empty, i.e. do not generate examples.
-            if($hideGenerated) {
-                return [];
-            }
-        }
-        
         $examples = $jsonPath->get($examplePath)[0];
 
         // Extract example generators.
@@ -502,20 +525,12 @@ class OpenAPI3 implements APISchemaInterface
         }
 
         // Add default generators.
-        $exampleKey = $config->hasOption(self::CFG_EXAMPLE_REQUIRED) ?
-            $config->getOption(self::CFG_EXAMPLE_REQUIRED) : 
-            'Required';
-        
-        $examples[$exampleKey] = [
+        $examples[$this->getBuiltInExampleName(self::CFG_EXAMPLE_REQUIRED, $config)] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
             self::X_REQUIRED_FOR_API => true
         ];
 
-        $exampleKey = $config->hasOption(self::CFG_EXAMPLE_FULL) ?
-            $config->getOption(self::CFG_EXAMPLE_FULL) : 
-            'Full';
-
-        $examples[$exampleKey] = [
+        $examples[$this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config)] = [
             OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL'
         ];
 
@@ -523,15 +538,62 @@ class OpenAPI3 implements APISchemaInterface
     }
 
     /**
+     * @param JsonObject $jsonPath
+     * @return void
+     */
+    protected function scrambleExampleValues(JsonObject &$jsonPath) : void
+    {
+        try {
+            // Scramble example properties.
+            foreach ($jsonPath->getJsonObjects('$.components.schemas..example') as $example) {
+                $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+
+            // Scramble example schemas.
+            foreach ($jsonPath->getJsonObjects('$.components.examples[*].value[*].*') as $example) {
+                $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+        } catch (\Throwable $e) {
+
+        }
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     * @throws \Random\RandomException
+     */
+    protected function scrambleValue(mixed $value) : mixed
+    {
+        switch (true) {
+            case is_string($value):
+                return StringDataType::scramble($value);
+            case is_numeric($value):
+                return StringDataType::scramble($value, "/[-_\\\\,.\/ ()\[\]\{\}=\"'@\:]/", "0123456789");
+            case is_array($value):
+                foreach ($value as $k => $v) {
+                    $value[$k] = $this->scrambleValue($v);
+                }
+                return $value;
+            default:
+                return $value;
+        }
+    }
+
+    /**
      * @param MetaObjectInterface $object
+     * @param string              $key
      * @param array               $objectSchema
      * @param array               $exampleSchema
+     * @param int                 $sampleCount
      * @return array
      */
     protected function generateExampleFromSchema(
         MetaObjectInterface $object, 
+        string $key,
         array $objectSchema, 
-        array $exampleSchema
+        array $exampleSchema,
+        int $sampleCount
     ) : array
     {
         $objectSchema = new OpenAPI3ObjectSchema($this, $objectSchema);
@@ -565,7 +627,13 @@ class OpenAPI3 implements APISchemaInterface
             $attributesToLoad[] = $attribute;
         }
         
-        $loadedValues = OpenAPI3MetaModelSchemaBuilder::loadExamples($object, $attributesToLoad);
+        $loadedValues = OpenAPI3MetaModelSchemaBuilder::getExampleRow(
+            $object, 
+            $key, 
+            $attributesToLoad,
+            false,
+            $sampleCount
+        );
         
         foreach ($objectSchema->getProperties() as $name => $property) {
             $exampleValue = null;
@@ -573,9 +641,7 @@ class OpenAPI3 implements APISchemaInterface
             
             if($property->isBoundToAttribute()) {
                 $attribute = $property->getAttribute();
-                $exampleValue = 
-                    $loadedValues[$attribute->getAlias()] ?? 
-                    $attribute->getDataType()->getValue();
+                $exampleValue = $loadedValues[$attribute->getAlias()];
             }
 
             // Filter for property optionality, if the example generator contains such a filter.
@@ -597,8 +663,7 @@ class OpenAPI3 implements APISchemaInterface
             try {
                 $exampleValue = 
                     $property->getExampleValue() ?? 
-                    $exampleValue ?? 
-                    $property->guessDataType()->getName();
+                    $exampleValue;
                 
                 $decoded = json_decode($exampleValue);
                 $exampleValue = $decoded ?? $exampleValue;
@@ -610,5 +675,18 @@ class OpenAPI3 implements APISchemaInterface
         }
         
         return ['value' => [$values]]; 
+    }
+    
+    protected function getBuiltInExampleName(string $key, ConfigurationInterface $config) : string
+    {
+        if($config->hasOption($key)) {
+            return $config->getOption($key);
+        }
+        
+        return match ($key) {
+            self::CFG_EXAMPLE_FULL => 'Full',
+            self::CFG_EXAMPLE_REQUIRED => 'Required',
+            default => 'Default'
+        };
     }
 }
