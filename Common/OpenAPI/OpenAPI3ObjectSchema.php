@@ -153,7 +153,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                         // Determine data type
                         if (empty($attrProp['type'] ?? null)) {
                             try {
-                                $typeProp = OpenAPI3MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
+                                $typeProp = JsonDataType::convertDataTypeToJsonSchemaType($attribute->getDataType());
                                 $attrProp = array_merge($attrProp, $typeProp);
                             } catch (InvalidArgumentException $e) {
                                 $object->getWorkbench()->getLogger()->logException($e);

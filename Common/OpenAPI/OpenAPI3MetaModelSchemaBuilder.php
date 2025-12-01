@@ -3,23 +3,11 @@ namespace axenox\ETL\Common\OpenAPI;
 
 use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\DataTypes\ComparatorDataType;
-use exface\Core\DataTypes\HexadecimalNumberDataType;
-use exface\Core\DataTypes\StringDataType;
-use exface\Core\DataTypes\TimeDataType;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Interfaces\DataTypes\DataTypeInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\DataTypes\IntegerDataType;
-use exface\Core\DataTypes\NumberDataType;
-use exface\Core\DataTypes\BooleanDataType;
-use exface\Core\DataTypes\ArrayDataType;
-use exface\Core\Interfaces\DataTypes\EnumDataTypeInterface;
-use exface\Core\DataTypes\DateTimeDataType;
-use exface\Core\DataTypes\DateDataType;
-use exface\Core\DataTypes\BinaryDataType;
-use exface\Core\Exceptions\InvalidArgumentException;
 
 /**
  * A builder that creates a schema from a MetaObjectInterface.
@@ -115,7 +103,7 @@ class OpenAPI3MetaModelSchemaBuilder
             }
             
             $properties[] = $attribute->getAlias();
-            $schema = array_merge($schema, self::convertToJsonSchemaDatatype($attribute->getDataType()));
+            $schema = array_merge($schema, JsonDataType::convertDataTypeToJsonSchemaType($attribute->getDataType()));
             
             if ($attribute->isRequired() === false){
                 $schema['nullable'] = true;
@@ -364,44 +352,5 @@ class OpenAPI3MetaModelSchemaBuilder
         }
         
         return $bestRow;
-    }
-
-    /**
-     * Convert a given data type to one that is JSON conform.
-     * 
-     * @param DataTypeInterface $dataType
-     * @return array|string[]
-     */
-    public static function convertToJsonSchemaDatatype(DataTypeInterface $dataType) : array
-    {
-        switch (true) {
-            case $dataType instanceof IntegerDataType:
-            case $dataType instanceof TimeDataType:
-                return ['type' => 'integer'];
-            case ($dataType instanceof NumberDataType) && $dataType->getBase() === 10:
-                return ['type' => 'number'];
-            case $dataType instanceof BooleanDataType:
-                return ['type' => 'boolean'];
-            case $dataType instanceof ArrayDataType:
-                return ['type' => 'array'];
-            case $dataType instanceof EnumDataTypeInterface:
-                return ['type' => 'string', 'enum' => $dataType->getValues()];
-            case $dataType instanceof DateTimeDataType:
-                return ['type' => 'string', 'format' => 'datetime'];
-            case $dataType instanceof DateDataType:
-                return ['type' => 'string', 'format' => 'date'];
-            case $dataType instanceof BinaryDataType:
-                if ($dataType->getEncoding() == 'base64') {
-                    return ['type' => 'string', 'format' => 'byte'];
-                } else {
-                    return ['type' => 'string', 'format' => 'binary'];
-                }
-            case $dataType instanceof StringDataType:
-                return ['type' => 'string'];
-            case $dataType instanceof HexadecimalNumberDataType:
-                return ['type' => 'string'];
-            default:
-                throw new InvalidArgumentException('Datatype: ' . $dataType->getAlias() . ' not recognized.');
-        }
     }
 }
