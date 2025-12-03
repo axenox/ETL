@@ -19,8 +19,6 @@ CREATE TABLE IF NOT EXISTS exf_monitor_error (
     CONSTRAINT pk_exf_monitor_error_oid PRIMARY KEY (oid)
 );
 
-
--- etl_flow
 CREATE TABLE IF NOT EXISTS etl_flow (
     oid                 uuid            NOT NULL,
     created_on          timestamp(7)    NOT NULL,
@@ -36,8 +34,6 @@ CREATE TABLE IF NOT EXISTS etl_flow (
     CONSTRAINT pk_etl_flow PRIMARY KEY (oid)
 );
 
-
--- etl_step
 CREATE TABLE IF NOT EXISTS etl_step (
     oid                  uuid            NOT NULL,
     created_on           timestamp(7)    NOT NULL,
@@ -59,8 +55,6 @@ CREATE TABLE IF NOT EXISTS etl_step (
     CONSTRAINT pk_etl_step PRIMARY KEY (oid)
 );
 
-
--- etl_step_run
 CREATE TABLE IF NOT EXISTS etl_step_run (
     oid                       uuid            NOT NULL,
     created_on                timestamp(7)    NOT NULL,
@@ -93,8 +87,27 @@ CREATE TABLE IF NOT EXISTS etl_step_run (
     UNIQUE (flow_run_oid, flow_run_pos)
 );
 
+CREATE TABLE etl_webservice (
+                                oid uuid,
+                                created_on timestamp NOT NULL,
+                                modified_on timestamp NOT NULL,
+                                created_by_user_oid uuid NOT NULL,
+                                modified_by_user_oid uuid NOT NULL,
+                                name varchar(100) NOT NULL,
+                                alias varchar(100) NOT NULL,
+                                app_oid uuid,
+                                description text,
+                                local_url varchar(400),
+                                remote_connection_oid uuid,
+                                config_uxon text,
+                                swagger_json text,
+                                type_oid uuid,
+                                flow_direction varchar(3) NOT NULL,
+                                version varchar(50),
+                                enabled_flag smallint NOT NULL DEFAULT 1,
+                                CONSTRAINT pk_etl_webservice PRIMARY KEY (oid)
+);
 
--- etl_webservice_type
 CREATE TABLE IF NOT EXISTS etl_webservice_type (
     oid                 uuid            NOT NULL,
     created_on          timestamp       NOT NULL,

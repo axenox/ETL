@@ -347,7 +347,7 @@
                 "// Multiline text delimited by `\n`",
                 "@MySQL: CONCAT([#name#], ' [', [#version#], ']')",
                 "@T-SQL: (CASE WHEN [#name#] IS NULL THEN NULL ELSE CONCAT([#name#], ' [', [#version#], ']') END)",
-                "@pgSQL: [#name#] || ' [' || [#version#] || ']'"
+                "@pgSQL: ([#name#] || ' [' || [#version#] || ']')"
             ],
             "OBJECT": "0x11ee9c1ba539d1529c1b025041000001",
             "FORMATTER": "",
