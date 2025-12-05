@@ -109,6 +109,43 @@
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "USE_IN_OBJECT_BASKET_FLAG": 0,
             "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "Web message: Cleanup old messages [WebserviceRequestCleanup]",
+            "CREATED_ON": "2025-12-04 15:16:28",
+            "MODIFIED_ON": "2025-12-05 13:53:42",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0x11f0a7f2d36a9d04a7f2025041000001",
+            "OBJECT": "0x11eeae4695964d78ae46025041000001",
+            "ACTION_PROTOTYPE": "exface/Core/Actions/CustomDataSourceQuery.php",
+            "ALIAS": "WebserviceRequestCleanup",
+            "NAME": "Cleanup old messages",
+            "SHORT_DESCRIPTION": "",
+            "CONFIG_UXON": {
+                "object_alias": "axenox.ETL.webservice_request",
+                "queries": [
+                    [
+                        "// Multiline text delimited by `\n`",
+                        "@T-SQL: DELETE FROM dbo.etl_webservice_request ",
+                        "    WHERE oid in (",
+                        "        SELECT TOP [#=GetConfig('CLEANUP.WEBSERVICE_REQUESTS.DELETE_BATCH', 'axenox.ETL')#] ",
+                        "            oid ",
+                        "        FROM dbo.etl_webservice_request",
+                        "        WHERE created_on < '[#=DateAdd(Today(), -1 * GetConfig('CLEANUP.WEBSERVICE_REQUESTS.DAYS_TO_KEEP', 'axenox.ETL'))#]' ",
+                        "        ORDER BY created_on asc",
+                        "    );",
+                        "    ",
+                        "@OTHER: DELETE FROM etl_webservice_request ",
+                        "    WHERE created_on < '[#=DateAdd(Today(), -1 * GetConfig('CLEANUP.WEBSERVICE_REQUESTS.DAYS_TO_KEEP', 'axenox.ETL'))#]' ",
+                        "    ORDER BY created_on ASC",
+                        "    LIMIT [#=GetConfig('CLEANUP.WEBSERVICE_REQUESTS.DELETE_BATCH', 'axenox.ETL')#] "
+                    ]
+                ]
+            },
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "USE_IN_OBJECT_BASKET_FLAG": 0,
+            "DOCS": ""
         }
     ],
     "totals_rows": [],
