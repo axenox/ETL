@@ -8,6 +8,9 @@
         "Pragma": "no-cache",
         "Expires": 0
 	},
+  
+    "CLEANUP.WEBSERVICE_REQUESTS.DAYS_TO_KEEP": 90,
+    "CLEANUP.WEBSERVICE_REQUESTS.DELETE_BATCH": 100,
 	
 	"STEP_RUN.TIMEOUT": 300,
 	"STEP_RUN.MEMORY_LIMIT": 500000000,
@@ -15,6 +18,9 @@
 
 	"NOTE_TAKER.NOTE_LIMIT": 500,
 	
-	"API_EXAMPLES.REQUIRED": "Required",
-	"API_EXAMPLES.FULL": "Full"
+	"API_EXAMPLES.SUFFIX.REQUIRED": "Required",
+	"API_EXAMPLES.SUFFIX.FULL": "Full",
+	"API_EXAMPLES.SCRAMBLE": false,
+	
+	"SWAGGER_UI.ALLOW_TRY_IT_OUT": ["get", "put", "post", "delete", "options", "head", "patch", "trace"]
 }
