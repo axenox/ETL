@@ -203,7 +203,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      */
     public function isRequiredProperty(OpenAPI3Property $property) : bool
     {
-        return in_array($property->getPropertyName(), $this->jsonSchema['required']);
+        return in_array($property->getPropertyName(), $this->jsonSchema['required'] ?? []);
     }
     
     /**
