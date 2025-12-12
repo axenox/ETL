@@ -73,7 +73,7 @@
             "UID": "0x11ebad892c9f773ead89025041000001",
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "NAME": "ETL Step Type",
-            "PROTOTYPE": "exface/Core/DataTypes/StringEnumDataType.php",
+            "PROTOTYPE": "exface/core/DataTypes/StringEnumDataType.php",
             "CONFIG_UXON": {
                 "show_values": false,
                 "values": {

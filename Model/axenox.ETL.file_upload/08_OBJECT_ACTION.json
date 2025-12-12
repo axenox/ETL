@@ -72,7 +72,7 @@
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11efab459dfc9a66ab45025041000001",
             "OBJECT": "0x11ef97055df83b389705025041000001",
-            "ACTION_PROTOTYPE": "exface/Core/Actions/ActionChain.php",
+            "ACTION_PROTOTYPE": "exface/core/Actions/ActionChain.php",
             "ALIAS": "FileUploadProcess",
             "NAME": "Process upload",
             "SHORT_DESCRIPTION": "",
