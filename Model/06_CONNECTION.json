@@ -66,7 +66,7 @@
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "TIME_ZONE": null,
             "LABEL": "DataFlow upload storage (local)",
-            "CONNECTOR": "exface/Core/DataConnectors/LocalFileConnector.php",
+            "CONNECTOR": "exface/core/DataConnectors/LocalFileConnector.php",
             "CONFIG": "$$~~igz9FL7t/MHI5ytKl8wh/4VjNlqWp/OeEGtztw6IWtXl/mK4IZwJygItMVTcT/oT3Yeiv8FpREA2K2KUOEeuPqsCRdiMYC8ghvRM9U9h8qCaXQ==",
             "READONLY": 0,
             "ALIAS": "dataflow_upload_storage_local"
@@ -81,7 +81,7 @@
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "TIME_ZONE": null,
             "LABEL": "Webservice Request Storage (local)",
-            "CONNECTOR": "exface/Core/DataConnectors/LocalFileConnector.php",
+            "CONNECTOR": "exface/core/DataConnectors/LocalFileConnector.php",
             "CONFIG": "$$~~HeYlE+nBmzfifhw+oUjpmsli6kuxtwcbxY69+1q3GfjvieoXLaTl3DBXCyMLx6a225jw6TtyixK+6MCJQPq/MthM8PucbOnNAbnNaavv/T48cDAv4FPHNikt+02d",
             "READONLY": 0,
             "ALIAS": "webservice_request_storage_local"

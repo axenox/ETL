@@ -67,7 +67,7 @@
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef8c6f8efaebc08c6f025041000001",
-            "BEHAVIOR": "exface/Core/Behaviors/FileAttachmentBehavior.php",
+            "BEHAVIOR": "exface/core/Behaviors/FileAttachmentBehavior.php",
             "CONFIG_UXON": {
                 "file_relation": "file_path",
                 "override_file_attributes": {
