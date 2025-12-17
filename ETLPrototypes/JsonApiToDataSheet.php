@@ -775,7 +775,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             $uxon->appendToProperty('lookup_mappings', $mapping);
         }
         
-        // We apply custom mappings last as their results would be overridden any mapping from the OpenAPI definition.
+        // We apply custom mappings last as their results would be overridden by any mapping from the OpenAPI definition.
         if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
             foreach ($customMapperUxon->getPropertiesAll() as $prop => $value) {
                 if(!$value instanceof UxonObject) {
