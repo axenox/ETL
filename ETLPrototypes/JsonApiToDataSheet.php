@@ -655,10 +655,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $baseSheet = $this->createBaseDataSheet($placeholders);
         
         foreach ($baseSheet->getColumns() as $baseCol) {
-            if (! $mappedSheet->getColumns()->getByExpression($baseCol->getExpressionObj())) {
+            $mappedCol = $mappedSheet->getColumns()->getByExpression($baseCol->getExpressionObj());
+            
+            // If the column exists, but is empty, we overwrite it with the base column.
+            if($mappedCol && $mappedCol->isEmpty(true)) {
+                $mappedSheet->getColumns()->remove($mappedCol);
+                $mappedCol = false;
+            }
+
+            if (!$mappedCol) {
                 $mappedSheet->getColumns()->add($baseCol);
             }
         }
+        
         foreach ($mappedSheet->getColumns() as $column) {
             if(!$column->isFresh() && $column->isFormula()) {
                 try {
@@ -755,21 +764,38 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
             'to_object_alias' => $object->getAliasWithNamespace()
         ]);
+        
+        // We loop over mappings and apply them via `appendToProperty` to ensure that they do not
+        // overwrite existing mappings. 
+        foreach ($col2col as $mapping) {
+            $uxon->appendToProperty('column_to_column_mappings', $mapping);
+        }
+        
+        foreach ($lookups as $mapping) {
+            $uxon->appendToProperty('lookup_mappings', $mapping);
+        }
+        
+        // We apply custom mappings last as their results would be overridden any mapping from the OpenAPI definition.
         if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
-            $uxon = $customMapperUxon->extend($uxon);
+            foreach ($customMapperUxon->getPropertiesAll() as $prop => $value) {
+                if(!$value instanceof UxonObject) {
+                    continue;
+                }
+                
+                foreach ($value->toArray() as $mapping) {
+                    $uxon->appendToProperty($prop, $mapping);
+                }
+            }
         }
-        if (! empty($col2col)) {
-            $uxon->setProperty('column_to_column_mappings', new UxonObject($col2col));
-        }
-        if (! empty($lookups)) {
-            $uxon->setProperty('lookup_mappings', new UxonObject($lookups));
-        }
+        
         // TODO Add DataColumnToJsonMapping's here
         return DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $uxon);
     }
 
     /**
      * Custom mapper to map properties of the API schema to the data sheet.
+     * 
+     * NOTE: This mapper will ALWAYS have `from_object_alias` and `to_object_alias` defined by the step.
      * 
      * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
      * @uxon-property properties_to_data_sheet_mapper
