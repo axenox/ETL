@@ -102,7 +102,7 @@ class OpenAPI3Property implements APIPropertyInterface
      */
     public function hasLookup() : bool
     {
-        return null !== $this->jsonSchema[self::X_LOOKUP] ?? null;
+        return null !== $this->jsonSchema[self::X_LOOKUP];
     }
 
     /**
