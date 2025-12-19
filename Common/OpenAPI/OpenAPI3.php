@@ -382,8 +382,6 @@ class OpenAPI3 implements APISchemaInterface
             }
 
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            $schema = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
-            $jsonPath->set($schemaPath . $this->toJsonPathKey($schemaName), $schema);
 
             $exampleNameFull = $this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config);
             foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
