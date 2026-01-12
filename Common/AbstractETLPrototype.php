@@ -206,6 +206,10 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * Configure how this step should react, if it detects duplicate entries in its input data.
      * 
+     * - `error`: Throw an error and terminate the step.
+     * - `disable_tracker`: Disable data tracking and continue.
+     * - `ignore`: Ignore the issue and continue, while trying to track data.
+     * 
      * @uxon-property if_duplicates_detected
      * @uxon-type [error,disable_tracker,ignore]
      * @uxon-template error

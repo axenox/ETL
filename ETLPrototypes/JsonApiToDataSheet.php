@@ -795,6 +795,9 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
     /**
      * Custom mapper to map properties of the API schema to the data sheet.
      * 
+     * For all mappings `from` and any expression in `default_value` refer to the property name defined
+     * in you OpenAPI-Definition.
+     * 
      * NOTE: This mapper will ALWAYS have `from_object_alias` and `to_object_alias` defined by the step.
      * 
      * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
