@@ -63,6 +63,7 @@ class OpenAPI3Property implements APIPropertyInterface
     const X_CALCULATION = 'x-calculation';
     const X_CUSTOM_ATTRIBUTE = 'x-custom-attribute';
     const X_PROPERTIES_FROM_DATA = 'x-properties-from-data';
+    const X_EXCEL_COLUMN = 'x-excel-column';
 
     private $objectSchema = null;
     private $name = null;
@@ -102,7 +103,7 @@ class OpenAPI3Property implements APIPropertyInterface
      */
     public function hasLookup() : bool
     {
-        return null !== $this->jsonSchema[self::X_LOOKUP] ?? null;
+        return null !== $this->jsonSchema[self::X_LOOKUP];
     }
 
     /**
@@ -209,6 +210,18 @@ class OpenAPI3Property implements APIPropertyInterface
     }
 
     /**
+     * Define an excel-column name for this property. When importing from or exporting to Excel sheets, this value will
+     * be used instead of the property name to identify the proper column.
+     * 
+     * @uxon-property x-excel-column
+     * @uxon-type string
+     */
+    public function getExcelColumnName() : ?string
+    {
+        return $this->jsonSchema[self::X_EXCEL_COLUMN] ?? null;
+    }
+
+    /**
      * {@inheritDoc}
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::isBoundToAttributeGroup()
      */
@@ -225,8 +238,21 @@ class OpenAPI3Property implements APIPropertyInterface
      * done.
      * 
      * However, if we also need an x-excel-column for every generated property, we need some more configuration
-     * here. In the simplest case, we could use `"x-excel-column": "[#name#]"`, which would expect excel columns
-     * to be named after the attributes. 
+     * here. In the simplest case, we could use `"x-excel-column": "[#alias#]"`, which would expect excel columns
+     * to be named after the attribute aliases. 
+     * 
+     * ```
+     *
+     *  {
+     *   "properties": {
+     *       "CustomAttributes": {
+     *           "x-attribute-group-alias": "~CUSTOM",
+     *           "x-excel-column": "[#alias#]"
+     *       }
+     *   }
+     *  }
+     *
+     *  ```
      * 
      * Or we can even use a `=Lookup()` formula to take the excel column names from a special column in the definition 
      * of the attributes. Assume, our `ORDER` has a `CustomAttributesJsonBehavior` and the attribute definitions are 
@@ -247,6 +273,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-attribute-group-alias
      * @uxon-type metamodel:attribute_group
+     * @uxon-template ~CUSTOM
      *
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeGroupAlias()
      */

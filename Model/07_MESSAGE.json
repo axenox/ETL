@@ -165,6 +165,26 @@
             "HINT": "",
             "TYPE": "ERROR",
             "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "7PNKJ51 Cannot check for duplicates! Not enough data to identify rows.",
+            "CREATED_ON": "2025-12-10 14:51:42",
+            "MODIFIED_ON": "2025-12-10 15:15:10",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f09b1b5bfa2b6e9b1bd7b4bf200aa8",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "CODE": "7PNKJ51",
+            "TITLE": "Cannot check for duplicates! Not enough data to identify rows.",
+            "DESCRIPTION": [
+                "// Multiline text delimited by `\n`",
+                "This is error occurs when a `FlowStep` attempts to check for duplicates when committing its output data and some of the columns to compare to are missing.",
+                "",
+                "The error message should inform you, where the list of columns to compare to has been defined. Make sure that all attributes in that list are named properly and are present in the input data for this step."
+            ],
+            "HINT": "",
+            "TYPE": "ERROR",
+            "DOCS": ""
         }
     ],
     "totals_rows": [],

@@ -139,12 +139,11 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
         yield $msg . PHP_EOL;
 
-        $toObject = $this->getToObject();
         $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
 
-        $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
+        $fromSheet = $this->readExcel($fileInfo, $toObjectSchema, $logBook);
         if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
             $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
@@ -350,13 +349,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * 
-     * @param \exface\Core\Interfaces\Filesystem\FileInfoInterface $fileInfo
-     * @param array $toObjectSchema
+     *
+     * @param FileInfoInterface        $fileInfo
+     * @param APIObjectSchemaInterface $toObjectSchema
+     * @param FlowStepLogBook          $logBook
      * @return DataSheetInterface
      */
-    protected function readExcel(FileInfoInterface $fileInfo, APIObjectSchemaInterface $toObjectSchema) : DataSheetInterface
+    protected function readExcel(
+        FileInfoInterface $fileInfo,
+        APIObjectSchemaInterface $toObjectSchema,
+        FlowStepLogBook $logBook
+    ) : DataSheetInterface
     {
+        $logBook->addLine('Reading data from Excel...');
+        $logBook->addIndent(1);
         $sheetname = $toObjectSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_SHEET);
         // Create fake meta object with the expected attributes and use the regular
         // ExcelBuilder to read it.
@@ -375,11 +381,13 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
+            $attrAlias = $propSchema->getPropertyName();
+            
             if ($excelColName === null || $excelColName === '') {
+                $logBook->addLine('SKIPPING "' . $attrAlias . '": Missing property "x-excel-column".');
                 continue;
             }
-            
-            $attrAlias = $propSchema->getPropertyName();
+
             $excelAddress = '[' . $excelColName . ']';
             MetaObjectFactory::addAttributeTemporary(
                 $fakeObj, 
@@ -393,6 +401,9 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
         $fakeSheet->dataRead();
+        
+        $logBook->addIndent(-1);
+        
         return $fakeSheet;
     }
 
