@@ -293,23 +293,20 @@ class OpenAPI3 implements APISchemaInterface
     protected function enhanceSchema(array $json) : array
     {
         $jsonPath = new JsonObject($json);
-        $title = $json['info']['title'] ?? '';
-        
+        $apiTitle = $json['info']['title'] ?? '';
+
         if ($this->apiVersion !== null) {
             $jsonPath->set('$.info.version', $this->apiVersion);
         }
 
         $schemaPath = '$.components.schemas';
-        $examplePath = '$.components.examples';
+        $examplesPath = '$.components.examples';
         $config = $this->getWorkbench()->getApp('axenox.ETL')->getConfig();
-        $examplesToGenerate = $this->extractExamplesGenerators($config, $jsonPath, $examplePath);
-
-        if($config->hasOption(self::CFG_EXAMPLE_SAMPLE_COUNT)) {
-            $sampleCount = $config->getOption(self::CFG_EXAMPLE_SAMPLE_COUNT);
-        } else {
-            $sampleCount = 40;
-        }
         
+        // This needs to happen now, since it also strips the example generators from the JSON.
+        $examplesToGenerate = $this->extractExamplesGenerators($config, $jsonPath, $examplesPath);
+        
+        // Enhance the basic schema. We will use this as a fallback in case example generation fails.
         foreach ($jsonPath->get($schemaPath)[0] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
@@ -318,91 +315,165 @@ class OpenAPI3 implements APISchemaInterface
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
             $schema = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
-            $jsonPath->set($schemaPath . '.' . $schemaName, $schema);
-
-            try {
-                $exampleNameFull = $this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config);
-                foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
-                    $fillExampleValues = $exampleName === $exampleNameFull;
-                    $exampleName = $schemaName . '_' . $exampleName;
-                    $path = $examplePath . '.' . $exampleName;
-                    $injectExample = empty($jsonPath->get($path));
-                    
-                    if(!$injectExample && !$fillExampleValues){
-                        continue;
-                    }
-
-                    $exampleJson = $this->generateExampleFromSchema(
-                        $object, 
-                        '[' . $title . ']' . $exampleName, 
-                        $schema, 
-                        $exampleSchema,
-                        $sampleCount
-                    );
-                    
-                    // Inject example into definition.
-                    if($injectExample) {
-                        // Ensure folder.
-                        if(empty($jsonPath->get($examplePath))) {
-                            $jsonPath->add('$.components', [], 'examples');
-                        }
-                        $jsonPath->set($examplePath . '.' . $exampleName, $exampleJson);
-
-                        // We have to add a reference to the example in "paths", but getting the correct path
-                        // is not trivial. The Path reference may be named differently than the component it
-                        // represents. To identify the correct path, we need to match object aliases, which would
-                        // be difficult with array accessors, which is why we use JSONPath.
-                        //
-                        // The path searches for all paths that have a property "content" anywhere in their structure
-                        // that matches these conditions:
-                        // - It has a child named "examples". 
-                        // - It has a child named "schema" with a property "x-attribute-alias".
-                        // - Said property is equal to the object alias of our $object.
-                        $schemaFilter = "[?(@.schema.x-object-alias == '{$object->getAliasWithNamespace()}')]";
-                        $referencePath = "$.paths..content{$schemaFilter}";
-
-                        // Ensure folder.
-                        if(empty($jsonPath->get($referencePath . ".examples"))) {
-                            $jsonPath->add($referencePath, [], 'examples');
-                        }
-
-                        // Add reference.
-                        $reference = '#/components/examples/' . $exampleName;
-                        $jsonPath->add(
-                            $referencePath . ".examples",
-                            [ '$ref' => $reference ],
-                            $exampleName
-                        );
-                    }
-                    
-                    // Fill missing example values.
-                    if($fillExampleValues) {
-                        $path = "$.components.schemas.{$schemaName}.properties";
-                        foreach ($exampleJson['value'][0] as $property => $example) {
-                            if($example === null) {
-                                continue;
-                            }
-                            
-                            $propertyPath = $path . '.' . $property;
-                            if(empty($jsonPath->get($propertyPath . '.example'))) {
-                                $jsonPath->add($propertyPath, $example, 'example');
-                            }
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
-                    'Failed to generate examples for API definition!', '83K3MPU', $e
-                ));
-            }
+            $jsonPath->set($schemaPath . $this->toJsonPathKey($schemaName), $schema);
         }
 
+        // Generate examples.
+        try {
+            $jsonPathWithExamples = $this->generateExamples(
+                new JsonObject($jsonPath->getValue()),
+                $config,
+                $apiTitle,
+                $schemaPath,
+                $examplesPath,
+                $examplesToGenerate
+            );
+            
+            // Ensure the new schema is functional. If an error is thrown, we use the schema without generated examples.
+            $jsonArray = $jsonPathWithExamples->getValue();
+            $schema = new OpenApi($jsonArray);
+            $schema->resolveReferences(new ReferenceContext($schema, "/"));
+            
+            $jsonPath = $jsonPathWithExamples;
+        } catch (\Throwable $e) {
+            $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
+                'Failed to generate examples for API definition!', '83K3MPU', $e
+            ));
+        }
+        
         if($config->hasOption(self::CFG_SCRAMBLE_EXAMPLES) &&
             $config->getOption(self::CFG_SCRAMBLE_EXAMPLES) === true) {
             $this->scrambleExampleValues($jsonPath);
         }
-
+        
         return $jsonPath->getValue();
+    }
+
+    /**
+     * Generates and injects examples into an OpenAPI definition.
+     * 
+     * @param JsonObject             $jsonPath
+     * @param ConfigurationInterface $config
+     * @param string                 $apiTitle
+     * @param string                 $schemaPath
+     * @param string                 $examplesPath
+     * @param array                  $examplesToGenerate
+     * @return JsonObject
+     */
+    protected function generateExamples(
+        JsonObject             $jsonPath,
+        ConfigurationInterface $config,
+        string                 $apiTitle,
+        string                 $schemaPath,
+        string                 $examplesPath,
+        array                  $examplesToGenerate
+    ) : JsonObject
+    {
+        if($config->hasOption(self::CFG_EXAMPLE_SAMPLE_COUNT)) {
+            $sampleCount = $config->getOption(self::CFG_EXAMPLE_SAMPLE_COUNT);
+        } else {
+            $sampleCount = 40;
+        }
+
+        foreach ($jsonPath->get($schemaPath)[0] as $schemaName => $schema) {
+            $objectAlias = $schema['x-object-alias'];
+            if(empty($objectAlias)) {
+                continue;
+            }
+
+            $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
+
+            $exampleNameFull = $this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config);
+            foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
+                $exampleName = JsonDataType::sanitizeForJsonPath($exampleName);
+                $fillExampleValues = $exampleName === $exampleNameFull;
+                $exampleName = JsonDataType::sanitizeForJsonPath($schemaName) . '_' . $exampleName;
+
+                $pathToExample = $examplesPath . $this->toJsonPathKey($exampleName);
+                $injectExample = empty($jsonPath->get($pathToExample));
+
+                if(!$injectExample && !$fillExampleValues){
+                    continue;
+                }
+
+                $exampleJson = $this->generateExampleFromSchema(
+                    $object,
+                    '[' . $apiTitle . ']' . $exampleName,
+                    $schema,
+                    $exampleSchema,
+                    $sampleCount
+                );
+
+                // Inject example into definition.
+                if($injectExample) {
+                    // Ensure folder.
+                    if(empty($jsonPath->get($examplesPath))) {
+                        $jsonPath->add('$.components', [], 'examples');
+                    }
+                    $jsonPath->set($pathToExample, $exampleJson);
+
+                    // We have to add a reference to the example in "paths", but getting the correct path
+                    // is not trivial. The Path reference may be named differently than the component it
+                    // represents. To identify the correct path, we need to match object aliases, which would
+                    // be difficult with array accessors, which is why we use JSONPath.
+                    //
+                    // The path searches for all paths that have a property "content" anywhere in their structure
+                    // that matches these conditions:
+                    // - It has a child named "examples". 
+                    // - It has a child named "schema" with a property "x-attribute-alias".
+                    // - Said property is equal to the object alias of our $object.
+                    $schemaFilter = "[?(@.schema..x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                    $referencePath = "$.paths..content{$schemaFilter}";
+
+                    // Ensure folder.
+                    if(empty($jsonPath->get($referencePath . ".examples"))) {
+                        $jsonPath->add($referencePath, [], 'examples');
+                    }
+
+                    // Add reference.
+                    $reference = '#/components/examples/' . $exampleName;
+                    $jsonPath->add(
+                        $referencePath . ".examples",
+                        [ '$ref' => $reference ],
+                        $exampleName
+                    );
+                }
+
+                // Fill missing example values.
+                if($fillExampleValues) {
+                    $path = "$.components.schemas{$this->toJsonPathKey($schemaName)}.properties";
+                    foreach ($exampleJson['value'][0] as $property => $example) {
+                        if($example === null) {
+                            continue;
+                        }
+
+                        $propertyPath = $path . '.' . $property;
+                        if(empty($jsonPath->get($propertyPath . '.example'))) {
+                            $jsonPath->add($propertyPath, $example, 'example');
+                        }
+                    }
+                }
+            }
+        }
+        
+        return $jsonPath;
+    }
+
+    /**
+     * Encloses a string in ['square brackets'], turning it into a key to ensure that special characters such as `.` do
+     * not affect JsonPath queries.
+     * 
+     * @param string $string
+     * @return string
+     */
+    protected function toJsonPathKey(string $string) : string
+    {
+        return "['" . $string . "']";
+    }
+    
+    protected function sanitizeForJsonPath(string $string) : string
+    {
+        return preg_replace('/\./', '_', $string);
     }
 
     public function publish(string $baseUrl) : string
@@ -609,11 +680,18 @@ class OpenAPI3 implements APISchemaInterface
         $attributesToLoad = [];
         
         foreach ($objectSchema->getProperties() as $property) {
-            if(!$property->isBoundToAttribute() || $property->isBoundToCalculation()) {
+            if(!$property->isBoundToAttribute() || 
+                $property->isBoundToCalculation() || 
+                str_starts_with($property->getAttributeAlias(), '=')
+            ) {
                 continue;
             }
-            
-            $attribute = $property->getAttribute();
+
+            try {
+                $attribute = $property->getAttribute();
+            } catch (\Throwable $e) {
+                continue;
+            }
 
             // Filter for attribute groups, if the example schema contains such a filter.
             if($groupFilter !== null) {
@@ -640,8 +718,12 @@ class OpenAPI3 implements APISchemaInterface
             $attribute = null;
             
             if($property->isBoundToAttribute()) {
-                $attribute = $property->getAttribute();
-                $exampleValue = $loadedValues[$attribute->getAlias()];
+                try {
+                    $attribute = $property->getAttribute();
+                    $exampleValue = $loadedValues[$attribute->getAlias()];
+                } catch (\Throwable $e) {
+                    
+                }
             }
 
             // Filter for property optionality, if the example generator contains such a filter.

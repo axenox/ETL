@@ -3,6 +3,7 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractAPISchemaPrototype;
 use axenox\ETL\Common\AbstractETLPrototype;
+use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\Traits\BypassDataAuthorizationStepTrait;
 use axenox\ETL\Common\Traits\PreventDuplicatesStepTrait;
@@ -18,6 +19,7 @@ use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ArrayDataType;
 use exface\Core\DataTypes\MessageTypeDataType;
+use exface\Core\Exceptions\DataSheets\DataMatcherError;
 use exface\Core\Exceptions\DataSheets\DataSheetInvalidValueError;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\RuntimeException;
@@ -249,9 +251,6 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
         
         $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
-        if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
-            $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
-        }
         
         $logBook->addSection('Saving data');
         $lap = $profiler->start('Saving data');
@@ -506,12 +505,45 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         if (null !== $checksUxon = $this->getToDataChecksUxon()) {
             $this->performDataChecks($toSheet, $checksUxon, 'to_data_checks', $stepData, $logbook);
         }
-        
+
+        // Extract match aliases from schema.
+        $matchAliasesFromSchema = [];
+        if (empty($this->getUpdateIfMatchingAttributeAliases())) {
+            $toObjectSchema = $this->getAPISchema($stepData)->getObjectSchema($toSheet->getMetaObject());
+            if($toObjectSchema->isUpdateIfMatchingAttributes()) {
+                $matchAliasesFromSchema = $toObjectSchema->getUpdateIfMatchingAttributeAliases();
+                $this->setUpdateIfMatchingAttributes($matchAliasesFromSchema);
+            }
+        }
+
         // Separate CREATEs from UPDATEs
         if (null !== $matcher = $this->getDuplicatesMatcher($toSheet, $logbook)) {
             $logbook->addSection('Finding existing data (duplicates)');
             $lap = $stepData->getProfiler()->start('Finding existing data (duplicates)');
-            $matchCollection = $matcher->getMatchesToUpdate($logbook);
+
+            if(!empty($matchAliasesFromSchema)) {
+                $hint = ' Refer to the property "' . OpenAPI3ObjectSchema::X_UPDATE_IF_MATCHING_ATTRIBUTES . '" in your OpenApi Definition' .
+                    ' for object "' . $toSheet->getMetaObject()->getAlias() . '".';
+                
+                $logbook->addLine('Found "' . OpenAPI3ObjectSchema::X_UPDATE_IF_MATCHING_ATTRIBUTES . 
+                    '" in schema. Will check for duplicates using these aliases ' . json_encode($matchAliasesFromSchema) . '.');
+            } else {
+                $hint = ' Refer to the property "update_if_matching_attributes" in your step definition.';
+            }
+
+            try {
+                $matchCollection = $matcher->getMatchesToUpdate($logbook);
+            } catch (DataMatcherError $e) {
+                throw new DataMatcherError(
+                    $matcher,
+                    $e->getMessage() . $hint,
+                    '7PNKJ51',
+                    null,
+                    $logbook,
+                    $e->getMatch()
+                );
+            }
+
             $lap->stop();
 
             if (! $matcher->hasMatches()) {
@@ -623,10 +655,19 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
         $baseSheet = $this->createBaseDataSheet($placeholders);
         
         foreach ($baseSheet->getColumns() as $baseCol) {
-            if (! $mappedSheet->getColumns()->getByExpression($baseCol->getExpressionObj())) {
+            $mappedCol = $mappedSheet->getColumns()->getByExpression($baseCol->getExpressionObj());
+            
+            // If the column exists, but is empty, we overwrite it with the base column.
+            if($mappedCol && $mappedCol->isEmpty(true)) {
+                $mappedSheet->getColumns()->remove($mappedCol);
+                $mappedCol = false;
+            }
+
+            if (!$mappedCol) {
                 $mappedSheet->getColumns()->add($baseCol);
             }
         }
+        
         foreach ($mappedSheet->getColumns() as $column) {
             if(!$column->isFresh() && $column->isFormula()) {
                 try {
@@ -723,21 +764,38 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
             'from_object_alias' => $fromObj->getAliasWithNamespace(),
             'to_object_alias' => $object->getAliasWithNamespace()
         ]);
+        
+        // We loop over mappings and apply them via `appendToProperty` to ensure that they do not
+        // overwrite existing mappings. 
+        foreach ($col2col as $mapping) {
+            $uxon->appendToProperty('column_to_column_mappings', $mapping);
+        }
+        
+        foreach ($lookups as $mapping) {
+            $uxon->appendToProperty('lookup_mappings', $mapping);
+        }
+        
+        // We apply custom mappings last as their results would be overridden by any mapping from the OpenAPI definition.
         if (null !== $customMapperUxon = $this->getPropertiesToDataMapperUxon()) {
-            $uxon = $customMapperUxon->extend($uxon);
+            foreach ($customMapperUxon->getPropertiesAll() as $prop => $value) {
+                if(!$value instanceof UxonObject) {
+                    continue;
+                }
+                
+                foreach ($value->toArray() as $mapping) {
+                    $uxon->appendToProperty($prop, $mapping);
+                }
+            }
         }
-        if (! empty($col2col)) {
-            $uxon->setProperty('column_to_column_mappings', new UxonObject($col2col));
-        }
-        if (! empty($lookups)) {
-            $uxon->setProperty('lookup_mappings', new UxonObject($lookups));
-        }
+        
         // TODO Add DataColumnToJsonMapping's here
         return DataSheetMapperFactory::createFromUxon($this->getWorkbench(), $uxon);
     }
 
     /**
      * Custom mapper to map properties of the API schema to the data sheet.
+     * 
+     * NOTE: This mapper will ALWAYS have `from_object_alias` and `to_object_alias` defined by the step.
      * 
      * @uxon-type \exface\Core\CommonLogic\DataSheets\DataSheetMapper
      * @uxon-property properties_to_data_sheet_mapper
