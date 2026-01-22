@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2023-10-18 16:18:11",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2025-01-22 22:22:15",
+    "modified_on": "2026-01-22 14:09:22",
     "contents": {
         "widget_type": "SplitVertical",
         "object_alias": "axenox.ETL.webservice",
@@ -144,6 +144,10 @@
                                             {
                                                 "attribute_alias": "AUTHORIZATION_POLICY__UID:COUNT",
                                                 "caption": "Policies"
+                                            },
+                                            {
+                                                "attribute_alias": "USER_ROLE_USERS__USER:COUNT",
+                                                "caption": "Users"
                                             }
                                         ],
                                         "sorters": [
@@ -167,7 +171,8 @@
                                                 "action_alias": "exface.Core.DeleteObject",
                                                 "visibility": "optional"
                                             }
-                                        ]
+                                        ],
+                                        "id": "roles_table"
                                     }
                                 ]
                             },
@@ -182,26 +187,48 @@
                                             {
                                                 "attribute_alias": "USER_POLICY__POLICY__TARGET_FACADE",
                                                 "value": "axenox/etl/Facades/DataFlowFacade.php",
-                                                "hidden": true
+                                                "hidden": true,
+                                                "apply_to_aggregates": false
+                                            },
+                                            {
+                                                "attribute_alias": "USER_ROLE_USERS__USER_ROLE",
+                                                "value": "=roles_table!UID",
+                                                "hidden": true,
+                                                "apply_on_change": true,
+                                                "apply_to_aggregates": false
                                             }
                                         ],
                                         "columns": [
                                             {
+                                                "attribute_alias": "DISABLED_FLAG",
+                                                "caption": "D",
+                                                "hint": "Shows if user is disabled"
+                                            },
+                                            {
                                                 "attribute_alias": "USERNAME"
                                             },
                                             {
-                                                "attribute_alias": "DISABLED_FLAG"
-                                            },
-                                            {
-                                                "attribute_alias": "USER_ROLE_USERS__USER_ROLE__LABEL:LIST_DISTINCT"
+                                                "attribute_alias": "USER_API_KEY__UID:COUNT",
+                                                "caption": "Keys",
+                                                "hint": "Number of API keys"
                                             },
                                             {
                                                 "attribute_alias": "USER_CREDENTIALS__UID:COUNT",
-                                                "caption": "=Translate('exface.Core', 'PAGE.USERS.CREDENTIALS')"
+                                                "caption": "Creds",
+                                                "hint": "Number of saved credentials"
+                                            },
+                                            {
+                                                "attribute_alias": "PASSWORD_FLAG",
+                                                "caption": "Pwd.",
+                                                "hint": "User has password"
                                             },
                                             {
                                                 "attribute_alias": "USER_AUTHENTICATOR__LAST_AUTHENTICATED_ON:MAX",
                                                 "caption": "=Translate('exface.Core', 'PAGE.USERS.LAST_LOGIN')"
+                                            },
+                                            {
+                                                "attribute_alias": "USER_ROLE_USERS__USER_ROLE__LABEL:LIST_DISTINCT",
+                                                "caption": "Roles"
                                             }
                                         ],
                                         "sorters": [
@@ -230,8 +257,8 @@
                                 ]
                             },
                             {
-                                "caption": "Policies",
-                                "width": "40%",
+                                "caption": "Policies for DataFlowFacade",
+                                "width": "33%",
                                 "widgets": [
                                     {
                                         "widget_type": "DataTable",
@@ -246,13 +273,14 @@
                                         ],
                                         "columns": [
                                             {
+                                                "attribute_alias": "DISABLED_FLAG",
+                                                "caption": "On"
+                                            },
+                                            {
                                                 "attribute_alias": "EFFECT"
                                             },
                                             {
                                                 "attribute_alias": "NAME"
-                                            },
-                                            {
-                                                "attribute_alias": "DISABLED_FLAG"
                                             },
                                             {
                                                 "attribute_alias": "AUTHORIZATION_POINT__LABEL"
