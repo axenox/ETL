@@ -11,7 +11,7 @@
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2023-10-18 16:18:11",
     "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2026-01-22 14:09:22",
+    "modified_on": "2026-01-22 14:19:37",
     "contents": {
         "widget_type": "SplitVertical",
         "object_alias": "axenox.ETL.webservice",
@@ -123,7 +123,7 @@
                         "widget_type": "SplitHorizontal",
                         "panels": [
                             {
-                                "caption": "Roles",
+                                "caption": "Roles with policies for DataFlowFacade",
                                 "width": "20%",
                                 "widgets": [
                                     {
@@ -177,7 +177,7 @@
                                 ]
                             },
                             {
-                                "caption": "Users",
+                                "caption": "Users with policies for DataFlowFacade",
                                 "widgets": [
                                     {
                                         "widget_type": "DataTable",
