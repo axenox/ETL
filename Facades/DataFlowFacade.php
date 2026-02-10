@@ -3,6 +3,7 @@ namespace axenox\ETL\Facades;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\WebFlowTask;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
@@ -11,12 +12,10 @@ use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Exceptions\UnavailableError;
 use Flow\JSONPath\JSONPathException;
 use GuzzleHttp\Psr7\Response;
-use Intervention\Image\Exception\NotFoundException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use axenox\ETL\Actions\RunETLFlow;
 use exface\Core\CommonLogic\Selectors\ActionSelector;
-use exface\Core\CommonLogic\Tasks\HttpTask;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\Facades\FacadeRoutingError;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
@@ -111,7 +110,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 	protected function runFlow(string $flowAlias, ServerRequestInterface $request): ResultInterface
 	{
         $taskData = $this->loggingMiddleware->getTaskData($request);
-		$task = new HttpTask($this->getWorkbench(), $this, $request);
+		$task = new WebFlowTask($this->getWorkbench(), $this, $request);
 		$task->setInputData($taskData);
 
 		$actionSelector = new ActionSelector($this->getWorkbench(), RunETLFlow::class);
