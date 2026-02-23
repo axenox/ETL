@@ -13,6 +13,7 @@ use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\FormulaFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use JsonPath\JsonObject;
 
 /**
  * Represents an OpenAPI 3.x schema bound to a meta object
@@ -36,6 +37,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     private $openAPISchema = null;
     private $jsonSchema = null;
+    private $jsonValidationSchema = null;
     private $properties = null;
     private $object = null;
     private $updateIfMatchingAttributeAliases = [];
@@ -44,6 +46,32 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     {
         $this->openAPISchema = $model;
         $this->jsonSchema = $jsonSchema;
+
+        // Validation expects "nullable" properties to be represented by "type":["actualType","null"], which is not 
+        // intuitive for designers, so we append the "null" here.
+        try {
+            $jsonObject = new JsonObject($jsonSchema);
+
+            foreach($jsonObject->getJsonObjects('$..properties[?(@.nullable == true)]') as $nullableProperty) {
+                $type = $nullableProperty->get('$.type');
+
+                // Don't perform any work if the type is already nullable OR if the type wasn't specified.
+                if(empty($type) || in_array('null', $type)) {
+                    continue;
+                }
+
+                $value = ['null'];
+                foreach ($type as $typeValue) {
+                    $value[] = $typeValue;
+                }
+                
+                $nullableProperty->set('$.type', $value);
+            }
+
+            $this->jsonValidationSchema = $jsonObject->getValue();
+        } catch (\Throwable $exception) {
+            $this->jsonValidationSchema = $jsonSchema;
+        }
     }
 
     public function getAPI() : APISchemaInterface
@@ -301,7 +329,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function validateRow(array $properties) : array
     {
         $rowObj = json_decode(json_encode($properties));
-        $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonSchema);
+        $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonValidationSchema);
         return $properties;
     }
 
