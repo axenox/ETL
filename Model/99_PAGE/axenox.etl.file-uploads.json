@@ -10,8 +10,8 @@
     "replaces_page_selector": null,
     "created_by_user_selector": "0x31000000000000000000000000000000",
     "created_on": "2024-09-09 09:21:59",
-    "modified_by_user_selector": "0x31000000000000000000000000000000",
-    "modified_on": "2025-11-04 18:08:16",
+    "modified_by_user_selector": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+    "modified_on": "2026-03-04 11:37:28",
     "contents": {
         "object_alias": "axenox.ETL.file_flow",
         "widget_type": "SplitHorizontal",
@@ -154,7 +154,7 @@
                                                         "to_object_alias": "axenox.ETL.flow_run",
                                                         "column_to_column_mappings": [
                                                             {
-                                                                "from": "flow",
+                                                                "from": "flow_run",
                                                                 "to": "UID"
                                                             }
                                                         ]
