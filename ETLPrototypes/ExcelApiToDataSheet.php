@@ -10,6 +10,7 @@ use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
 use exface\Core\DataTypes\SemanticVersionDataType;
+use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -192,19 +193,23 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
         if ($this->isValidatingApiSchema()) {
             $logBook->addIndent(1);
-            $rowErrors = [];
+            $errors = new DataSheetErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
+            
             foreach ($fromSheet->getRows() as $i => $row) {
                 try {
                     $toObjectSchema->validateRow($row);
                 } catch (JsonSchemaValidationError $e) {
-                    $msg = $e->getMessage();
-                    $logBook->addLine($msg);
-                    $rowErrors[$i+1] = $msg;
+                    foreach ($e->getErrors() as $error) {
+                        $msg = 'Property "' . $error['property'] . '": ' . $error['message'];
+                        $errors->appendError(new RuntimeException($msg, $e), $i + 1, false);
+                    }
                 }
             }
+            
             $logBook->addIndent(-1);
-            if (count($rowErrors) > 0) {
-                throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
+            if ($errors->countErrors() > 0) {
+                $errors->updateMessage();
+                throw $errors;
             }
         }
         
