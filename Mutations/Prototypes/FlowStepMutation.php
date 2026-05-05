@@ -10,6 +10,7 @@ use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Mutations\AppliedMutationInterface;
 use exface\Core\Mutations\AppliedMutationOnArray;
+use exface\Core\Mutations\Prototypes\GenericUxonMutation;
 
 class FlowStepMutation extends AbstractMutation
 {
@@ -29,12 +30,14 @@ class FlowStepMutation extends AbstractMutation
             throw new InvalidArgumentException('Cannot apply flow step mutation to ' . get_class($subject) . ' - subject must be an ETLStepInterface!');
         }
 
+        $uxon = $subject->exportUxonObject();
+        
         /* @var $subject ETLStepInterface */
         $stateBefore = [
             'name'        => $subject->getName(),
             'from_object' => $subject->getFromObject()->getAliasWithNamespace(),
             'to_object'   => $subject->getToObject()->getAliasWithNamespace(),
-            'uxon'        => $subject->exportUxonObject()->toArray(),
+            'uxon'        => $uxon->toArray()
         ];
 
         if ($this->changeName !== null) {
@@ -47,14 +50,16 @@ class FlowStepMutation extends AbstractMutation
             $subject->setToObject(MetaObjectFactory::createFromString($this->getWorkbench(), $this->changeToObject));
         }
         if ($this->changeUxon !== null) {
-            $subject->importUxonObject($this->changeUxon);
+            $mutation = new GenericUxonMutation($this->getWorkbench(), $this->changeUxon);
+            $mutation->apply($uxon);
+            $subject->importUxonObject($uxon);
         }
 
         $stateAfter = [
             'name'        => $subject->getName(),
             'from_object' => $subject->getFromObject()->getAliasWithNamespace(),
             'to_object'   => $subject->getToObject()->getAliasWithNamespace(),
-            'uxon'        => $subject->exportUxonObject()->toArray(),
+            'uxon'        => $uxon->toArray(),
         ];
 
         return new AppliedMutationOnArray($this, $subject, $stateBefore, $stateAfter);
