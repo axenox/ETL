@@ -2,6 +2,7 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\ETLPrototypes\StepGroup;
+use axenox\ETL\Events\Flow\OnDataFlowLoaded;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
 use exface\Core\Interfaces\WorkbenchInterface;
@@ -24,6 +25,7 @@ class DataFlow implements DataFlowInterface
     private $name = null;
     private $alias = null;
     private $version = null;
+    private $description = null;
     private $uid;
     private $rootStepGroup = null;
     
@@ -34,13 +36,15 @@ class DataFlow implements DataFlowInterface
         $this->name = $name;
         $this->alias = $alias;
         $this->version = $version;
+        
+        $this->getWorkbench()->eventManager()->dispatch(new OnDataFlowLoaded($this));
     }
     
     /**
      * 
      * @return StepGroup
      */
-    protected function getStepGroup() : StepGroup
+    public function getStepGroup() : StepGroup
     {
         if ($this->rootStepGroup === null) {
             $this->rootStepGroup = new StepGroup($this, $this->getName());
@@ -95,6 +99,45 @@ class DataFlow implements DataFlowInterface
     public function getName(): string
     {
         return $this->name;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setName()
+     */
+    public function setName(string $name): DataFlowInterface
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::getDescription()
+     */
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setDescription()
+     */
+    public function setDescription(string $description): DataFlowInterface
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setVersion()
+     */
+    public function setVersion(string $version): DataFlowInterface
+    {
+        $this->version = $version;
+        return $this;
     }
 
     /**

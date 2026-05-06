@@ -99,6 +99,7 @@ class StepGroup implements DataFlowStepInterface
         // entire flow and maybe also some input data.
 
         $steps = $this->getSteps();
+        
         $nr = $startPosNo;
         foreach ($steps as $step) {
             $nr++;
@@ -235,6 +236,16 @@ class StepGroup implements DataFlowStepInterface
     public function getName() : string
     {
         return $this->name;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowStepInterface::setName()
+     */
+    public function setName(string $name) : DataFlowStepInterface
+    {
+        $this->name = $name;
+        return $this;
     }
     
     /**
@@ -518,7 +529,7 @@ class StepGroup implements DataFlowStepInterface
      * @throws ActionRuntimeError
      * @return DataFlowStepInterface[]
      */
-    protected function getSteps() : array
+    public function getSteps() : array
     {
         if ($this->stepsLoaded !== null) {
             return $this->stepsLoaded;
@@ -586,12 +597,8 @@ class StepGroup implements DataFlowStepInterface
             }
         }
         
-        if ($disabledCompletely === true) {
-            return [];
-        }
-        
         $this->stepsLoaded = $loadedSteps;
-        return $steps;
+        return $disabledCompletely ? [] : $steps;
     }
 
     protected function countSteps() : int
