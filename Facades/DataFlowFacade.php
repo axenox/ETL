@@ -5,7 +5,7 @@ use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Common\WebFlowTask;
 use axenox\ETL\Common\WebserviceInfo;
-use axenox\ETL\Events\OnWebServiceLoaded;
+use axenox\ETL\Events\OnWebserviceLoaded;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
@@ -402,7 +402,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             $this
         ));
         
-        $this->getWorkbench()->eventManager()->dispatch(new OnWebServiceLoaded($result));
+        $this->getWorkbench()->eventManager()->dispatch(new OnWebserviceLoaded($result));
         return $result;
     }
 

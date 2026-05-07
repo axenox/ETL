@@ -9,12 +9,12 @@ use exface\Core\Interfaces\WorkbenchInterface;
 /**
  * Event triggered when an `ApiSchema` is done loading and ready to be altered.
  *
- * @event axenox.ETL.OnWebServiceLoaded
+ * @event axenox.ETL.OnWebserviceLoaded
  *
  * @author Georg Bieger
  *
  */
-class OnWebServiceLoaded extends AbstractEvent
+class OnWebserviceLoaded extends AbstractEvent
 {
     private ?LogBookInterface $logBook;
     
@@ -36,7 +36,7 @@ class OnWebServiceLoaded extends AbstractEvent
      */
     public static function getEventName() : string
     {
-        return "axenox.ETL.OnWebServiceLoaded";
+        return "axenox.ETL.OnWebserviceLoaded";
     }
 
     /**

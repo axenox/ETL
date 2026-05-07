@@ -2,14 +2,14 @@
 
 namespace axenox\ETL\Mutations\MutationPoints;
 
-use axenox\ETL\Events\OnWebServiceLoaded;
+use axenox\ETL\Events\OnWebserviceLoaded;
 use exface\Core\CommonLogic\Mutations\AbstractMutationPoint;
 use exface\Core\Events\Mutations\OnMutationsAppliedEvent;
 use exface\Core\Mutations\MetaObjectUidMutationTarget;
 
 class WebserviceMutationPoint extends AbstractMutationPoint
 {
-    public static function onWebserviceLoadedApplyMutations(OnWebServiceLoaded $event) : void
+    public static function onWebserviceLoadedApplyMutations(OnWebserviceLoaded $event) : void
     {
         $point = $event->getWorkbench()->getMutator()->getMutationPoint(self::class);
         
