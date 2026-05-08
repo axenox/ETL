@@ -2,6 +2,7 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
+use axenox\ETL\Common\WebserviceInfo;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -129,8 +130,14 @@ class OpenAPI3 implements APISchemaInterface
     private mixed $openAPIJsonObj;
     private ?OpenApi $openAPISchema;
     private ?string $apiVersion = null;
+    private ?WebserviceInfo $info;
 
-    public function __construct(WorkbenchInterface $workbench, string $openAPIJson, string $apiVersion = null)
+    public function __construct(
+        WorkbenchInterface $workbench,
+        string $openAPIJson,
+        string $apiVersion = null,
+        WebserviceInfo $info = null
+    )
     {
         // Use local version of JSONPathLexer with edit to
         // Make sure to require BEFORE the JSONPath classes are loaded, so that the custom lexer replaces
@@ -146,11 +153,25 @@ class OpenAPI3 implements APISchemaInterface
         $this->workbench = $workbench;
         $this->openAPIJson = $openAPIJson;
         $this->apiVersion = $apiVersion;
+        $this->info = $info;
 
         $jsonArray = json_decode($openAPIJson, true);
         $jsonArray = $this->enhanceSchema($jsonArray);
+        $this->updateSchema($jsonArray);
+    }
+
+    /**
+     * Update the internal schema with a new value.
+     * 
+     * @param array $schemaArray
+     * @return void
+     * @throws \cebe\openapi\exceptions\TypeErrorException
+     * @throws \cebe\openapi\exceptions\UnresolvableReferenceException
+     */
+    protected function updateSchema(array $schemaArray) : void
+    {
         // Instatiate a cebe/openapi schema and use it to resolve references
-        $schema = new OpenApi($jsonArray);
+        $schema = new OpenApi($schemaArray);
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
 
         $this->openAPIJsonObj = $schema->getSerializableData();
@@ -185,6 +206,26 @@ class OpenAPI3 implements APISchemaInterface
         return OpenAPISchema::class;
     }
 
+    /**
+     * @return WebserviceInfo|null
+     */
+    public function getWebserviceInfo() : WebserviceInfo|null
+    {
+        return $this->info;
+    }
+
+    /**
+     * Provide additional information about this webservice.
+     * 
+     * @param WebserviceInfo $info
+     * @return APISchemaInterface
+     */
+    public function setWebserviceInfo(WebserviceInfo $info) : APISchemaInterface
+    {
+        $this->info = $info;
+        return $this;
+    }
+    
     /**
      * @see APISchemaInterface::getRouteForRequest()
      */
@@ -474,6 +515,28 @@ class OpenAPI3 implements APISchemaInterface
     protected function sanitizeForJsonPath(string $string) : string
     {
         return preg_replace('/\./', '_', $string);
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Performs a deep merge of the given UXON over the current OpenAPI JSON structure.
+     * Scalar values in the incoming UXON overwrite existing values; array/object values
+     * are merged recursively.
+     *
+     * @see \axenox\ETL\Common\OpenAPI\OpenAPI3UxonTrait::importUxonObject()
+     */
+    public function importUxonObject(UxonObject $uxon, array $skip_property_names = []) : void
+    {
+        $incoming = $uxon->toArray();
+        if (! empty($skip_property_names)) {
+            foreach ($skip_property_names as $key) {
+                unset($incoming[$key]);
+            }
+        }
+        
+        $modifiedArray = array_replace_recursive($this->openAPIJsonArray ?? [], $incoming);
+        $this->updateSchema($modifiedArray);
     }
 
     public function publish(string $baseUrl) : string

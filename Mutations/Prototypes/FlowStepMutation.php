@@ -31,7 +31,7 @@ class FlowStepMutation extends AbstractMutation
         }
 
         $uxon = $subject->exportUxonObject();
-        
+
         /* @var $subject ETLStepInterface */
         $stateBefore = [
             'name'        => $subject->getName(),

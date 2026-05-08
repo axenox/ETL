@@ -55,7 +55,7 @@
         {
             "_EXPORT_SUMMARY": "DataFlow mutation",
             "CREATED_ON": "2026-04-30 14:47:40",
-            "MODIFIED_ON": "2026-04-30 14:47:40",
+            "MODIFIED_ON": "2026-05-05 15:48:53",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "UID": "0x11f1b6b0c60a95fcb6b0978d31e45188",
@@ -63,6 +63,20 @@
             "MUTATION_PROTOTYPE_FILE": "axenox/etl/Mutations/Prototypes/DataFlowMutation.php",
             "DESCRIPTION": "",
             "NAME": "DataFlow mutation",
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "MUTATION_TARGET": "0x11f1a49e1f631166a49e11fcd7d99163"
+        },
+        {
+            "_EXPORT_SUMMARY": "Webservice mutation",
+            "CREATED_ON": "2026-05-05 14:20:04",
+            "MODIFIED_ON": "2026-05-07 09:58:02",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f1a41cbf47e81ca41c8519e56fbbb8",
+            "MUTATION_POINT_FILE": "axenox/etl/Mutations/MutationPoints/WebserviceMutationPoint.php",
+            "MUTATION_PROTOTYPE_FILE": "axenox/etl/Mutations/Prototypes/WebserviceMutation.php",
+            "DESCRIPTION": "",
+            "NAME": "Webservice mutation",
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "MUTATION_TARGET": "0x11f18f2ea2dfc6ec8f2e8bd9afe08dfc"
         }
