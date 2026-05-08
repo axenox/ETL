@@ -24,6 +24,7 @@ class ETLApp extends App
         // Static listeners.
         $staticListenersInstaller = new StaticEventListenerInstaller($this->getSelector());
         $staticListenersInstaller->addListenerToInstall("axenox.ETL.Flow.OnDataFlowLoaded","\\axenox\\ETL\\Mutations\\MutationPoints\\DataFlowMutationPoint::onDataFlowLoadedApplyMutations");
+        $staticListenersInstaller->addListenerToInstall("axenox.ETL.OnWebserviceLoaded", "\\axenox\\ETL\\Mutations\\MutationPoints\\WebserviceMutationPoint::onWebserviceLoadedApplyMutations");
         $installer->addInstaller($staticListenersInstaller);
         
         // Facade
