@@ -143,6 +143,16 @@ class DataFlowMutation extends AbstractMutation
     }
 
     /**
+     * You can insert all steps of a specified dataflow into the subject. You may specify
+     * an index at which you want the steps to be inserted.
+     * 
+     * To improve readability and maintainability, it is recommended to create new dataflows
+     * specifically to be injected via mutations instead of using existing ones.
+     * 
+     * NOTE: Trying to insert a flow into itself will result in an error.
+     * Make sure that the inserted dataflow is not subject of a mutation that inserts
+     * the subject flow.
+     * 
      * @uxon-property insert_data_flows
      * @uxon-type \axenox\ETL\Mutations\Prototypes\InsertDataFlow[]
      * @uxon-template [{"alias_with_version":"", "target_index":""}]
