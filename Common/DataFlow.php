@@ -43,8 +43,9 @@ class DataFlow implements DataFlowInterface
             throw new InvalidArgumentException('Self reference detected in Flow "' . $alias . '". This is probably caused by mutations trying to insert a flow into itself.');
         }
         
-        self::$onLoadedList[] = $uid;
+        self::$onLoadedList[$uid] = $uid;
         $this->getWorkbench()->eventManager()->dispatch(new OnDataFlowLoaded($this));
+        unset(self::$onLoadedList[$uid]);
     }
     
     /**
