@@ -3,6 +3,7 @@
 namespace axenox\ETL\Mutations\Prototypes;
 
 use axenox\ETL\Common\DataFlow;
+use axenox\ETL\Factories\DataFlowFactory;
 use axenox\ETL\Interfaces\DataFlowInterface;
 use exface\Core\CommonLogic\Mutations\AbstractMutation;
 use exface\Core\CommonLogic\UxonObject;
@@ -16,6 +17,7 @@ class DataFlowMutation extends AbstractMutation
     private ?string $changeName = null;
     private ?string $changeVersion = null;
     private ?string $changeDescription = null;
+    private ?array $insertDataFlows = null;
     private ?UxonObject $changeStepsUxon = null;
 
     /**
@@ -26,6 +28,7 @@ class DataFlowMutation extends AbstractMutation
         if (! $this->supports($subject)) {
             throw new InvalidArgumentException('Cannot apply page mutation to ' . get_class($subject) . ' - subject must be a DataFLow!');
         }
+        $workbench = $this->getWorkbench();
 
         /* @var $subject DataFlow */
         $stateBefore = [
@@ -43,8 +46,17 @@ class DataFlowMutation extends AbstractMutation
         if ($this->changeDescription !== null) {
             $subject->setDescription($this->changeDescription);
         }
+        if($this->insertDataFlows !== null) {
+            $subject->getStepGroup()->getSteps();
+            foreach ($this->insertDataFlows as $insertDataFlow) {
+                $flow = DataFlowFactory::createFromString($workbench, $insertDataFlow->getAliasWithVersion());
+                $flow->getStepGroup()->insertIntoOtherGroup(
+                    $subject->getStepGroup(),
+                    $insertDataFlow->getTargetIndex() ?? -1
+                );
+            }
+        }
         if($this->changeStepsUxon !== null) {
-            $workbench = $this->getWorkbench();
             foreach ($this->changeStepsUxon as $stepMutationUxon) {
                 $mutation = new FlowStepMutation($workbench, $stepMutationUxon);
                 $name = $mutation->getStepName();
@@ -122,6 +134,40 @@ class DataFlowMutation extends AbstractMutation
     protected function setChangeDescription(string $value): DataFlowMutation
     {
         $this->changeDescription = $value;
+        return $this;
+    }
+
+    public function getInsertDataFlows(): ?array
+    {
+        return $this->insertDataFlows;
+    }
+
+    /**
+     * You can insert all steps of a specified dataflow into the subject. You may specify
+     * an index at which you want the steps to be inserted.
+     * 
+     * To improve readability and maintainability, it is recommended to create new dataflows
+     * specifically to be injected via mutations instead of using existing ones.
+     * 
+     * NOTE: Trying to insert a flow into itself will result in an error.
+     * Make sure that the inserted dataflow is not subject of a mutation that inserts
+     * the subject flow.
+     * 
+     * @uxon-property insert_data_flows
+     * @uxon-type \axenox\ETL\Mutations\Prototypes\InsertDataFlow[]
+     * @uxon-template [{"alias_with_version":"", "target_index":""}]
+     *
+     * @param UxonObject $insertDataFlows
+     * @return $this
+     */
+    public function setInsertDataFlows(UxonObject $insertDataFlows): DataFlowMutation
+    {
+        $this->insertDataFlows = [];
+        
+        foreach ($insertDataFlows as $insertDataFlow) {
+            $this->insertDataFlows[] = InsertDataFlow::fromUxon($insertDataFlow);
+        }
+        
         return $this;
     }
 
