@@ -5,6 +5,7 @@ use axenox\ETL\ETLPrototypes\StepGroup;
 use axenox\ETL\Events\Flow\OnDataFlowLoaded;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Interfaces\WorkbenchInterface;
 use axenox\ETL\Interfaces\DataFlowInterface;
 
@@ -21,6 +22,7 @@ class DataFlow implements DataFlowInterface
 {
     use ImportUxonObjectTrait;
     
+    private static array $onLoadedList = [];
     private $workbench = null;
     private $name = null;
     private $alias = null;
@@ -37,7 +39,13 @@ class DataFlow implements DataFlowInterface
         $this->alias = $alias;
         $this->version = $version;
         
+        if(in_array($uid, self::$onLoadedList)) {
+            throw new InvalidArgumentException('Self reference detected in Flow "' . $alias . '". This is probably caused by mutations trying to insert a flow into itself.');
+        }
+        
+        self::$onLoadedList[$uid] = $uid;
         $this->getWorkbench()->eventManager()->dispatch(new OnDataFlowLoaded($this));
+        unset(self::$onLoadedList[$uid]);
     }
     
     /**

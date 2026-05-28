@@ -27,7 +27,7 @@ class FlowStepMutation extends AbstractMutation
     public function apply($subject): AppliedMutationInterface
     {
         if (! $this->supports($subject)) {
-            throw new InvalidArgumentException('Cannot apply flow step mutation to ' . get_class($subject) . ' - subject must be an ETLStepInterface!');
+            throw new InvalidArgumentException('Cannot apply flow step mutation to ' . get_class($subject) . ' - subject not supported!');
         }
 
         $uxon = $subject->exportUxonObject();
