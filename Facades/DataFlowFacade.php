@@ -4,6 +4,8 @@ namespace axenox\ETL\Facades;
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Common\WebFlowTask;
+use axenox\ETL\Common\WebserviceInfo;
+use axenox\ETL\Events\OnWebserviceLoaded;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
@@ -370,7 +372,38 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         $schemaClass = $routeData['type__schema_class'];
         $version = $routeData['version'];
-        return new $schemaClass($this->getWorkbench(), $json, $version);
+        $result = new $schemaClass($this->getWorkbench(), $json, $version);
+
+        $webserviceUid = $routeData['UID'];
+        $webserviceName = null;
+        $webserviceVersion = null;
+
+        if(!empty($webserviceUid)) {
+            $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
+            $ds->getColumns()->addMultiple([
+                'name',
+                'version',
+                'UID',
+            ]);
+
+            $ds->getFilters()->addConditionFromString('UID', $webserviceUid);
+            if($ds->dataRead() > 0) {
+                $row = $ds->getRow();
+                $webserviceName = $row['name'];
+                $webserviceVersion = $row['version'];
+            }
+        }
+        
+        $result->setWebserviceInfo(new WebserviceInfo(
+            $webserviceName,
+            $webserviceVersion,
+            $webserviceUid,
+            $result,
+            $this
+        ));
+        
+        $this->getWorkbench()->eventManager()->dispatch(new OnWebserviceLoaded($result));
+        return $result;
     }
 
     /**

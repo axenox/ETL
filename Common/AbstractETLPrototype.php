@@ -125,6 +125,16 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     {
         return $this->name;
     }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowStepInterface::setName()
+     */
+    public function setName(string $name) : ETLStepInterface
+    {
+        $this->name = $name;
+        return $this;
+    }
     
     /**
      * 
@@ -251,6 +261,16 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     {
         return $this->fromObject;
     }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\ETLStepInterface::setFromObject()
+     */
+    public function setFromObject(MetaObjectInterface $object) : ETLStepInterface
+    {
+        $this->fromObject = $object;
+        return $this;
+    }
     
     /**
      * 
@@ -260,6 +280,16 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     public function getToObject() : MetaObjectInterface
     {
         return $this->toObject;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\ETLStepInterface::setToObject()
+     */
+    public function setToObject(MetaObjectInterface $object) : ETLStepInterface
+    {
+        $this->toObject = $object;
+        return $this;
     }
     
     /**

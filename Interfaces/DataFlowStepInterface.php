@@ -36,6 +36,14 @@ interface DataFlowStepInterface extends WorkbenchDependantInterface, iCanBeConve
     public function setDisabled(bool $value) : DataFlowStepInterface;
     
     public function getName() : string;
+
+    /**
+     * Sets the display name of the step.
+     *
+     * @param string $name
+     * @return DataFlowStepInterface
+     */
+    public function setName(string $name) : DataFlowStepInterface;
     
     /**
      * Returns the maximum time this step is allowed to run in seconds.

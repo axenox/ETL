@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL;
 
+use exface\Core\CommonLogic\AppInstallers\StaticEventListenerInstaller;
 use exface\Core\Interfaces\InstallerInterface;
 use exface\Core\CommonLogic\Model\App;
 use exface\Core\CommonLogic\AppInstallers\AbstractSqlDatabaseInstaller;
@@ -19,6 +20,12 @@ class ETLApp extends App
     public function getInstaller(InstallerInterface $injected_installer = null)
     {
         $installer = parent::getInstaller($injected_installer);
+
+        // Static listeners.
+        $staticListenersInstaller = new StaticEventListenerInstaller($this->getSelector());
+        $staticListenersInstaller->addListenerToInstall("axenox.ETL.Flow.OnDataFlowLoaded","\\axenox\\ETL\\Mutations\\MutationPoints\\DataFlowMutationPoint::onDataFlowLoadedApplyMutations");
+        $staticListenersInstaller->addListenerToInstall("axenox.ETL.OnWebserviceLoaded", "\\axenox\\ETL\\Mutations\\MutationPoints\\WebserviceMutationPoint::onWebserviceLoadedApplyMutations");
+        $installer->addInstaller($staticListenersInstaller);
         
         // Facade
         $tplInstaller = new HttpFacadeInstaller($this->getSelector());

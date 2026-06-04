@@ -12,6 +12,7 @@ use exface\Core\DataTypes\MessageTypeDataType;
 use exface\Core\DataTypes\TimeDataType;
 use exface\Core\Exceptions\InternalError;
 use exface\Core\Exceptions\RuntimeException;
+use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Widgets\DebugMessage;
 use axenox\ETL\Interfaces\ETLStepResultInterface;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
@@ -99,6 +100,7 @@ class StepGroup implements DataFlowStepInterface
         // entire flow and maybe also some input data.
 
         $steps = $this->getSteps();
+        
         $nr = $startPosNo;
         foreach ($steps as $step) {
             $nr++;
@@ -235,6 +237,16 @@ class StepGroup implements DataFlowStepInterface
     public function getName() : string
     {
         return $this->name;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowStepInterface::setName()
+     */
+    public function setName(string $name) : DataFlowStepInterface
+    {
+        $this->name = $name;
+        return $this;
     }
     
     /**
@@ -518,7 +530,7 @@ class StepGroup implements DataFlowStepInterface
      * @throws ActionRuntimeError
      * @return DataFlowStepInterface[]
      */
-    protected function getSteps() : array
+    public function getSteps() : array
     {
         if ($this->stepsLoaded !== null) {
             return $this->stepsLoaded;
@@ -552,46 +564,138 @@ class StepGroup implements DataFlowStepInterface
         
         $disabledCompletely = true;
         $steps = [];
-        $loadedSteps = [];
+        $this->stepsLoaded = [];
+        
         foreach ($ds->getRows() as $row) {
             $stepConfig = UxonObject::fromAnything($row['etl_config_uxon'] ?? []);
-            if ($row['etl_prototype'] === 'axenox/etl/ETLPrototypes/StepGroup.php') {
-                $step = new StepGroup($this->getFlow(), $row['name'], $this, $stepConfig);
+            $toObj = MetaObjectFactory::createFromString($this->getWorkbench(), $row['to_object']);
+            if ($row['from_object']) {
+                $fromObj = MetaObjectFactory::createFromString($this->getWorkbench(), $row['from_object']);
             } else {
-                $toObj = MetaObjectFactory::createFromString($this->getWorkbench(), $row['to_object']);
-                if ($row['from_object']) {
-                    $fromObj = MetaObjectFactory::createFromString($this->getWorkbench(), $row['from_object']);
-                } else {
-                    $fromObj = $toObj;
-                }
-                $step = ETLStepFactory::createFromFile(
-                    $row['etl_prototype'],
-                    $row['name'],
-                    $toObj,
-                    $fromObj,
-                    $stepConfig
-                );
+                $fromObj = $toObj;
             }
             
-            $step->setDisabled(BooleanDataType::cast($row['disabled']));
+            $step = $this->createStep(
+                $row['etl_prototype'],
+                $row['name'],
+                $row['UID'],
+                $stepConfig,
+                $fromObj,
+                $toObj,
+                $row['stop_flow_on_error'] ?? false,
+                BooleanDataType::cast($row['disabled'])
+            );
+            
             if ($step->isDisabled() === false) {
                 $disabledCompletely = false;
             }
-            
-            $steps[] = $step;
-            $loadedSteps[$row['UID']] = $step;
-            
-            if ($row['stop_flow_on_error']) {
-                $this->flowStoppers[] = $step;
+
+            $steps[$row['UID']] = $step;
+        }
+
+        return $disabledCompletely ? [] : $steps;
+    }
+
+    /**
+     * Creates a new step form data and adds it to this group.
+     * 
+     * @param string              $protoType
+     * @param string              $name
+     * @param string              $uid
+     * @param UxonObject          $config
+     * @param MetaObjectInterface $fromObject
+     * @param MetaObjectInterface $toObject
+     * @param bool                $stopOnError
+     * @param bool                $disabled
+     * @return ETLStepInterface
+     */
+    protected function createStep(
+        string $protoType,
+        string $name,
+        string $uid,
+        UxonObject $config,
+        MetaObjectInterface $fromObject,
+        MetaObjectInterface $toObject,
+        bool $stopOnError = false,
+        bool $disabled = false,
+    ) : ETLStepInterface
+    {
+        if ($protoType === 'axenox/etl/ETLPrototypes/StepGroup.php') {
+            $step = new StepGroup($this->getFlow(), $name, $this, $config);
+        } else {
+            $step = ETLStepFactory::createFromFile(
+                $protoType,
+                $name,
+                $toObject,
+                $fromObject,
+                $config
+            );
+        }
+
+        $step->setDisabled($disabled);
+        $this->addStep($step, $uid, $stopOnError);
+        return $step;
+    }
+
+    /**
+     * Add a step to this group. You may specify an index at which the step should be inserted.
+     * 
+     * @param DataFlowStepInterface $step
+     * @param string                $uid
+     * @param bool                  $stopOnError
+     * @param int                   $index
+     * @return $this
+     */
+    public function addStep(DataFlowStepInterface $step, string $uid, bool $stopOnError = false, int $index = -1) : StepGroup    
+    {
+        if ($stopOnError) {
+            $this->flowStoppers[$uid] = $step;
+        }
+
+        if($index < 0 || empty($this->stepsLoaded)) {
+            $this->stepsLoaded[$uid] = $step;
+        } else {
+            $buffer = $this->stepsLoaded ?? [];
+            $this->stepsLoaded = [];
+            $currentIndex = 0;
+            $index = min($index, count($buffer) -1);
+
+            foreach ($buffer as $bufferUid => $bufferStep) {
+                if($index === $currentIndex) {
+                    $this->stepsLoaded[$uid] = $step;
+                }
+
+                $this->stepsLoaded[$bufferUid] = $bufferStep;
+                $currentIndex++;
             }
         }
         
-        if ($disabledCompletely === true) {
-            return [];
+        return $this;
+    }
+
+    /**
+     * Inserts the steps of this group into another group. You may specify an index at which the step should be inserted.
+     * 
+     * @param StepGroup $otherGroup
+     * @param int       $index
+     * @return $this
+     */
+    public function insertIntoOtherGroup(StepGroup $otherGroup, int $index = -1) : StepGroup
+    {
+        foreach ($this->getSteps() as $uid => $step) {
+            $otherGroup->addStep(
+                $step,
+                $uid,
+                $this->flowStoppers[$uid] !== null,
+                $index
+            );
+            
+            if($index > -1) {
+                $index++;
+            }
         }
         
-        $this->stepsLoaded = $loadedSteps;
-        return $steps;
+        return $this;
     }
 
     protected function countSteps() : int
