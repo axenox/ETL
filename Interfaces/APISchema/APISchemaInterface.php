@@ -1,6 +1,7 @@
 <?php
 namespace axenox\ETL\Interfaces\APISchema;
 
+use axenox\ETL\Common\WebserviceInfo;
 use exface\Core\Interfaces\iCanBeConvertedToUxon;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
@@ -13,6 +14,10 @@ interface APISchemaInterface extends WorkbenchDependantInterface, iCanBeConverte
 
     public function getRouteForRequest(ServerRequestInterface $request) : APIRouteInterface;
 
+    public function getWebserviceInfo() : WebserviceInfo|null;
+    
+    public function setWebserviceInfo(WebserviceInfo $info) : APISchemaInterface;
+    
     /**
      * Get the validated version of the schema ot be published to external partners
      * 
