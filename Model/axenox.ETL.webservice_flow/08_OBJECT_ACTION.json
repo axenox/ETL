@@ -67,9 +67,9 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create JSON import flow [WebserviceFlowCreateJsonImport]",
             "CREATED_ON": "2025-04-08 12:26:39",
-            "MODIFIED_ON": "2025-07-28 15:50:54",
+            "MODIFIED_ON": "2026-06-16 23:59:29",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f0a700f4f17f94a700025041000001",
             "OBJECT": "0x11ee81f57aaf6a1281f5025041000001",
             "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
@@ -194,9 +194,11 @@
                                                                 "to": "from_object"
                                                             },
                                                             {
+                                                                "/*": "",
                                                                 "//": "step config",
                                                                 "from": "='{\"//doc-timeout\":\"increased timout for large amounts of data to process\",\"timeout\":500,\"//doc-skip_invalid_rows\":\"set to true if you want to accept errors like x-lookup not found and only log them\",\"skip_invalid_rows\":false,\"note_on_success\":{\"message\":\"The import succeeded!\",\"message_type\":\"success\"},\"note_on_failure\":{\"message\":\"The import has failed!\",\"message_type\":\"error\"},\"base_data_sheet\":{\"/*\":\"please implement attribute or change it to an existing equivalent\",\"columns\":[{\"//doc-LAST_IMPORTED_ON\":\"every import should have an attribute to store the last import date\",\"attribute_alias\":\"LAST_IMPORTED_ON\",\"formula\":\"=Now()\"}],\"*/\":\"\"}}'",
-                                                                "to": "etl_config_uxon"
+                                                                "to": "etl_config_uxon",
+                                                                "*/": ""
                                                             }
                                                         ],
                                                         "variable_to_column_mappings": [
@@ -436,6 +438,185 @@
                                                 {
                                                     "variable": "_to_object",
                                                     "to": "to_object"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "alias": "exface.Core.CreateData",
+                                        "input_mapper": {
+                                            "from_object_alias": "axenox.ETL.flow",
+                                            "to_object_alias": "axenox.ETL.webservice_flow",
+                                            "column_to_column_mappings": [
+                                                {
+                                                    "from": "UID",
+                                                    "to": "flow"
+                                                },
+                                                {
+                                                    "from": "name",
+                                                    "to": "route"
+                                                }
+                                            ],
+                                            "variable_to_column_mappings": [
+                                                {
+                                                    "variable": "_webservice_uid",
+                                                    "to": "webservice"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            "APP": "0x11ebbc50679eacdabc50025041000001",
+            "USE_IN_OBJECT_BASKET_FLAG": 0,
+            "DOCS": ""
+        },
+        {
+            "_EXPORT_SUMMARY": "Web route: Create JSON export flow [WebserviceFlowCreateJsonExport]",
+            "CREATED_ON": "2026-06-16 23:57:41",
+            "MODIFIED_ON": "2026-06-17 00:33:40",
+            "CREATED_BY_USER": "0x31000000000000000000000000000000",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
+            "UID": "0x11f1a4f065dcd490a4f0025041000001",
+            "OBJECT": "0x11ee81f57aaf6a1281f5025041000001",
+            "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
+            "ALIAS": "WebserviceFlowCreateJsonExport",
+            "NAME": "Create JSON export flow",
+            "SHORT_DESCRIPTION": "",
+            "CONFIG_UXON": {
+                "input_rows_min": 1,
+                "input_rows_max": 1,
+                "prefill_with_input_data": true,
+                "icon": "plus",
+                "input_mappers": [
+                    {
+                        "from_object_alias": "axenox.ETL.webservice",
+                        "to_object_alias": "axenox.ETL.webservice_flow",
+                        "column_to_column_mappings": [
+                            {
+                                "from": "UID",
+                                "to": "webservice"
+                            },
+                            {
+                                "from": "app",
+                                "to": "webservice__app"
+                            }
+                        ]
+                    }
+                ],
+                "dialog": {
+                    "object_alias": "axenox.ETL.webservice_flow",
+                    "width": 1,
+                    "height": "auto",
+                    "columns_in_grid": 1,
+                    "widgets": [
+                        {
+                            "attribute_alias": "webservice__app",
+                            "widget_type": "InputHidden"
+                        },
+                        {
+                            "attribute_alias": "webservice",
+                            "disabled": true
+                        },
+                        {
+                            "attribute_alias": "route"
+                        },
+                        {
+                            "attribute_alias": "flow__step__from_object",
+                            "required": true,
+                            "caption": "Export from object",
+                            "hint": "The object, that the export flow will be publishing"
+                        }
+                    ],
+                    "buttons": [
+                        {
+                            "visibility": "promoted",
+                            "align": "opposite",
+                            "action": {
+                                "alias": "exface.Core.ActionChain",
+                                "input_mapper": {
+                                    "from_object_alias": "axenox.ETL.webservice_flow",
+                                    "to_object_alias": "axenox.ETL.webservice_flow",
+                                    "column_to_variable_mappings": [
+                                        {
+                                            "from": "webservice",
+                                            "to": "_webservice_uid"
+                                        },
+                                        {
+                                            "from": "flow__step__from_object",
+                                            "to": "_from_object"
+                                        }
+                                    ]
+                                },
+                                "actions": [
+                                    {
+                                        "alias": "exface.Core.CreateData",
+                                        "object_alias": "axenox.ETL.flow",
+                                        "input_mapper": {
+                                            "from_object_alias": "axenox.ETL.webservice_flow",
+                                            "to_object_alias": "axenox.ETL.flow",
+                                            "column_to_column_mappings": [
+                                                {
+                                                    "from": "route",
+                                                    "to": "name"
+                                                },
+                                                {
+                                                    "from": "route",
+                                                    "to": "alias"
+                                                },
+                                                {
+                                                    "from": "webservice__app",
+                                                    "to": "app"
+                                                },
+                                                {
+                                                    "from": "webservice__version",
+                                                    "to": "version"
+                                                }
+                                            ],
+                                            "data_to_subsheet_mappings": [
+                                                {
+                                                    "subsheet_relation_path": "step",
+                                                    "subsheet_mapper": {
+                                                        "to_object_alias": "axenox.ETL.step",
+                                                        "column_to_column_mappings": [
+                                                            {
+                                                                "from": "=1",
+                                                                "to": "step_flow_sequence"
+                                                            },
+                                                            {
+                                                                "from": "='E'",
+                                                                "to": "type"
+                                                            },
+                                                            {
+                                                                "from": "=Concatenate(route, ': App > JSON')",
+                                                                "to": "name"
+                                                            },
+                                                            {
+                                                                "from": "='axenox/etl/ETLPrototypes/DataSheetToJsonApi.php'",
+                                                                "to": "etl_prototype"
+                                                            },
+                                                            {
+                                                                "//": "object axenox.ETL.webservice_message",
+                                                                "from": "='0x11eeae4695964d78ae46025041000001'",
+                                                                "to": "to_object"
+                                                            },
+                                                            {
+                                                                "//": "step config",
+                                                                "from": "='{}'",
+                                                                "to": "etl_config_uxon"
+                                                            }
+                                                        ],
+                                                        "variable_to_column_mappings": [
+                                                            {
+                                                                "variable": "_from_object",
+                                                                "to": "from_object"
+                                                            }
+                                                        ]
+                                                    }
                                                 }
                                             ]
                                         }
