@@ -12,6 +12,7 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
+use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Widgets\DebugMessage;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
@@ -122,7 +123,7 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
         return $this;
     }
 
-    protected function createBaseDataSheet(array $placeholders = []) : DataSheetInterface
+    protected function createBaseDataSheet(MetaObjectInterface $baseObject, array $placeholders = []) : DataSheetInterface
     {
         if (null !== $uxon = $this->getBaseDataSheetUxon()) {
             if (! empty($placeholders)) {
@@ -130,9 +131,9 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
                 $json = StringDataType::replacePlaceholders($json, $placeholders);
                 $uxon = UxonObject::fromJson($json);
             } 
-            $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $this->getToObject());
+            $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $baseObject);
         } else {
-            $ds = DataSheetFactory::createFromObject($this->getToObject());
+            $ds = DataSheetFactory::createFromObject($baseObject);
         }
         return $ds;
     }
