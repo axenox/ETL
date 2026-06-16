@@ -66,7 +66,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         if ((bool)$routeModel['enabled'] === false) {
             // return Service Unavailable if related data flow is not running
-            throw new UnavailableError('Dataflow inactive.');
+            throw new UnavailableError('Webservice or data flow not enabled.');
         }
 
         $routePath = RouteConfigLoader::getRoutePath($request);
