@@ -37,11 +37,15 @@ UPDATE
 SET step_flow_sequence = srs.flow_run_pos
 WHERE step_flow_sequence IS NULL OR step_flow_sequence = -1;
 
-/* Simple flows with only one step get the sequence 1 if not processed already */	
-UPDATE etl_step
-SET step_flow_sequence = 1
-	WHERE (SELECT temp_s.`Count` FROM (SELECT COUNT(`oid`) AS `Count` FROM etl_step s1 WHERE s1.flow_oid = etl_step.flow_oid) AS temp_s) = 1
-		AND step_flow_sequence IS NULL OR step_flow_sequence = -1;
+/* Simple flows with only one step get the sequence 1 if not processed already */
+UPDATE etl_step AS s
+SET s.step_flow_sequence = 1
+WHERE (
+      SELECT COUNT(s1.oid)
+      FROM etl_step AS s1
+      WHERE s1.flow_oid = s.flow_oid
+  ) = 1
+AND (s.step_flow_sequence IS NULL OR s.step_flow_sequence = -1);
 
 /* All other steps get -1 to indicate, that they must be reviewed! */
 UPDATE etl_step SET step_flow_sequence = -1 WHERE step_flow_sequence IS NULL;
