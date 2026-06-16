@@ -1,14 +1,14 @@
 -- UP
 
 -- Make version columns longer
-CALL execute_sql_on_existing_column('etl_webservice', 'version', 'ALTER TABLE etl_webservice CHANGE COLUMN `version` `version` VARCHAR(50) NULL DEFAULT NULL');
-CALL execute_sql_on_existing_column('etl_flow', 'version', 'ALTER TABLE etl_flow CHANGE COLUMN `version` `version` VARCHAR(50) NULL DEFAULT NULL');
+CALL execute_sql_on_existing_column('etl_webservice', 'version', 'ALTER TABLE etl_webservice CHANGE COLUMN `version` `version` VARCHAR(50) COLLATE ''utf8mb3_general_ci'' NULL DEFAULT NULL');
+CALL execute_sql_on_existing_column('etl_flow', 'version', 'ALTER TABLE etl_flow CHANGE COLUMN `version` `version` VARCHAR(50) COLLATE ''utf8mb3_general_ci'' NULL DEFAULT NULL');
 
 -- Remove request_direction from web services
 CALL execute_sql_on_existing_column('etl_webservice', 'request_direction', 'ALTER TABLE etl_webservice DROP COLUMN request_direction');
 
 -- Make local url required
-CALL execute_sql_on_existing_column('etl_webservice', 'local_url', 'ALTER TABLE `etl_webservice` CHANGE COLUMN `local_url` `local_url` VARCHAR(400) NOT NULL');
+CALL execute_sql_on_existing_column('etl_webservice', 'local_url', 'ALTER TABLE `etl_webservice` CHANGE COLUMN `local_url` `local_url` VARCHAR(400) COLLATE ''utf8mb3_general_ci'' NOT NULL');
 
 ALTER TABLE `etl_webservice`
 	ADD UNIQUE INDEX `Unique per path and version` (`local_url`, `version`);
@@ -26,6 +26,6 @@ ALTER TABLE `etl_flow`
 CALL execute_sql_on_existing_column('etl_webservice', 'version', 'CHANGE COLUMN `version` `version` VARCHAR(10) NULL');
 CALL execute_sql_on_existing_column('etl_flow', 'version', 'CHANGE COLUMN `version` `version` VARCHAR(10) NULL');
 
-CALL execute_sql_on_existing_column('etl_webservice', 'local_url', 'CHANGE COLUMN `local_url` `local_url` VARCHAR(400) NULL');
+CALL execute_sql_on_existing_column('etl_webservice', 'local_url', 'CHANGE COLUMN `local_url` `local_url` VARCHAR(400) COLLATE ''utf8mb3_general_ci'' NULL');
 
 CALL execute_sql_on_missing_column('etl_webservice', 'request_direction', 'ALTER TABLE etl_webservice ADD request_direction varchar(10) NOT NULL DEFAULT \'Inbound\'');
