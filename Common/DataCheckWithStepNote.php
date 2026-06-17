@@ -36,7 +36,7 @@ class DataCheckWithStepNote extends DataCheck
     private ?AbstractETLPrototype $step = null;
     private mixed $isInvalidValue = false;
     private bool $removeInvalidRows = false;
-    private bool $stopOnCheckFailed;
+    private bool $stopOnCheckFailed = false;
     private array $placeHolders;
 
     /**
