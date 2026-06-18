@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Web service: Edit steps [WebserviceSplitEditDialog]",
             "CREATED_ON": "2024-01-09 12:47:29",
-            "MODIFIED_ON": "2025-04-09 11:00:52",
+            "MODIFIED_ON": "2026-06-17 23:39:25",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eeb5b6dde235f4b5b6025041000001",
@@ -232,6 +232,9 @@
                                                                             },
                                                                             {
                                                                                 "action_alias": "axenox.ETL.WebserviceFlowCreateExcelJsonImport"
+                                                                            },
+                                                                            {
+                                                                                "action_alias": "axenox.ETL.WebserviceFlowCreateJsonExport"
                                                                             }
                                                                         ]
                                                                     },
