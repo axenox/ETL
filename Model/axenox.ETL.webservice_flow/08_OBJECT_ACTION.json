@@ -67,7 +67,7 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create JSON import flow [WebserviceFlowCreateJsonImport]",
             "CREATED_ON": "2025-04-08 12:26:39",
-            "MODIFIED_ON": "2026-06-16 23:59:29",
+            "MODIFIED_ON": "2026-06-17 23:44:36",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f0a700f4f17f94a700025041000001",
@@ -150,12 +150,8 @@
                                             "to_object_alias": "axenox.ETL.flow",
                                             "column_to_column_mappings": [
                                                 {
-                                                    "from": "route",
+                                                    "from": "=Concatenate(webservice__name, ': ', route)",
                                                     "to": "name"
-                                                },
-                                                {
-                                                    "from": "route",
-                                                    "to": "alias"
                                                 },
                                                 {
                                                     "from": "webservice__app",
@@ -248,9 +244,9 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create Excel+JSON import flow [WebserviceFlowCreateExcelJsonImport]",
             "CREATED_ON": "2025-04-09 08:58:11",
-            "MODIFIED_ON": "2025-07-28 15:51:04",
+            "MODIFIED_ON": "2026-06-17 23:45:27",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
-            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f09474007a76349474c84bd653ed63",
             "OBJECT": "0x11ee81f57aaf6a1281f5025041000001",
             "ACTION_PROTOTYPE": "exface/core/Actions/ShowDialog.php",
@@ -332,12 +328,8 @@
                                             "to_object_alias": "axenox.ETL.flow",
                                             "column_to_column_mappings": [
                                                 {
-                                                    "from": "route",
+                                                    "from": "=Concatenate(webservice__name, ': ', route)",
                                                     "to": "name"
-                                                },
-                                                {
-                                                    "from": "route",
-                                                    "to": "alias"
                                                 },
                                                 {
                                                     "from": "webservice__app",
@@ -478,7 +470,7 @@
         {
             "_EXPORT_SUMMARY": "Web route: Create JSON export flow [WebserviceFlowCreateJsonExport]",
             "CREATED_ON": "2026-06-16 23:57:41",
-            "MODIFIED_ON": "2026-06-17 00:33:40",
+            "MODIFIED_ON": "2026-06-17 23:42:09",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f1a4f065dcd490a4f0025041000001",
@@ -561,12 +553,8 @@
                                             "to_object_alias": "axenox.ETL.flow",
                                             "column_to_column_mappings": [
                                                 {
-                                                    "from": "route",
+                                                    "from": "=Concatenate(webservice__name, ': ', route)",
                                                     "to": "name"
-                                                },
-                                                {
-                                                    "from": "route",
-                                                    "to": "alias"
                                                 },
                                                 {
                                                     "from": "webservice__app",
@@ -606,7 +594,13 @@
                                                             },
                                                             {
                                                                 "//": "step config",
-                                                                "from": "='{}'",
+                                                                "from": [
+                                                                    "// Multiline text delimited by `\n`",
+                                                                    "='{",
+                                                                    "  \"row_limit\": \"[#~parameter:limit#]\",",
+                                                                    "  \"row_offset\": \"[#~parameter:offset#]\"",
+                                                                    "}'"
+                                                                ],
                                                                 "to": "etl_config_uxon"
                                                             }
                                                         ],
