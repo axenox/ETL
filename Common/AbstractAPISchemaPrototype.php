@@ -128,7 +128,7 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
         if (null !== $uxon = $this->getBaseDataSheetUxon()) {
             if (! empty($placeholders)) {
                 $json = $uxon->toJson();
-                $json = StringDataType::replacePlaceholders($json, $placeholders);
+                $json = StringDataType::replacePlaceholders($json, $placeholders, false);
                 $uxon = UxonObject::fromJson($json);
             } 
             $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $baseObject);
