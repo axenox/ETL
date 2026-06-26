@@ -220,9 +220,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     /**
      * Configure the underlying webservice that provides the OpenApi definition.
      *
-     * @uxon-property webservice
-     * @uxon-type object
-     * @uxon-template {"alias": "alias", "version": "^1.25.x"}
+     * @deprecated DO NOT USE. Property will be phased out soon.
      *
      * @param UxonObject $webserviceConfig
      * @return ExcelApiToDataSheet
@@ -233,11 +231,19 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         return $this;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceAlias() : ?string
     {
         return $this->webservice['alias'] ?? null;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceVersion() : ?string
     {
         return $this->webservice['version'] ?? null;
@@ -282,48 +288,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     public function isIncremental(): bool
     {
         return false;
-    }
-
-    /**
-     * Reads the OpenAPI specification from the configrued webservice and transforms it into an excel column mapping
-     * 
-     * // TODO currently this supports only OpenAPI v3!!!
-     * 
-     * @return string
-     */
-    protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
-    {
-        $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-        $ds->getColumns()->addMultiple([
-            'UID',
-            'version',
-            'swagger_json', 
-            'type__schema_class',
-            'enabled'
-        ]);
-        if ((null !== $customWebservice = $this->getWebserviceAlias()) && (null !== $customWebserviceVersion = $this->getWebserviceVersion())) {
-            $ds->getFilters()->addConditionFromString('alias', $customWebservice, '==');
-            $ds->getFilters()->addConditionFromString('version', $customWebserviceVersion, '==');
-        } else {
-            $ds->getFilters()->addConditionFromString('webservice_flow__flow__flow_run__UID', $stepData->getFlowRunUid());
-        }
-        $ds->dataRead();        
-
-        switch ($ds->countRows()) {
-            case 0:
-                throw new RuntimeException('Cannot find webservice for flow step "' . $this->getName() . '" using filter `' . $ds->getFilters()->__toString() . '`');
-            case 1:
-                $row = $ds->getRow(0);
-                break;
-            default:
-                $versionCol = $ds->getColumns()->get('version');
-                $bestFit = SemanticVersionDataType::findVersionBest('*', $versionCol->getValues());
-                $row = $ds->getRow($versionCol->findRowByValue($bestFit));
-                break;
-        }
-        $schemaClass = $row['type__schema_class'];
-        $schema = new $schemaClass($this->getWorkbench(), $row['swagger_json']);
-        return $schema;
     }
 
     /**
