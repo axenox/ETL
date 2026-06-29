@@ -6,6 +6,7 @@ use axenox\ETL\Common\WebserviceInfo;
 use axenox\ETL\Events\OnWebserviceLoaded;
 use axenox\ETL\Facades\DataFlowFacade;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use exface\Core\DataTypes\BooleanDataType;
 use exface\Core\DataTypes\SemanticVersionDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\AbstractStaticFactory;
@@ -62,12 +63,21 @@ class APISchemaFactory extends AbstractStaticFactory
                 $ds->getFilters()->addCondition($filter);
             }
         }
-        if(!$allowDisabledSchemas) {
-            $ds->getFilters()->addConditionFromString('enabled', 'true');
-        }
 
         // Read data.
         $ds->dataRead();
+        
+        if(!$allowDisabledSchemas && $ds->countRows() > 0) {
+            foreach ($ds->getRows() as $idx => $row) {
+                if(BooleanDataType::cast($row['enabled']) !== true) {
+                    $ds->removeRow($idx, false);
+                }
+            }
+            
+            if($ds->countRows() === 0) {
+                throw new InvalidArgumentException('All webservices matching these filters `' . $ds->getFilters()->__toString() . '` are DISABLED.');
+            }
+        }
 
         // Get result.
         switch ($ds->countRows()) {
