@@ -4,9 +4,8 @@ namespace axenox\ETL\Facades;
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Common\WebFlowTask;
-use axenox\ETL\Common\WebserviceInfo;
-use axenox\ETL\Events\OnWebserviceLoaded;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
+use axenox\ETL\Factories\APISchemaFactory;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -365,45 +364,20 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         if (empty($routeData)) {
             throw new FacadeRoutingError('No route data found in request!');
         }
-        $json = $routeData['swagger_json'];
-        if ($json === null || $json === '') {
-            return null;
-        }
 
-        $schemaClass = $routeData['type__schema_class'];
-        $version = $routeData['version'];
-        $result = new $schemaClass($this->getWorkbench(), $json, $version);
-
-        $webserviceUid = $routeData['UID'];
-        $webserviceName = null;
-        $webserviceVersion = null;
-
-        if(!empty($webserviceUid)) {
-            $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-            $ds->getColumns()->addMultiple([
-                'name',
-                'version',
-                'UID',
-            ]);
-
-            $ds->getFilters()->addConditionFromString('UID', $webserviceUid);
-            if($ds->dataRead() > 0) {
-                $row = $ds->getRow();
-                $webserviceName = $row['name'];
-                $webserviceVersion = $row['version'];
-            }
-        }
+        // If the route data specifies an 'enabled' state, we use that to determine whether disabled webservices are allowed.
+        // This is necessary to enable editing disabled webservices.
+        $allowDisabledSchemas = !$routeData['enabled'] ?? false;
         
-        $result->setWebserviceInfo(new WebserviceInfo(
-            $webserviceName,
-            $webserviceVersion,
-            $webserviceUid,
-            $result,
-            $this
-        ));
-        
-        $this->getWorkbench()->eventManager()->dispatch(new OnWebserviceLoaded($result));
-        return $result;
+        return APISchemaFactory::loadAPISchema(
+            $this->getWorkbench(),
+            $routeData['UID'],
+            $routeData['version'],
+            null,
+            $this,
+            null,
+            $allowDisabledSchemas
+        );
     }
 
     /**
