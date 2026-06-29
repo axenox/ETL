@@ -2,21 +2,22 @@
 
 namespace axenox\ETL\Common;
 
-use axenox\ETL\Common\AbstractETLPrototype;
-use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\ETLPrototypes\ExcelApiToDataSheet;
+use axenox\ETL\Factories\APISchemaFactory;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\DataSheetDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Factories\ConditionFactory;
 use exface\Core\Factories\DataSheetFactory;
+use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
-use exface\Core\Widgets\DebugMessage;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
-use axenox\ETL\Interfaces\OpenApiFacadeInterface;
 
 /**
  * Base class for automated flow steps, that use standardized API schemas like OpenAPI or OData
@@ -43,27 +44,51 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
                 return $taskSchema['model'];
             }
         }
-
-        if (! ($task instanceof HttpTaskInterface)) {
-            throw new InvalidArgumentException('Cannot use OpenAPI flow steps with non-HTTP tasks!');
-        }
         
         $facade = $task->getFacade();
-        if ($facade === null || ! ($facade instanceof OpenApiFacadeInterface)) {
-            throw new InvalidArgumentException('Cannot use OpenAPI flow steps with non-OpenAPI facades!');
-        }
         
-        $model = $facade->getApiSchemaForRequest($task->getHttpRequest());
-        if ($model === null) {
-            throw new InvalidArgumentException('Cannot load OpenAPI definition from HTTP task!');
+        // Load model via facade.
+        if ($facade instanceof ApiSchemaFacadeInterface && $task instanceof HttpTaskInterface) {
+            $model = $facade->getApiSchemaForRequest($task->getHttpRequest());
+        } 
+        // Load model directly.
+        else {
+            $alias = null;
+            $version = null;
+            
+            if($this instanceof ExcelApiToDataSheet) {
+                $alias = $this->getWebserviceAlias();
+                $version = $this->getWebserviceVersion();
+            }
+
+            $additionalFilters = [];
+            if ($alias === null) {
+                $additionalFilters[] = ConditionFactory::createFromExpressionString(
+                    MetaObjectFactory::createFromString($this->getWorkbench(), 'axenox.ETL.webservice'),
+                    'webservice_flow__flow__flow_run__UID',
+                    $stepData->getFlowRunUid(),
+                    '=='
+                );
+            }
+            
+            $model = APISchemaFactory::loadAPISchema(
+                $this->getWorkbench(),
+                null,
+                $version,
+                $alias,
+                null,
+                $additionalFilters
+            );
         }
+
+        
         $this->taskSchemas[] = [
             'task' => $task,
             'model' => $model
         ];
+        
         return $model;
     }
-
 
     /**
      * @param ETLStepDataInterface $stepData
@@ -130,7 +155,7 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
                 $json = $uxon->toJson();
                 $json = StringDataType::replacePlaceholders($json, $placeholders, false);
                 $uxon = UxonObject::fromJson($json);
-            } 
+            }
             $ds = DataSheetFactory::createFromUxon($this->getWorkbench(), $uxon, $baseObject);
         } else {
             $ds = DataSheetFactory::createFromObject($baseObject);

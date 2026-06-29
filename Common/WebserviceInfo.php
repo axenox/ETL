@@ -11,14 +11,16 @@ class WebserviceInfo
     private ?string $version;
     private ?string $uid;
     private APISchemaInterface $webservice;
-    private DataFlowFacade $facade;
+    private ?DataFlowFacade $facade;
+    private bool $enabled = true;
 
     public function __construct(
         ?string            $name,
         ?string            $version,
         ?string            $uid,
         APISchemaInterface $webservice,
-        DataFlowFacade     $facade
+        ?DataFlowFacade     $facade,
+        bool $enabled = true
     )
     {
         $this->name = $name;
@@ -26,6 +28,7 @@ class WebserviceInfo
         $this->uid = $uid;
         $this->webservice = $webservice;
         $this->facade = $facade;
+        $this->enabled = $enabled;
     }
 
     /**
@@ -61,10 +64,15 @@ class WebserviceInfo
     }
 
     /**
-     * @return DataFlowFacade
+     * @return DataFlowFacade|null
      */
-    public function getFacade(): DataFlowFacade
+    public function getFacade(): ?DataFlowFacade
     {
         return $this->facade;
+    }
+    
+    public function isEnabled() : bool
+    {
+        return $this->enabled;
     }
 }
