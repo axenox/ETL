@@ -187,15 +187,15 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
     /**
      * Loads ALL flows for a given webservice and tries to return a flow that matches the provided route path.
      * 
-     * @param string $routeUid
+     * @param string $webserviceUID
      * @param string $routePath
      * @return string
      */
-    protected function tryGetFlowAliasWithVersion(string $routeUid, string $routePath) : string
+    protected function tryGetFlowAliasWithVersion(string $webserviceUID, string $routePath) : string
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_flow');
         $ds->getColumns()->addMultiple(['webservice', 'flow__alias_with_version', 'route']);
-        $ds->getFilters()->addConditionFromString('webservice', $routeUid);
+        $ds->getFilters()->addConditionFromString('webservice', $webserviceUID);
         $ds->dataRead();
 
         $matches = [];
@@ -208,7 +208,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             }
         }
 
-        $msg = 'webservice route `' . $routePath . '` (route UID `' . $routeUid . '`).';
+        $msg = 'webservice route `' . $routePath . '` (route UID `' . $webserviceUID . '`).';
         
         switch (count($matches)) {
             case 0:
