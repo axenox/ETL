@@ -367,7 +367,7 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         // If a UID was specified, we can safely assume that a result is expected
         // regardless of the schema's ENABLED state. 
-        $allowDisabledSchemas = $routeData['UID'] !== null;
+        $allowDisabledSchemas = !$routeData['enabled'] ?? false;
         
         return APISchemaFactory::loadAPISchema(
             $this->getWorkbench(),
