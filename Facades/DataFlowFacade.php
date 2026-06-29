@@ -365,8 +365,8 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
             throw new FacadeRoutingError('No route data found in request!');
         }
 
-        // If a UID was specified, we can safely assume that a result is expected
-        // regardless of the schema's ENABLED state. 
+        // If the route data specifies an 'enabled' state, we use that to determine whether disabled webservices are allowed.
+        // This is necessary to enable editing disabled webservices.
         $allowDisabledSchemas = !$routeData['enabled'] ?? false;
         
         return APISchemaFactory::loadAPISchema(

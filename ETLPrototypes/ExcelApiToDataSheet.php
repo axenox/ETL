@@ -3,13 +3,11 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
-use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
-use exface\Core\DataTypes\SemanticVersionDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
