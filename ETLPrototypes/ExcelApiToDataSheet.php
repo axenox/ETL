@@ -140,7 +140,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
         yield $msg . PHP_EOL;
 
-        $toSheet = $this->createBaseDataSheet($this->getToObject(), $placeholders);
+        $toSheet = $this->createBaseDataSheet($placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
 
