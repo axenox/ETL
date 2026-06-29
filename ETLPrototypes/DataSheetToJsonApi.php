@@ -142,7 +142,7 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($stepTask) . '` received instead.');
         }
 
-        $baseSheet = $this->createBaseDataSheet($this->getFromObject(), $placeholders);
+        $baseSheet = $this->createBaseDataSheet($placeholders);
         if ($limit = $this->getRowLimit($placeholders)) {
             $baseSheet->setRowsLimit($limit);
         }

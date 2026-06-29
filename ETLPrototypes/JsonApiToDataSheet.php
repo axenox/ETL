@@ -652,7 +652,7 @@ class JsonApiToDataSheet extends AbstractAPISchemaPrototype
      */
     protected function mergeBaseSheet(DataSheetInterface $mappedSheet, array $placeholders, ETLStepDataInterface $stepData) : DataSheetInterface
     {
-        $baseSheet = $this->createBaseDataSheet($this->getToObject(), $placeholders);
+        $baseSheet = $this->createBaseDataSheet($placeholders);
         
         foreach ($baseSheet->getColumns() as $baseCol) {
             $mappedCol = $mappedSheet->getColumns()->getByExpression($baseCol->getExpressionObj());
