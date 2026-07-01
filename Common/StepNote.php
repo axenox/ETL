@@ -316,7 +316,7 @@ class StepNote implements NoteInterface
     {
         $this->exceptionFlag = (bool)$exception;
         $this->exceptionMessage = $exception?->getMessage();
-        $this->exceptionLogId = $exception?->getId();
+        $this->exceptionLogId = $exception instanceof ExceptionInterface ? $exception->getId() : null;
         if(empty($this->messageCode) && $exception instanceof ExceptionInterface) {
             $this->messageCode = $exception->getAlias();
         }

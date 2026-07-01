@@ -523,7 +523,13 @@ class OpenAPI3 implements APISchemaInterface
      * Performs a deep merge of the given UXON over the current OpenAPI JSON structure.
      * Scalar values in the incoming UXON overwrite existing values; array/object values
      * are merged recursively.
-     *
+     * 
+     * TODO geb 2026-07-01: Modifying an OpenAPI3 instance after instantiation does not really make sense. A lot of processing and enhancements happen
+     * TODO                 during construction, which have to be re-done upon modification. To be more transparent about the work performed and to avoid
+     * TODO                 issues with incomplete transformations (such as stale $.paths references), we should make this class largely immutable.
+     * 
+     * @deprecated
+     * 
      * @see \axenox\ETL\Common\OpenAPI\OpenAPI3UxonTrait::importUxonObject()
      */
     public function importUxonObject(UxonObject $uxon, array $skip_property_names = []) : void

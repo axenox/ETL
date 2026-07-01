@@ -2,7 +2,7 @@
 
 namespace axenox\ETL\Mutations\Prototypes;
 
-use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use axenox\ETL\Common\WebserviceInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Interfaces\Mutations\AppliedMutationInterface;
@@ -22,18 +22,21 @@ use exface\Core\Mutations\Prototypes\GenericUxonMutation;
  *
  * ### Change OpenAPI metadata
  *
- * ```json
+ * ```
+ * 
  * {
  *   "change": {
  *     "$.info.title": "Orders API",
  *     "$.info.version": "2.1.0"
  *   }
  * }
+ * 
  * ```
  *
  * ### Change OpenAPI and facade options together
  *
- * ```json
+ * ```
+ * 
  * {
  *   "change": {
  *     "$.info.description": "Updated by mutation"
@@ -44,6 +47,7 @@ use exface\Core\Mutations\Prototypes\GenericUxonMutation;
  *     }
  *   }
  * }
+ * 
  * ```
  */
 class WebserviceMutation extends GenericUxonMutation
@@ -62,10 +66,10 @@ class WebserviceMutation extends GenericUxonMutation
             );
         }
 
-        // Mutate the OpenAPI JSON.
-        $schemaUxon = $subject->exportUxonObject();
+        // Mutate the OpenAPI Schema.
+        $schemaUxon = UxonObject::fromArray($subject->getSchemaArray());
         $applied = parent::apply($schemaUxon);
-        $subject->importUxonObject($schemaUxon);
+        $subject->setSchemaArray($schemaUxon->toArray());
         
         $stateBefore['openAPI'] = $applied->dumpStateBefore();
         $stateAfter['openAPI'] = $applied->dumpStateAfter();
@@ -87,7 +91,7 @@ class WebserviceMutation extends GenericUxonMutation
      */
     public function supports($subject): bool
     {
-        return $subject instanceof APISchemaInterface;
+        return $subject instanceof WebserviceInfo;
     }
 
     /**
