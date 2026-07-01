@@ -526,7 +526,7 @@ class OpenAPI3 implements APISchemaInterface
      * 
      * TODO geb 2026-07-01: Modifying an OpenAPI3 instance after instantiation does not really make sense. A lot of processing and enhancements happen
      * TODO                 during construction, which have to be re-done upon modification. To be more transparent about the work performed and to avoid
-     * TODO                 issues with incomplete transformations, we should make this class largely immutable.
+     * TODO                 issues with incomplete transformations (such as stale $.paths references), we should make this class largely immutable.
      * 
      * @deprecated
      * 
