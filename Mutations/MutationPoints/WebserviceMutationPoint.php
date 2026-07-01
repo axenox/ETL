@@ -14,15 +14,15 @@ class WebserviceMutationPoint extends AbstractMutationPoint
         $point = $event->getWorkbench()->getMutator()->getMutationPoint(self::class);
         
         $webservice = $event->getWebservice();
-        $uid = $webservice->getWebserviceInfo()->getUid();
-        $name = $webservice->getWebserviceInfo()->getName() ?? 'Unknown Webservice';
+        $uid = $webservice->getUid();
+        $name = $webservice->getName() ?? 'Unknown Webservice';
         if($uid === null) {
             return;
         }
         
         $target = new MetaObjectUidMutationTarget('axenox.ETL.webservice', $uid);
 
-        $applied = $point->applyMutations($target, $event->getApiSchema());
+        $applied = $point->applyMutations($target, $webservice);
         if (!empty($applied)) {
             $point->getWorkbench()->eventManager()->dispatch(new OnMutationsAppliedEvent($applied, 'Webservice "' . $name . '"', $point));
         }
