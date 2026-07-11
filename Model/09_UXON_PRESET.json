@@ -497,7 +497,7 @@
         {
             "_EXPORT_SUMMARY": "OpenAPI 3.0 Import",
             "CREATED_ON": "2024-05-22 15:16:33",
-            "MODIFIED_ON": "2025-04-10 13:02:33",
+            "MODIFIED_ON": "2026-06-18 08:36:56",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef927082f249d29270025041000001",
@@ -542,9 +542,8 @@
                                     "application/json": {
                                         "schema": {
                                             "type": "array",
-                                            "x-object-alias": "my.App.MY_OBJECT",
                                             "items": {
-                                                "$ref": "#/components/schemas/Object"
+                                                "$ref": "#/components/schemas/TODO_object_name_here"
                                             }
                                         }
                                     }
@@ -563,9 +562,10 @@
                 },
                 "components": {
                     "schemas": {
-                        "Object": {
+                        "TODO_object_name_here": {
                             "type": "object",
                             "x-object-alias": "my.App.MY_OBJECT",
+                            "description": "// Replace `TODO_object_name_here` with the non-namespaced alias of the exported object. Then select \"Presets\" in the menu for the object node. There will be presets with properties for all metaobjects with that name. Use one of them as base and fine-tune properties.",
                             "properties": {
                                 "prop1": {
                                     "type": "integer",
@@ -587,7 +587,7 @@
         {
             "_EXPORT_SUMMARY": "OpenAPI 3.0 Export",
             "CREATED_ON": "2024-05-22 15:21:54",
-            "MODIFIED_ON": "2025-04-10 13:33:10",
+            "MODIFIED_ON": "2026-06-18 08:36:07",
             "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11ef85f541f8fa8885f5025041000001",
@@ -659,9 +659,8 @@
                                                         "objects": {
                                                             "type": "array",
                                                             "items": {
-                                                                "$ref": "#/components/schemas/Object"
-                                                            },
-                                                            "x-object-alias": "my.APP.OBJECT_ALIAS"
+                                                                "$ref": "#/components/schemas/TODO_object_name_here"
+                                                            }
                                                         },
                                                         "page_limit": {
                                                             "type": "integer",
@@ -699,9 +698,10 @@
                 },
                 "components": {
                     "schemas": {
-                        "Object": {
+                        "TODO_object_name_here": {
                             "type": "object",
                             "x-object-alias": "my.APP.OBJECT_ALIAS",
+                            "description": "// Replace `TODO_object_name_here` with the non-namespaced alias of the exported object. Then select \"Presets\" in the menu for the object node. There will be presets with properties for all metaobjects with that name. Use one of them as base and fine-tune properties.",
                             "properties": {
                                 "prop1": {
                                     "type": "integer",

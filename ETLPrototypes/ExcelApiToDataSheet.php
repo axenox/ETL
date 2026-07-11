@@ -3,13 +3,11 @@ namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
-use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
-use exface\Core\DataTypes\SemanticVersionDataType;
 use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
@@ -140,7 +138,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
         yield $msg . PHP_EOL;
 
-        $toSheet = $this->createBaseDataSheet($placeholders);
+        $toSheet = $this->createBaseDataSheet($this->getToObject(), $placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
 
@@ -220,9 +218,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     /**
      * Configure the underlying webservice that provides the OpenApi definition.
      *
-     * @uxon-property webservice
-     * @uxon-type object
-     * @uxon-template {"alias": "alias", "version": "^1.25.x"}
+     * @deprecated DO NOT USE. Property will be phased out soon.
      *
      * @param UxonObject $webserviceConfig
      * @return ExcelApiToDataSheet
@@ -233,11 +229,19 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         return $this;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceAlias() : ?string
     {
         return $this->webservice['alias'] ?? null;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceVersion() : ?string
     {
         return $this->webservice['version'] ?? null;
@@ -282,48 +286,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     public function isIncremental(): bool
     {
         return false;
-    }
-
-    /**
-     * Reads the OpenAPI specification from the configrued webservice and transforms it into an excel column mapping
-     * 
-     * // TODO currently this supports only OpenAPI v3!!!
-     * 
-     * @return string
-     */
-    protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
-    {
-        $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-        $ds->getColumns()->addMultiple([
-            'UID',
-            'version',
-            'swagger_json', 
-            'type__schema_class',
-            'enabled'
-        ]);
-        if ((null !== $customWebservice = $this->getWebserviceAlias()) && (null !== $customWebserviceVersion = $this->getWebserviceVersion())) {
-            $ds->getFilters()->addConditionFromString('alias', $customWebservice, '==');
-            $ds->getFilters()->addConditionFromString('version', $customWebserviceVersion, '==');
-        } else {
-            $ds->getFilters()->addConditionFromString('webservice_flow__flow__flow_run__UID', $stepData->getFlowRunUid());
-        }
-        $ds->dataRead();        
-
-        switch ($ds->countRows()) {
-            case 0:
-                throw new RuntimeException('Cannot find webservice for flow step "' . $this->getName() . '" using filter `' . $ds->getFilters()->__toString() . '`');
-            case 1:
-                $row = $ds->getRow(0);
-                break;
-            default:
-                $versionCol = $ds->getColumns()->get('version');
-                $bestFit = SemanticVersionDataType::findVersionBest('*', $versionCol->getValues());
-                $row = $ds->getRow($versionCol->findRowByValue($bestFit));
-                break;
-        }
-        $schemaClass = $row['type__schema_class'];
-        $schema = new $schemaClass($this->getWorkbench(), $row['swagger_json']);
-        return $schema;
     }
 
     /**

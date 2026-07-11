@@ -142,7 +142,7 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             throw new InvalidArgumentException('Http request needed to process OpenApi definitions! `' . get_class($stepTask) . '` received instead.');
         }
 
-        $baseSheet = $this->createBaseDataSheet($placeholders);
+        $baseSheet = $this->createBaseDataSheet($this->getFromObject(), $placeholders);
         if ($limit = $this->getRowLimit($placeholders)) {
             $baseSheet->setRowsLimit($limit);
         }
@@ -162,7 +162,7 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
             . ($limit ? 'rows ' . ($offset+1) . ' - ' . ($offset+$limit) : 'all rows')
             . ' requested in OpenApi definition';
 
-        $apiSchema = $this->getAPISchema($stepData->getTask());
+        $apiSchema = $this->getAPISchema($stepData);
         $fromObjectSchema = $apiSchema->getObjectSchema($fromSheet->getMetaObject(), $this->getSchemaName());
         $requestedColumns = $this->addColumnsFromSchema($fromObjectSchema, $fromSheet);
         
@@ -240,31 +240,38 @@ class DataSheetToJsonApi extends AbstractAPISchemaPrototype
         }
 
         if ($jsonSchema['type'] == 'object') {
-            foreach ($jsonSchema['properties'] as $propertyName => $propertyValue) {
-                switch (true) {
-                    case array_key_exists('x-object-alias', $propertyValue) && $propertyValue['x-object-alias'] === $objectAlias:
-                        $body[$propertyName] = $newContent;
-                        break;
-                    case array_key_exists('x-placeholder', $propertyValue):
-                        $value = StringDataType::replacePlaceholders($propertyValue['x-placeholder'], $placeholders, false);
+            if ($objectAlias === $jsonSchema['x-object-alias'] ?? null) {
+                $body = $newContent;
+            } else {
+                foreach ($jsonSchema['properties'] as $propertyName => $propertyValue) {
+                    switch (true) {
+                        case array_key_exists('x-object-alias', $propertyValue) && $propertyValue['x-object-alias'] === $objectAlias:
+                            $body[$propertyName] = $newContent;
+                            break;
+                        case array_key_exists('x-attribute-alias', $propertyValue):
+                            $body[$propertyName] = $newContent;
+                            break;
+                        case array_key_exists('x-placeholder', $propertyValue):
+                            $value = StringDataType::replacePlaceholders($propertyValue['x-placeholder'], $placeholders, false);
 
-                        switch (true) {
-                            case empty($value):
-                                $value = null;
-                                break;
-                            case ($propertyValue['type'] === 'integer'):
-                                $value = (int)$value;
-                                break;
-                            case ($propertyValue['type'] === 'boolean'):
-                                $value = (bool)$value;
-                                break;
-                        }
+                            switch (true) {
+                                case empty($value):
+                                    $value = null;
+                                    break;
+                                case ($propertyValue['type'] === 'integer'):
+                                    $value = (int)$value;
+                                    break;
+                                case ($propertyValue['type'] === 'boolean'):
+                                    $value = (bool)$value;
+                                    break;
+                            }
 
-                        $body[$propertyName] = $value;
-                        break;
-                    case $propertyValue['type'] === 'array':
-                    case $propertyValue['type'] === 'object':
-                        $body[$propertyName] = $this->createBodyFromSchema($propertyValue, $newContent, $objectAlias, $placeholders);
+                            $body[$propertyName] = $value;
+                            break;
+                        case $propertyValue['type'] === 'array':
+                        case $propertyValue['type'] === 'object':
+                            $body[$propertyName] = $this->createBodyFromSchema($propertyValue, $newContent, $objectAlias, $placeholders);
+                    }
                 }
             }
         }

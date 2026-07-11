@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "Web service [axenox.ETL.webservice]",
             "CREATED_ON": "2023-10-18 16:06:50",
-            "MODIFIED_ON": "2025-04-11 11:01:54",
+            "MODIFIED_ON": "2026-06-17 00:04:49",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eebdc39597022cbdc3025041000001",
@@ -232,6 +232,9 @@
                                                         },
                                                         {
                                                             "action_alias": "axenox.ETL.WebserviceFlowCreateExcelJsonImport"
+                                                        },
+                                                        {
+                                                            "action_alias": "axenox.ETL.WebserviceFlowCreateJsonExport"
                                                         }
                                                     ]
                                                 },
