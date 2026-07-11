@@ -4,9 +4,8 @@ namespace axenox\ETL\Facades;
 use axenox\ETL\Common\AbstractOpenApiPrototype;
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Common\WebFlowTask;
-use axenox\ETL\Common\WebserviceInfo;
-use axenox\ETL\Events\OnWebserviceLoaded;
 use axenox\ETL\Facades\Middleware\RequestLoggingMiddleware;
+use axenox\ETL\Factories\APISchemaFactory;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ApiSchemaFacadeInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -66,16 +65,16 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 
         if ((bool)$routeModel['enabled'] === false) {
             // return Service Unavailable if related data flow is not running
-            throw new UnavailableError('Dataflow inactive.');
+            throw new UnavailableError('Webservice or data flow not enabled.');
         }
 
         $routePath = RouteConfigLoader::getRoutePath($request);
 
     	// process flow
-		$routeUID = $routeModel['UID'];
-		$flowAlias = $this->getFlowAliasWithVersion($routeUID, $routePath);
+		$webserviceUID = $routeModel['UID'];
+		$flowAlias = $this->tryGetFlowAliasWithVersion($webserviceUID, $routePath);
 		$flowRunUID = RunETLFlow::generateFlowRunUid();
-        $this->loggingMiddleware->logRequestProcessing($request, $routeUID, $flowRunUID);
+        $this->loggingMiddleware->logRequestProcessing($request, $webserviceUID, $flowRunUID);
 	    $flowResult = $this->runFlow($flowAlias, $request); // flow data update
 		$flowOutput = $flowResult->getMessage();
         $requestWithBody = $this->loadRequestDataWithBody($request);
@@ -184,34 +183,39 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
 		return json_encode($body);
 	}
 
-    protected function getFlowAliasWithVersion(string $routeUid, string $routePath) : string
+    /**
+     * Loads ALL flows for a given webservice and tries to return a flow that matches the provided route path.
+     * 
+     * @param string $webserviceUID
+     * @param string $routePath
+     * @return string
+     */
+    protected function tryGetFlowAliasWithVersion(string $webserviceUID, string $routePath) : string
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_flow');
         $ds->getColumns()->addMultiple(['webservice', 'flow__alias_with_version', 'route']);
-        $ds->getFilters()->addConditionFromString('webservice', $routeUid);
+        $ds->getFilters()->addConditionFromString('webservice', $webserviceUID);
         $ds->dataRead();
 
-        $alias = null;
+        $matches = [];
         $rows = $ds->getRows();
         foreach ($rows as $row){
             // Compare routes without leading slashes because people will copy these slashes from
             // the swagger UI and paste them into the route field in the webservice config.
             if (strcasecmp(ltrim($row['route'], '/'), ltrim($routePath,'/')) === 0) {
-                $alias = $row['flow__alias_with_version'];
-                return $alias;
+                $matches[] = $row['flow__alias_with_version'];
             }
         }
 
-        if ($alias === null && count($rows) === 1){
-            return $rows[0]['flow__alias_with_version'];
-        } else {
-            $msg = 'webservice route `' . $routePath . '` (route UID `' . $routeUid . '`)';
-            if (count($rows) === 0) {
-                $msg = 'No data flow found for ' . $msg;
-            } else {
-                $msg = 'Multiple data flows found for ' . $msg;
-            }
-            throw new DataNotFoundError($ds, $msg);
+        $msg = 'webservice route `' . $routePath . '` (route UID `' . $webserviceUID . '`).';
+        
+        switch (count($matches)) {
+            case 0:
+                throw new DataNotFoundError($ds, 'No data flow found for ' . $msg);
+            case 1:
+                return $matches[0];
+            default:
+                throw new DataNotFoundError($ds, 'Multiple data flows found for ' . $msg);
         }
     }
 
@@ -365,45 +369,20 @@ class DataFlowFacade extends AbstractHttpFacade implements OpenApiFacadeInterfac
         if (empty($routeData)) {
             throw new FacadeRoutingError('No route data found in request!');
         }
-        $json = $routeData['swagger_json'];
-        if ($json === null || $json === '') {
-            return null;
-        }
 
-        $schemaClass = $routeData['type__schema_class'];
-        $version = $routeData['version'];
-        $result = new $schemaClass($this->getWorkbench(), $json, $version);
-
-        $webserviceUid = $routeData['UID'];
-        $webserviceName = null;
-        $webserviceVersion = null;
-
-        if(!empty($webserviceUid)) {
-            $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-            $ds->getColumns()->addMultiple([
-                'name',
-                'version',
-                'UID',
-            ]);
-
-            $ds->getFilters()->addConditionFromString('UID', $webserviceUid);
-            if($ds->dataRead() > 0) {
-                $row = $ds->getRow();
-                $webserviceName = $row['name'];
-                $webserviceVersion = $row['version'];
-            }
-        }
+        // If the route data specifies an 'enabled' state, we use that to determine whether disabled webservices are allowed.
+        // This is necessary to enable editing disabled webservices.
+        $allowDisabledSchemas = !$routeData['enabled'] ?? false;
         
-        $result->setWebserviceInfo(new WebserviceInfo(
-            $webserviceName,
-            $webserviceVersion,
-            $webserviceUid,
-            $result,
-            $this
-        ));
-        
-        $this->getWorkbench()->eventManager()->dispatch(new OnWebserviceLoaded($result));
-        return $result;
+        return APISchemaFactory::loadAPISchema(
+            $this->getWorkbench(),
+            $routeData['UID'],
+            $routeData['version'],
+            null,
+            $this,
+            null,
+            $allowDisabledSchemas
+        );
     }
 
     /**
