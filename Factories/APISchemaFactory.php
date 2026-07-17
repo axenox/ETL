@@ -84,12 +84,18 @@ class APISchemaFactory extends AbstractStaticFactory
             case 0:
                 throw new InvalidArgumentException('Cannot find webservice using filters `' . $ds->getFilters()->__toString() . '`.');
             case 1:
-                $row = $ds->getRow();
+                $row = $ds->getRowFirst();
                 break;
             default:
                 $versionCol = $ds->getColumns()->get('version');
                 $bestFit = SemanticVersionDataType::findVersionBest($version ?? '*', $versionCol->getValues());
-                $row = $ds->getRow($versionCol->findRowByValue($bestFit));
+                
+                $idx = $versionCol->findRowByValue($bestFit);
+                if($idx !== false) {
+                    $row = $ds->getRow($idx);
+                } else {
+                    $row = $ds->getRowFirst();
+                }
                 break;
         }
         
