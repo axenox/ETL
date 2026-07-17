@@ -1,13 +1,13 @@
 <?php
 namespace axenox\ETL\Events;
 
-use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
+use axenox\ETL\Common\WebserviceInfo;
 use exface\Core\Events\AbstractEvent;
 use exface\Core\Interfaces\Debug\LogBookInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 
 /**
- * Event triggered when an `ApiSchema` is done loading and ready to be altered.
+ * Event triggered when an `ApiSchema` definition is loaded from storage and is ready to be altered.
  *
  * @event axenox.ETL.OnWebserviceLoaded
  *
@@ -17,17 +17,19 @@ use exface\Core\Interfaces\WorkbenchInterface;
 class OnWebserviceLoaded extends AbstractEvent
 {
     private ?LogBookInterface $logBook;
-    
-    private APISchemaInterface $webservice;
+    private WorkbenchInterface $workbench;
+    private WebserviceInfo $webservice;
 
     /**
-     * @param APISchemaInterface    $webservice
+     * @param WorkbenchInterface    $workbench
+     * @param WebserviceInfo        $webservice
      * @param LogBookInterface|null $logBook
      */
-    public function __construct(APISchemaInterface $webservice, LogBookInterface $logBook = null)
+    public function __construct(WorkbenchInterface $workbench, WebserviceInfo $webservice, LogBookInterface $logBook = null)
     {
         $this->logBook = $logBook;
         $this->webservice = $webservice;
+        $this->workbench = $workbench;
     }
 
     /**
@@ -45,7 +47,7 @@ class OnWebserviceLoaded extends AbstractEvent
      */
     public function getWorkbench() : WorkbenchInterface
     {
-        return $this->webservice->getWorkbench();
+        return $this->workbench;
     }
 
     /**
@@ -55,19 +57,11 @@ class OnWebserviceLoaded extends AbstractEvent
     {
         return $this->logBook;
     }
-
+    
     /**
-     * @return APISchemaInterface
+     * @return WebserviceInfo
      */
-    public function getApiSchema(): APISchemaInterface
-    {
-        return $this->webservice;
-    }
-
-    /**
-     * @return APISchemaInterface
-     */
-    public function getWebservice(): APISchemaInterface
+    public function getWebservice(): WebserviceInfo
     {
         return $this->webservice;
     }

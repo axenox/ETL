@@ -382,10 +382,14 @@ class OpenAPI3 implements APISchemaInterface
             ));
         }
         
+        // Apply scrambling.
         if($config->hasOption(self::CFG_SCRAMBLE_EXAMPLES) &&
             $config->getOption(self::CFG_SCRAMBLE_EXAMPLES) === true) {
             $this->scrambleExampleValues($jsonPath);
         }
+        
+        // Document error messages.
+        $this->documentErrorMessages($jsonPath);
         
         return $jsonPath->getValue();
     }
@@ -523,7 +527,13 @@ class OpenAPI3 implements APISchemaInterface
      * Performs a deep merge of the given UXON over the current OpenAPI JSON structure.
      * Scalar values in the incoming UXON overwrite existing values; array/object values
      * are merged recursively.
-     *
+     * 
+     * TODO geb 2026-07-01: Modifying an OpenAPI3 instance after instantiation does not really make sense. A lot of processing and enhancements happen
+     * TODO                 during construction, which have to be re-done upon modification. To be more transparent about the work performed and to avoid
+     * TODO                 issues with incomplete transformations (such as stale $.paths references), we should make this class largely immutable.
+     * 
+     * @deprecated
+     * 
      * @see \axenox\ETL\Common\OpenAPI\OpenAPI3UxonTrait::importUxonObject()
      */
     public function importUxonObject(UxonObject $uxon, array $skip_property_names = []) : void
@@ -686,6 +696,51 @@ class OpenAPI3 implements APISchemaInterface
             // Scramble example schemas.
             foreach ($jsonPath->getJsonObjects('$.components.examples[*].value[*].*') as $example) {
                 $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+        } catch (\Throwable $e) {
+
+        }
+    }
+
+    /**
+     * @param JsonObject $jsonPath
+     * @return void
+     */
+    protected function documentErrorMessages(JsonObject &$jsonPath) : void
+    {
+        try {
+            // Select all component properties that match these filters.
+            // TODO This only collects x-lookups at the moment. To extend the search append additional filters.
+            $filters = [
+                '@.x-lookup.if_not_found_error',
+                // For example, to collect enums add '@.enum'.
+            ];
+            $filters = implode(' or ', $filters);
+            $propertiesWithErrorHandling = $jsonPath->getJsonObjects('$.components.schemas.*.properties[?(' . $filters . ')]');
+            
+            // Scramble example properties.
+            foreach ($propertiesWithErrorHandling as &$property) {
+                $errors = [];
+                
+                $error = $property->get("$.x-lookup.if_not_found_error['//']")[0];
+                if($error !== null) {
+                    $errors['x-lookup'] = $error;
+                }
+                
+                // TODO Add additional error categories here.
+                
+                if(empty($errors)) {
+                    continue;
+                }
+                
+                $value = '';
+                $first = true;
+                foreach ($errors as $group => $message) {
+                    $value .= ($first ? '' : ', ') . $group . ': ' . $message;
+                    $first = false;
+                }
+                
+                $property->set('$.x-error-messages', $value);
             }
         } catch (\Throwable $e) {
 

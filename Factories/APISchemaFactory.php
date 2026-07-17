@@ -92,20 +92,29 @@ class APISchemaFactory extends AbstractStaticFactory
                 $row = $ds->getRow($versionCol->findRowByValue($bestFit));
                 break;
         }
-
-        // Create the schema instance.
-        $schemaClass = $row['type__schema_class'];
-        $schema = new $schemaClass($workbench, $row['swagger_json'], $row['version']);
-        $schema->setWebserviceInfo(new WebserviceInfo(
+        
+        $schemaJson = json_decode($row['swagger_json'], true);
+        $webservice = new WebserviceInfo(
             $row['name'],
             $row['version'],
             $row['UID'],
-            $schema,
+            $schemaJson,
             $facade,
             $row['enabled'] ?? false
-        ));
+        );
 
-        $workbench->eventManager()->dispatch(new OnWebserviceLoaded($schema));
+        // Dispatch event. This will trigger mutations.
+        $workbench->eventManager()->dispatch(new OnWebserviceLoaded($workbench, $webservice));
+        
+        // Create the schema instance.
+        $schemaClass = $row['type__schema_class'];
+        $schema = new $schemaClass(
+            $workbench,
+            json_encode($webservice->getSchemaArray()),
+            $webservice->getVersion()
+        );
+        
+        $schema->setWebserviceInfo($webservice);
         return $schema;
     }
 }
