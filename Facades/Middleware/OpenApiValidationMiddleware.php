@@ -98,7 +98,7 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
                                     'details' => $e->getErrors()
                                 ];
                                 $eDetails = new JsonSchemaValidationError($errors, 'Invalid request body', null, null, $json);
-                                throw new HttpBadRequestError($request, $e2->getMessage(), null, $eDetails);
+                                throw new HttpBadRequestError($request, $e->getMessage(), null, $eDetails);
                             } catch (Throwable $e) {
                                 throw $prev;
                             }
@@ -108,8 +108,16 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
                     case $prev instanceof InvalidParameter:
                         $schemaError = $prev->getPrevious();
                         $context = 'Invalid request parameter';
-                        $msg = $prev->getMessage() . '. ' . $schemaError->getMessage();
-                        throw new HttpBadRequestError($request, $context . $msg, null, $exception);
+                        // Reflect the offending parameter value, but HTML-encode it so any attacker-controlled
+                        // content (e.g. XSS probes) is rendered inert in every context - even if the response
+                        // were ever interpreted as HTML. json_encode + application/json + nosniff already
+                        // protect the JSON response; this is defense-in-depth.
+                        $safeValue = htmlspecialchars($prev->value(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        $msg = "Parameter '" . $prev->name() . "' has invalid value '" . $safeValue . "'";
+                        if ($schemaError !== null) {
+                            $msg .= '. ' . $schemaError->getMessage();
+                        }
+                        throw new HttpBadRequestError($request, $context . ': ' . $msg, null, $exception);
                 }
             }
 
