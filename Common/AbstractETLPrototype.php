@@ -551,7 +551,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 
                 if(!empty($baseData)) {
                     $rowNo = array_key_first($baseData);
-                    $affectedBaseData[$rowNo] = $baseData[$rowNo];
+                    $affectedBaseData[$rowNo + $i] = $baseData[$rowNo];
                 } else {
                     $rowNo = $this->toDisplayRowNumber($i);
                     $affectedCurrentData[$rowNo] = $failedToFind[0];
@@ -806,10 +806,15 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * @param DataSheetInterface $baseData
      * @param array              $failedToFind
+     * @param string|null        $toRowNumberFunction
      * @return array
      * @see DataSheetTracker::getBaseDataForSheet()
      */
-    protected function getBaseData(DataSheetInterface $baseData, array &$failedToFind) : array
+    protected function getBaseData(
+        DataSheetInterface $baseData,
+        array &$failedToFind,
+        ?string $toRowNumberFunction = 'toDisplayRowNumber'
+    ) : array
     {
         if($this->dataTracker === null) {
             $failedToFind = $baseData->getRows();
@@ -819,7 +824,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
         return $this->dataTracker->getBaseDataForSheet(
             $baseData,
             $failedToFind,
-            [$this, 'toDisplayRowNumber']
+            $toRowNumberFunction !== null ? [$this, $toRowNumberFunction] : null
         );
     }
     
