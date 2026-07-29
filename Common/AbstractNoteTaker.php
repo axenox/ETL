@@ -11,6 +11,8 @@ use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\TranslationInterface;
 use exface\Core\Interfaces\WorkbenchDependantInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
+use exface\Core\Templates\BracketHashStringTemplateRenderer;
+use exface\Core\Templates\Placeholders\ArrayPlaceholders;
 
 /**
  * @inheritDoc
@@ -144,6 +146,7 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
     {
         $data = $note->getNoteData();
         $data['ordering_id'] = ++self::$currentOrderingIds[get_called_class()];
+        $this->renderNoteData($data);
         
         $pending = $this->getPendingNotesInternal();
         $pending->addRow($data);
@@ -151,6 +154,16 @@ abstract class AbstractNoteTaker implements NoteTakerInterface
         if($this->noteLimit > 0 && $pending->countRows() > $this->noteLimit) {
             $pending->removeRow(0);
         }
+    }
+    
+    protected function renderNoteData(array &$noteData) : void
+    {
+        $phData = $noteData;
+        unset($phData['message']);
+        
+        $renderer = new BracketHashStringTemplateRenderer($this->getWorkbench());
+        $renderer->addPlaceholder(new ArrayPlaceholders($phData, '~data:'));
+        $noteData['message'] = $renderer->render($noteData['message']);
     }
 
     /**
