@@ -81,12 +81,15 @@ trait ITakeStepNotesTrait
         $note = StepNote::fromException($stepData, $exception);
         
         if($this->noteOnFailureUxon !== null) {
-            $msg = $note->getMessage();
-            $note->importUxonObject($this->noteOnFailureUxon);
-            $noteMsg = $note->getMessage();
-            $noteMsg = empty($noteMsg) ? $noteMsg : StringDataType::endSentence($noteMsg);
+            // Get rendered message from exception.
+            $exceptionMsg = $note->getMessage();
             
-            $note->setMessage($noteMsg . (empty($noteMsg) ? '' : ' ') . $msg);
+            // Apply UXON.
+            $note->importUxonObject($this->noteOnFailureUxon);
+            // If UXON had no message, re-apply exception message as fallback.
+            if(empty($note->getMessage())) {
+                $note->setMessage($exceptionMsg);
+            }
         }
         
         return $note;
