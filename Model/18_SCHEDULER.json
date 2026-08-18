@@ -61,20 +61,20 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Dump old web service logs",
+            "_EXPORT_SUMMARY": "Cleanup old data flow logs",
             "CREATED_ON": "2025-12-05 11:58:52",
-            "MODIFIED_ON": "2025-12-05 14:09:02",
+            "MODIFIED_ON": "2026-08-05 18:06:15",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11f0bb7d63165120bb7d025041000001",
             "ACTION_UXON": {
-                "alias": "axenox.ETL.WebserviceRequestCleanup"
+                "alias": "axenox.ETL.Cleanup"
             },
             "QUEUE_TOPICS": "scheduler",
             "SCHEDULE": "0 4 * * *",
             "APP": "0x11ebbc50679eacdabc50025041000001",
             "DESCRIPTION": "",
-            "NAME": "Dump old web service logs",
+            "NAME": "Cleanup old data flow logs",
             "TASK_UXON": null,
             "FIRST_RUN": "2025-12-04 15:10:12"
         }

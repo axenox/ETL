@@ -382,10 +382,14 @@ class OpenAPI3 implements APISchemaInterface
             ));
         }
         
+        // Apply scrambling.
         if($config->hasOption(self::CFG_SCRAMBLE_EXAMPLES) &&
             $config->getOption(self::CFG_SCRAMBLE_EXAMPLES) === true) {
             $this->scrambleExampleValues($jsonPath);
         }
+        
+        // Document error messages.
+        $this->documentErrorMessages($jsonPath);
         
         return $jsonPath->getValue();
     }
@@ -692,6 +696,51 @@ class OpenAPI3 implements APISchemaInterface
             // Scramble example schemas.
             foreach ($jsonPath->getJsonObjects('$.components.examples[*].value[*].*') as $example) {
                 $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+        } catch (\Throwable $e) {
+
+        }
+    }
+
+    /**
+     * @param JsonObject $jsonPath
+     * @return void
+     */
+    protected function documentErrorMessages(JsonObject &$jsonPath) : void
+    {
+        try {
+            // Select all component properties that match these filters.
+            // TODO This only collects x-lookups at the moment. To extend the search append additional filters.
+            $filters = [
+                '@.x-lookup.if_not_found_error',
+                // For example, to collect enums add '@.enum'.
+            ];
+            $filters = implode(' or ', $filters);
+            $propertiesWithErrorHandling = $jsonPath->getJsonObjects('$.components.schemas.*.properties[?(' . $filters . ')]');
+            
+            // Scramble example properties.
+            foreach ($propertiesWithErrorHandling as &$property) {
+                $errors = [];
+                
+                $error = $property->get("$.x-lookup.if_not_found_error['//']")[0];
+                if($error !== null) {
+                    $errors['x-lookup'] = $error;
+                }
+                
+                // TODO Add additional error categories here.
+                
+                if(empty($errors)) {
+                    continue;
+                }
+                
+                $value = '';
+                $first = true;
+                foreach ($errors as $group => $message) {
+                    $value .= ($first ? '' : ', ') . $group . ': ' . $message;
+                    $first = false;
+                }
+                
+                $property->set('$.x-error-messages', $value);
             }
         } catch (\Throwable $e) {
 

@@ -25,6 +25,27 @@ use Throwable;
  * 
  * `StepNotes` will be stored in `axenox.ETL.step_note` and can be used to generate user-friendly insights into
  * the data flows they originated from.
+ * 
+ * ### Message Placeholders
+ * 
+ * You can enrich your message with note data, by using [#~data:data_key#] placeholders.
+ * Valid data keys are:
+ * - 'flow_run'
+ * - 'step_run'
+ * - 'message_code'
+ * - 'message_type'
+ * - 'exception_flag'
+ * - 'exception_message'
+ * - 'exception_log_id'
+ * - 'count_reads'
+ * - 'count_writes'
+ * - 'count_creates'
+ * - 'count_updates'
+ * - 'count_deletes'
+ * - 'count_errors'
+ * - 'count_warnings'
+ * - 'context_data'
+ * - 'visible_for_user_roles'
  */
 class StepNote implements NoteInterface
 {

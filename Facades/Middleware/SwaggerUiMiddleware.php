@@ -88,8 +88,53 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
             <script>
                 window.onload = function() {
                 //<editor-fold desc='Changeable Configuration Block'>
+
+                /* Swagger UI plugin to show a badge on collapsible operation headers for x-status property
+                 * 
+                 * The x-status property will be used to indicate, if a route (flow) is disabled or not connected
+                 * to a flow at all. It is just for information, but helps a lot, when clicking through APIs
+                 */
+                const StatusBadgePlugin = () => ({
+                    wrapComponents: {
+                        OperationSummary: (Original, system) => (props) => {
+                            const React = system.React;
+                            const opData = props.operationProps && props.operationProps.toJS
+                                ? props.operationProps.toJS()
+                                : {};
+                            const xStatus = opData.op && opData.op["x-status"];
+
+                            if (!xStatus) return React.createElement(Original, props);
+
+                            return React.createElement(
+                                "div",
+                                { style: { position: "relative" } },
+                                React.createElement(Original, props),
+                                React.createElement(
+                                    "span",
+                                    {
+                                        style: {
+                                            position: "absolute",
+                                            top: "50%",
+                                            right: "50px",
+                                            transform: "translateY(-50%)",
+                                            padding: "3px 8px",
+                                            backgroundColor: "#89bf04",
+                                            color: "white",
+                                            borderRadius: "57px",
+                                            fontSize: "12px",
+                                            fontWeight: "bold",
+                                            fontFamily: "sans-serif",
+                                            pointerEvents: "none"
+                                        }
+                                    },
+                                    xStatus
+                                )
+                            );
+                        }
+                    }
+                });
                 
-                // the following lines will be replaced by docker/configurator, when it runs in a docker-container
+                // Initialize Swagger UI
                 window.ui = SwaggerUIBundle({
                         url: '{$openapiUrl}',
                         dom_id: '#swagger-ui',
@@ -101,7 +146,8 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
                             SwaggerUIStandalonePreset
                         ],
                         plugins: [
-                            SwaggerUIBundle.plugins.DownloadUrl
+                            SwaggerUIBundle.plugins.DownloadUrl,
+                            StatusBadgePlugin
                         ],
                         layout: 'StandaloneLayout',
                         {$supportedSubmitMethods}
