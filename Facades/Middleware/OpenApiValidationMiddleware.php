@@ -104,7 +104,14 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
                             }
                         }
 
-                        throw new HttpBadRequestError($request, $exception->getMessage(), null, $exception);
+                        $path = $this->buildJsonPathToMismatch($prev);
+                        if ($path !== false) {
+                            $path = " (JSON-Path to affected property: '" . $path . "')";
+                        } else {
+                            $path = '';
+                        }
+                        
+                        throw new HttpBadRequestError($request, $exception->getMessage() . $path, null, $exception);
                     case $prev instanceof InvalidParameter:
                         $schemaError = $prev->getPrevious();
                         $context = 'Invalid request parameter';
@@ -179,5 +186,30 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
             return $request->getQueryParams()[$this->verboseUrlParam] === 'true';
         }
         return false;
+    }
+
+    /**
+     * Builds a JSON path to a SchemaMismatch error, by parsing its data breadcrumbs.
+     * 
+     * Returns FALSE if there were no breadcrumbs to follow.
+     * 
+     * @param SchemaMismatch $schemaMismatch
+     * @return bool|string
+     */
+    protected function buildJsonPathToMismatch(SchemaMismatch $schemaMismatch) : bool|string
+    {
+        $breadCrumb = $schemaMismatch->dataBreadCrumb()->buildChain();
+        
+        if(empty($breadCrumb)) {
+            return false;
+        } 
+        
+        foreach ($breadCrumb as $idx => $breadCrumbItem) {
+            if (is_numeric($breadCrumbItem)) {
+                $breadCrumb[$idx] = '[' . $breadCrumbItem . ']';
+            }
+        }
+
+        return '$.' . implode('.', $breadCrumb);
     }
 }
