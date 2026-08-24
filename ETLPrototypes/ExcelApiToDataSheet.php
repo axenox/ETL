@@ -344,6 +344,7 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Improve excel reading performance by skipping empty cells. This will also help avoid
         // getting completely empty rows, that cannot be used for imports anyway.
         $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
+        $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_REMOVE_EMPTY_ROWS, true);
         $this->getCrudCounter()->addObject($fakeObj);
         
         foreach ($toObjectSchema->getProperties() as $propSchema) {
