@@ -759,9 +759,11 @@ abstract class AbstractETLPrototype implements ETLStepInterface
                 $badData
             );
             
-            if($this->ifDuplicatesDetected == self::IF_DUPLICATES_IGNORE) {
-                $exception->setAlias('81YKZHB');
-            }
+            $exception->setAlias(match($this->ifDuplicatesDetected) {
+                self::IF_DUPLICATES_ERROR => '81YKTKG',
+                self::IF_DUPLICATES_IGNORE => '81YKZHB',
+                default => $exception->getDefaultAlias(),
+            });
             
             StepNote::fromException(
                 $stepData,
@@ -771,6 +773,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             )->enrichWithAffectedData(
                 $badData,
                 [],
+                false
             )->setMessageType(
                 MessageTypeDataType::WARNING
             )->takeNote();
