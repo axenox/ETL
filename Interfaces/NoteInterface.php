@@ -3,6 +3,7 @@
 namespace axenox\ETL\Interfaces;
 
 use axenox\ETL\Common\AbstractNoteTaker;
+use exface\Core\CommonLogic\UxonObject;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 
 /**
@@ -119,10 +120,10 @@ interface NoteInterface
      * Set which `exface.Core.USER_ROLE` aliases this note should be visible for.
      * Default is `AUTHENTICATED` (visible for everyone).
      *
-     * @param string|array $roles
+     * @param UxonObject|string $roles
      * @return NoteInterface
      */
-    function setVisibleUserRoles(string|array $roles) : NoteInterface;
+    function setVisibleForUserRoles(UxonObject|string $roles) : NoteInterface;
 
     /**
      * Adds the rows provided as context data (limiting actual row data to 10 lines each) and
