@@ -32,7 +32,7 @@ class WebRequestStatusDataType extends IntegerDataType implements EnumDataTypeIn
         if (empty($this->labels)) {
             $translator = $this->getWorkbench()->getApp('axenox.ETL')->getTranslator();
             
-            foreach (WebRequestStatusDataType::getValuesStatic() as $const => $val) {
+            foreach (WebRequestStatusDataType::getValuesOfConstants() as $const => $val) {
                 $this->labels[$val] = $translator->translate('WEBSERVICE.STATUS.' . $const);
             }
         }
