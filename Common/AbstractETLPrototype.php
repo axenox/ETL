@@ -617,7 +617,11 @@ abstract class AbstractETLPrototype implements ETLStepInterface
     /**
      * Define a set of data checks to performed on the data RECEIVED by this step. Use the property
      * `stop_on_failed_check` to control, whether a failed check should halt the procedure.
-     *
+     * 
+     * IMPORTANT: Since you are checking the input data for this step, your expressions must reference
+     * columns by their original names. For instance, if you are importing an excel, use the excel column names
+     * and if you are importing from a JSON use the JSON property keys.
+     * 
      * NOTE: You can configure per step, whether it should generate a step note on success and/or failure.
      *
      * @uxon-property from_data_checks
