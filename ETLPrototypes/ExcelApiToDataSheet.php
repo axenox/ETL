@@ -1,15 +1,14 @@
 <?php
 namespace axenox\ETL\ETLPrototypes;
 
-use axenox\ETL\Common\NoteTaker;
-use axenox\ETL\Common\StepNote;
+use axenox\ETL\Common\AbstractETLPrototype;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
-use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
+use axenox\ETL\Common\FlowStepLogBook;
 use exface\Core\CommonLogic\Filesystem\DataSourceFileInfo;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\DataTypes\ComparatorDataType;
-use exface\Core\Exceptions\DataSheets\DataSheetMissingRequiredValueError;
+use exface\Core\Exceptions\DataSheets\DataSheetErrorMultiple;
 use exface\Core\Exceptions\DataTypes\JsonSchemaValidationError;
 use exface\Core\Exceptions\RuntimeException;
 use exface\Core\Factories\DataSheetFactory;
@@ -28,41 +27,53 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
  * Objects have to be defined with an x-object-alias and with x-attribute-aliases for the object to fill
  * AND x-excel-sheet and with x-excel-column for the information where to read the information in the excel
  * like:
+ * 
  * ´´´
  * {
  *     "Activities": {
  *          "type": "object",
- *          "x-object-alias": "full.namespace.object",
+ *          "x-object-alias": "my.App.Activity",
  *          "x-excel-sheet": "Activities",
  *          "properties: {
  *              "Activity_Id" {
  *                  "type": "string",
- *                  "x-attribute-alias": "attribute_alias",
+ *                  "x-attribute-alias": "activity_id",
  *                  "x-excel-column": "Activity_Id"
  *              }
  *          }
  *     }
  * }
- *
+ * 
  * ´´´
+ * 
+ * ## Customizing the resulting data sheet
  *
+ * Using `base_data_sheet` you can customize the data sheet, that is going to be used by adding
+ * filters, sorters, aggregators, etc. from placeholders available in the flow step.
  *
- * Placeholder and STATIC Formulas can be defined wihtin the configuration.
- * "additional_rows": [
- *      {
- *          "attribute_alias": "ETLFlowRunUID",
- *          "value": "[#flow_run_uid#]"
- *      },
- *      {
- *          "attribute_alias": "RequestId",
- *          "value": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
- *      },
- *      {
- *          "attribute_alias": "Betreiber",
- *          "value": "SuedLink"
- *      }
- * ]
+ * ### Example: save additional information about the flow run in a staging table
  *
+ * ```
+ * {
+ *  "base_data_sheet": {
+ *      "columns": [
+ *          {
+ *              "attribute_alias": "ETLFlowRunUID",
+ *              "formula": "='[#flow_run_uid#]'"
+ *          },
+ *          {
+ *              "attribute_alias": "RequestId",
+ *              "formula": "=Lookup('UID', 'axenox.ETL.webservice_request', 'flow_run = [#flow_run_uid#]')"
+ *          },
+ *          {
+ *              "attribute_alias": "Betreiber",
+ *              "formula": "='SuedLink'"
+ *          }
+ *      ]
+ * }
+ *
+ * ```
+ * 
  * @author Andrej Kaqbachnik
  */
 class ExcelApiToDataSheet extends JsonApiToDataSheet
@@ -76,7 +87,21 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
 
     private $validateApiSchema = false;
 
-    private $excelHasHeaderRow = true;
+    private int $firstRowIndex = 2;
+
+    /**
+     * Summary of getPlaceholders
+     * @param \axenox\ETL\Interfaces\ETLStepDataInterface $stepData
+     * @return string[]
+     */
+    protected function getPlaceholders(ETLStepDataInterface $stepData) : array
+    {
+    	$phs = parent::getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
+        $phs['upload_uid'] = $uploadUid;
+        return $phs;
+    }
 
     /**
      *
@@ -88,95 +113,63 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     {
         $stepRunUid = $stepData->getStepRunUid();
         $placeholders = $this->getPlaceholders($stepData);
+        $fileData = $this->getUploadData($stepData);
+        $uploadUid = $fileData->getUidColumn()->getValue(0);
         $result = new UxonEtlStepResult($stepRunUid);
         $logBook = $this->getLogBook($stepData);
+        $profiler = $stepData->getProfiler();
         $this->getCrudCounter()->reset();
 
         // Read the upload info (in particular the UID) into a data sheet
-        $fileData = $this->getUploadData($stepData);
-        $uploadUid = $fileData->getUidColumn()->getValue(0);;
-        $placeholders['upload_uid'] = $uploadUid;
+        $lap = $profiler->start('Reading from-sheet for step ' . $this->getName());
 
         // If there is no file to read, stop here.
         // TODO Or throw an error? Need a step config property here!
-        if ($uploadUid === null) {
-            yield 'No file found in step input' . PHP_EOL;
+        if ($placeholders['upload_uid'] === null) {
+            $lap->stop();
+            $logBook->addLine($msg = 'No file found in step input');
+            yield $msg . PHP_EOL;
             return $result->setProcessedRowsCounter(0);
         }
 
         // Create a FileInfo object for the Excel file
+        $logBook->addSection('Reading from-sheet');
         $fileInfo = DataSourceFileInfo::fromObjectAndUID($fileData->getMetaObject(), $uploadUid);
-        yield 'Processing file "' . $fileInfo->getFilename() . '"' . PHP_EOL;
+        $logBook->addLine($msg = 'Processing file "' . $fileInfo->getFilename() . '"');
+        yield $msg . PHP_EOL;
 
-        $toObject = $this->getToObject();
-        $toSheet = $this->createBaseDataSheet($placeholders);
+        $toSheet = $this->createBaseDataSheet($this->getToObject(), $placeholders);
         $apiSchema = $this->getAPISchema($stepData);
         $toObjectSchema = $apiSchema->getObjectSchema($toSheet->getMetaObject(), $this->getSchemaName());
-        
-        if ($this->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($this->getToObject());
-        } elseif($toObjectSchema->isUpdateIfMatchingAttributes()) {
-            $this->addDuplicatePreventingBehavior($toObject, $toObjectSchema->getUpdateIfMatchingAttributeAliases());
+
+        $fromSheet = $this->readExcel($fileInfo, $toObjectSchema, $logBook);
+        if (empty($this->getUpdateIfMatchingAttributeAliases()) && $toObjectSchema->isUpdateIfMatchingAttributes()) {
+            $this->setUpdateIfMatchingAttributes($toObjectSchema->getUpdateIfMatchingAttributeAliases());
         }
 
-        $fromSheet = $this->readExcel($fileInfo, $toObjectSchema);
-        $logBook->addDataSheet('Excel data', $fromSheet);
+        $logBook->addLine("Read {$fromSheet->countRows()} rows from Excel into from-sheet based on {$fromSheet->getMetaObject()->__toString()}");
+        $logBook->addDataSheet('Excel data', $fromSheet->copy());
         $this->getCrudCounter()->addValueToCounter($fromSheet->countRows(), CrudCounter::COUNT_READS);
+        $lap->stop();
+
+        $toSheet = $this->getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook);
         
-        // Validate data in the from-sheet against the JSON schema
-        if ($this->isValidatingApiSchema()) {
-            foreach ($fromSheet->getRows() as $i => $row) {
-                $rowErrors = [];
-                try {
-                    $toObjectSchema->validateRow($row);
-                } catch (JsonSchemaValidationError $e) {
-                    $rowErrors[$i+1] = $e->getMessage();
-                }
-            }
-            if (count($rowErrors) > 0) {
-                throw new RuntimeException('Invalid data on rows: ' . implode(', ', array_keys($rowErrors)));
-            }
-        }
-
-        // Apply the mapper
-        $mapper = $this->getPropertiesToDataSheetMapper($fromSheet->getMetaObject(), $toObjectSchema);
-        $logBook->addSection('Filling data sheet');
-
-        $toSheet = $this->applyDataSheetMapper($mapper, $fromSheet, $stepData, $logBook);
-
-        if($toSheet->countRows() === 0) {
-            $logBook->addLine($msg = 'All input rows removed because of invalid or missing data.');
-
-            $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($this, $logBook));
-
-            yield $msg . PHP_EOL;
-            return $result->setProcessedRowsCounter(0);
-        }
-        
-        $toSheet = $this->mergeBaseSheet($toSheet, $placeholders);
-
-        // Saving relations is very complex and not yet supported for OpenApi Imports
-        $this->removeRelationColumns($toSheet);
-
+        $logBook->addSection('Saving data');
+        $lap = $profiler->start('Saving data for step ' . $this->getName());
         $msg = 'Importing **' . $toSheet->countRows() . '** rows for ' . $toSheet->getMetaObject()->getAlias(). ' with the data from provided Excel file.';
         $logBook->addLine($msg);
-        $logBook->addDataSheet('To-data', $toSheet);
         yield $msg;
 
         $this->getCrudCounter()->start([], false, [CrudCounter::COUNT_READS]);
-        
-        $writer = $this->writeData(
+
+        $resultSheet = $this->writeData(
             $toSheet, 
             $this->getCrudCounter(), 
             $stepData,
-            $logBook,
-            $this->isSkipInvalidRows()
+            $logBook
         );
+        $lap->stop();
 
-        $logBook->addSection('Saving data');
-        yield from $writer;
-        $resultSheet = $writer->getReturn();
-        
         $logBook->addLine('Saved **' . $resultSheet->countRows() . '** rows of "' . $resultSheet->getMetaObject()->getAlias(). '".');
         if ($toSheet !== $resultSheet) {
             $logBook->addDataSheet('To-data as saved', $resultSheet);
@@ -189,11 +182,43 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
+     * @inheritDoc
+     * @see JsonApiToDataSheet::getToSheet()
+     */
+    protected function getToSheet(ETLStepDataInterface $stepData, DataSheetInterface $fromSheet, APIObjectSchemaInterface $toObjectSchema, FlowStepLogBook $logBook): DataSheetInterface
+    {
+        // Validate data in the from-sheet against the JSON schema
+        $logBook->addLine('`validate_api_schema` is `' . ($this->isValidatingApiSchema() ? 'true' : 'false') . '`');
+        if ($this->isValidatingApiSchema()) {
+            $logBook->addIndent(1);
+            $errors = new DataSheetErrorMultiple('', null, null, $this->getWorkbench()->getCoreApp()->getTranslator());
+            
+            foreach ($fromSheet->getRows() as $i => $row) {
+                try {
+                    $toObjectSchema->validateRow($row);
+                } catch (JsonSchemaValidationError $e) {
+                    foreach ($e->getErrors() as $error) {
+                        $msg = 'Property "' . $error['property'] . '": ' . $error['message'];
+                        $errors->appendError(new RuntimeException($msg, $e), $i + 1, false);
+                    }
+                }
+            }
+            
+            $logBook->addIndent(-1);
+            if ($errors->countErrors() > 0) {
+                $errors->updateMessage();
+                throw $errors;
+            }
+        }
+        
+        return parent::getToSheet($stepData, $fromSheet, $toObjectSchema, $logBook); 
+    }
+
+
+    /**
      * Configure the underlying webservice that provides the OpenApi definition.
      *
-     * @uxon-property webservice
-     * @uxon-type object
-     * @uxon-template {"alias": "alias", "version": "^1.25.x"}
+     * @deprecated DO NOT USE. Property will be phased out soon.
      *
      * @param UxonObject $webserviceConfig
      * @return ExcelApiToDataSheet
@@ -204,11 +229,19 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         return $this;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceAlias() : ?string
     {
         return $this->webservice['alias'] ?? null;
     }
 
+    /**
+     * @deprecated DO NOT USE. Property will be phased out soon.
+     * @return string|null
+     */
     protected function getWebserviceVersion() : ?string
     {
         return $this->webservice['version'] ?? null;
@@ -256,36 +289,6 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * Reads the OpenAPI specification from the configrued webservice and transforms it into an excel column mapping
-     * 
-     * // TODO currently this supports only OpenAPI v3!!!
-     * 
-     * @return string
-     */
-    protected function getAPISchema(ETLStepDataInterface $stepData) : APISchemaInterface
-    {
-        $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice');
-        $ds->getColumns()->addMultiple([
-            'UID', 
-            'swagger_json', 
-            'type__schema_class',
-            'enabled'
-        ]);
-        if ((null !== $customWebservice = $this->getWebserviceAlias()) && (null !== $customWebserviceVersion = $this->getWebserviceVersion())) {
-            $ds->getFilters()->addConditionFromString('alias', $customWebservice, '==');
-            $ds->getFilters()->addConditionFromString('version', $customWebserviceVersion, '==');
-        } else {
-            $ds->getFilters()->addConditionFromString('webservice_flow__flow__flow_run__UID', $stepData->getFlowRunUid());
-        }
-        $ds->dataRead();        
-
-        $webservice = $ds->getSingleRow();
-        $schemaClass = $webservice['type__schema_class'];
-        $schema = new $schemaClass($this->getWorkbench(), $webservice['swagger_json']);
-        return $schema;
-    }
-
-    /**
      * 
      * @param \exface\Core\Interfaces\Tasks\TaskInterface $task
      */
@@ -313,13 +316,20 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * 
-     * @param \exface\Core\Interfaces\Filesystem\FileInfoInterface $fileInfo
-     * @param array $toObjectSchema
+     *
+     * @param FileInfoInterface        $fileInfo
+     * @param APIObjectSchemaInterface $toObjectSchema
+     * @param FlowStepLogBook          $logBook
      * @return DataSheetInterface
      */
-    protected function readExcel(FileInfoInterface $fileInfo, APIObjectSchemaInterface $toObjectSchema) : DataSheetInterface
+    protected function readExcel(
+        FileInfoInterface $fileInfo,
+        APIObjectSchemaInterface $toObjectSchema,
+        FlowStepLogBook $logBook
+    ) : DataSheetInterface
     {
+        $logBook->addLine('Reading data from Excel...');
+        $logBook->addIndent(1);
         $sheetname = $toObjectSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_SHEET);
         // Create fake meta object with the expected attributes and use the regular
         // ExcelBuilder to read it.
@@ -334,15 +344,18 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         // Improve excel reading performance by skipping empty cells. This will also help avoid
         // getting completely empty rows, that cannot be used for imports anyway.
         $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_READ_EMPTY_CELLS, false);
+        $fakeObj->setDataAddressProperty(ExcelBuilder::DAP_EXCEL_REMOVE_EMPTY_ROWS, true);
         $this->getCrudCounter()->addObject($fakeObj);
-
+        
         foreach ($toObjectSchema->getProperties() as $propSchema) {
             $excelColName = $propSchema->getFormatOption(self::API_SCHEMA_FORMAT, self::API_OPTION_COLUMN);
+            $attrAlias = $propSchema->getPropertyName();
+            
             if ($excelColName === null || $excelColName === '') {
+                $logBook->addLine('SKIPPING "' . $attrAlias . '": Missing property "x-excel-column".');
                 continue;
             }
-            
-            $attrAlias = $propSchema->getPropertyName();
+
             $excelAddress = '[' . $excelColName . ']';
             MetaObjectFactory::addAttributeTemporary(
                 $fakeObj, 
@@ -356,6 +369,9 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
         $fakeSheet = DataSheetFactory::createFromObject($fakeObj);
         $fakeSheet->getColumns()->addFromAttributeGroup($fakeObj->getAttributes());
         $fakeSheet->dataRead();
+        
+        $logBook->addIndent(-1);
+        
         return $fakeSheet;
     }
 
@@ -385,27 +401,37 @@ class ExcelApiToDataSheet extends JsonApiToDataSheet
     }
 
     /**
-     * Set to FALSE if the excel table does NOT have a header row with column names
-     * 
-     * @uxon-property excel_has_header_row
-     * @uxon-type boolean
-     * @uxon-default true
-     * 
-     * @param bool $trueOrFalse
-     * @return ExcelApiToDataSheet
+     * @deprecated 
      */
     protected function setExcelHasHeaderRow(bool $trueOrFalse) : ExcelApiToDataSheet
     {
-        $this->excelHasHeaderRow = $trueOrFalse;
+        $this->firstRowIndex = $trueOrFalse ? 2 : 1;
+        return $this;
+    }
+
+    /**
+     * When outputting row numbers, they will be counted starting from this number.
+     * 
+     * @uxon-property first_row_index
+     * @uxon-type integer
+     * 
+     * @param int $index
+     * @return ExcelApiToDataSheet
+     */
+    protected function setFirstRowIndex(int $index) : ExcelApiToDataSheet
+    {
+        $this->firstRowIndex = $index;
         return $this;
     }
     
     /**
      * {@inheritDoc}
-     * @see JsonApiToDataSheet::getFromDataRowNumber()
+     * @see AbstractETLPrototype::toDisplayRowNumber()
      */
-    protected function getFromDataRowNumber(int $dataSheetRowIdx): int
+    public function toDisplayRowNumber(int $dataSheetRowIdx, bool $inverse = false): int
     {
-        return $dataSheetRowIdx + 1 + ($this->excelHasHeaderRow ? 1 : 0);
+        return $inverse ?
+            $dataSheetRowIdx - $this->firstRowIndex :
+            $dataSheetRowIdx + $this->firstRowIndex;
     }
 }

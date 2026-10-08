@@ -2,8 +2,10 @@
 namespace axenox\ETL\Common;
 
 use axenox\ETL\ETLPrototypes\StepGroup;
+use axenox\ETL\Events\Flow\OnDataFlowLoaded;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\Traits\ImportUxonObjectTrait;
+use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Interfaces\WorkbenchInterface;
 use axenox\ETL\Interfaces\DataFlowInterface;
 
@@ -20,10 +22,12 @@ class DataFlow implements DataFlowInterface
 {
     use ImportUxonObjectTrait;
     
+    private static array $onLoadedList = [];
     private $workbench = null;
     private $name = null;
     private $alias = null;
     private $version = null;
+    private $description = null;
     private $uid;
     private $rootStepGroup = null;
     
@@ -34,13 +38,21 @@ class DataFlow implements DataFlowInterface
         $this->name = $name;
         $this->alias = $alias;
         $this->version = $version;
+        
+        if(in_array($uid, self::$onLoadedList)) {
+            throw new InvalidArgumentException('Self reference detected in Flow "' . $alias . '". This is probably caused by mutations trying to insert a flow into itself.');
+        }
+        
+        self::$onLoadedList[$uid] = $uid;
+        $this->getWorkbench()->eventManager()->dispatch(new OnDataFlowLoaded($this));
+        unset(self::$onLoadedList[$uid]);
     }
     
     /**
      * 
      * @return StepGroup
      */
-    protected function getStepGroup() : StepGroup
+    public function getStepGroup() : StepGroup
     {
         if ($this->rootStepGroup === null) {
             $this->rootStepGroup = new StepGroup($this, $this->getName());
@@ -95,6 +107,45 @@ class DataFlow implements DataFlowInterface
     public function getName(): string
     {
         return $this->name;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setName()
+     */
+    public function setName(string $name): DataFlowInterface
+    {
+        $this->name = $name;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::getDescription()
+     */
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setDescription()
+     */
+    public function setDescription(string $description): DataFlowInterface
+    {
+        $this->description = $description;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see \axenox\ETL\Interfaces\DataFlowInterface::setVersion()
+     */
+    public function setVersion(string $version): DataFlowInterface
+    {
+        $this->version = $version;
+        return $this;
     }
 
     /**

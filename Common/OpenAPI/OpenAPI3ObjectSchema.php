@@ -1,7 +1,6 @@
 <?php
 namespace axenox\ETL\Common\OpenAPI;
 
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIPropertyInterface;
@@ -14,6 +13,7 @@ use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\FormulaFactory;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
+use JsonPath\JsonObject;
 
 /**
  * Represents an OpenAPI 3.x schema bound to a meta object
@@ -32,9 +32,12 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
 
     const X_OBJECT_ALIAS = 'x-object-alias';
     const X_UPDATE_IF_MATCHING_ATTRIBUTES = 'x-update-if-matching-attributes';
+    const X_OBJECT_UID = 'x-object-uid';
+    const X_OBJECT_LABEL = 'x-object-label';
 
     private $openAPISchema = null;
     private $jsonSchema = null;
+    private $jsonValidationSchema = null;
     private $properties = null;
     private $object = null;
     private $updateIfMatchingAttributeAliases = [];
@@ -43,6 +46,32 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     {
         $this->openAPISchema = $model;
         $this->jsonSchema = $jsonSchema;
+
+        // Validation expects "nullable" properties to be represented by "type":["actualType","null"], which is not 
+        // intuitive for designers, so we append the "null" here.
+        try {
+            $jsonObject = new JsonObject($jsonSchema);
+
+            foreach($jsonObject->getJsonObjects('$..properties[?(@.nullable == true)]') as $nullableProperty) {
+                $type = $nullableProperty->get('$.type');
+
+                // Don't perform any work if the type is already nullable OR if the type wasn't specified.
+                if(empty($type) || in_array('null', $type)) {
+                    continue;
+                }
+
+                $value = ['null'];
+                foreach ($type as $typeValue) {
+                    $value[] = $typeValue;
+                }
+                
+                $nullableProperty->set('$.type', $value);
+            }
+
+            $this->jsonValidationSchema = $jsonObject->getValue();
+        } catch (\Throwable $exception) {
+            $this->jsonValidationSchema = $jsonSchema;
+        }
     }
 
     public function getAPI() : APISchemaInterface
@@ -89,7 +118,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function getMetaObject() : ?MetaObjectInterface
     {
         if ($this->object === null) {
-            if (null !== $alias = $this->jsonSchema[self::X_OBJECT_ALIAS] ?? null) {
+            if (null !== $alias = ($this->jsonSchema[self::X_OBJECT_ALIAS] ?? null)) {
                 $this->object = MetaObjectFactory::createFromString($this->getAPI()->getWorkbench(), $alias);
             }
         }
@@ -152,7 +181,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
                         // Determine data type
                         if (empty($attrProp['type'] ?? null)) {
                             try {
-                                $typeProp = MetaModelSchemaBuilder::convertToJsonSchemaDatatype($attribute->getDataType());
+                                $typeProp = JsonDataType::convertDataTypeToJsonSchemaType($attribute->getDataType());
                                 $attrProp = array_merge($attrProp, $typeProp);
                             } catch (InvalidArgumentException $e) {
                                 $object->getWorkbench()->getLogger()->logException($e);
@@ -202,7 +231,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      */
     public function isRequiredProperty(OpenAPI3Property $property) : bool
     {
-        return in_array($property->getPropertyName(), $this->jsonSchema['required']);
+        return in_array($property->getPropertyName(), $this->jsonSchema['required'] ?? []);
     }
     
     /**
@@ -221,7 +250,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
      * is found, the step will perform an update and will not create a new item.
      * 
      * **NOTE:** this will overwrite data in all the attributes affected by the `mapper`.
-     *
+     * 
      * @uxon-property x-update-if-matching-attributes
      * @uxon-type metamodel:attribute[]
      * @uxon-template [""]
@@ -231,6 +260,52 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function isUpdateIfMatchingAttributes() : bool
     {
         return empty($this->jsonSchema[self::X_UPDATE_IF_MATCHING_ATTRIBUTES] ?? []) === false;
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see APIObjectSchemaInterface::getUidProperties()
+     */
+    public function getUidProperties() : null|array
+    {
+        $props = $this->jsonSchema[self::X_OBJECT_UID];
+        return is_array($props) ? $props : [$props];
+    }
+
+    /**
+     * One or more property names, that form the UID of one instance of this object.
+     * 
+     * @uxon-property x-object-uid
+     * @uxon-type array|string
+     * @uxon-template [""]
+     * 
+     * @see APIObjectSchemaInterface::hasUidProperties()
+     */
+    public function hasUidProperties() : bool
+    {
+        return '' !== ($this->jsonSchema[self::X_OBJECT_UID] ?? '');
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see APIObjectSchemaInterface::getLabelPropertyName()
+     */
+    public function getLabelPropertyName() : ?string
+    {
+        return $this->jsonSchema[self::X_OBJECT_LABEL];
+    }
+
+    /**
+     * Name of the property, that form the UID of one instance of this object.
+     * 
+     * @uxon-property x-object-label
+     * @uxon-type string
+     * 
+     * @see APIObjectSchemaInterface::hasLabelProperty()
+     */
+    public function hasLabelProperty() : bool
+    {
+        return '' !== ($this->jsonSchema[self::X_OBJECT_LABEL] ?? '');
     }
 
     /**
@@ -254,7 +329,7 @@ class OpenAPI3ObjectSchema implements APIObjectSchemaInterface
     public function validateRow(array $properties) : array
     {
         $rowObj = json_decode(json_encode($properties));
-        $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonSchema);
+        $result = JsonDataType::validateJsonSchema($rowObj, $this->jsonValidationSchema);
         return $properties;
     }
 

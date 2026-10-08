@@ -1,0 +1,85 @@
+{
+    "object_alias": "exface.Core.MUTATION_TARGET",
+    "columns": [
+        {
+            "name": "_EXPORT_SUMMARY",
+            "hidden": true,
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "CREATED_ON",
+            "attribute_alias": "CREATED_ON"
+        },
+        {
+            "name": "MODIFIED_ON",
+            "attribute_alias": "MODIFIED_ON"
+        },
+        {
+            "name": "CREATED_BY_USER",
+            "attribute_alias": "CREATED_BY_USER"
+        },
+        {
+            "name": "MODIFIED_BY_USER",
+            "attribute_alias": "MODIFIED_BY_USER"
+        },
+        {
+            "name": "UID",
+            "attribute_alias": "UID"
+        },
+        {
+            "name": "OBJECT",
+            "attribute_alias": "OBJECT"
+        },
+        {
+            "name": "NAME",
+            "attribute_alias": "NAME"
+        },
+        {
+            "name": "DESCRIPTION",
+            "attribute_alias": "DESCRIPTION"
+        },
+        {
+            "name": "APP",
+            "attribute_alias": "APP"
+        }
+    ],
+    "rows": [
+        {
+            "_EXPORT_SUMMARY": "Webservice",
+            "CREATED_ON": "2026-04-30 14:46:41",
+            "MODIFIED_ON": "2026-05-07 09:57:32",
+            "CREATED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "MODIFIED_BY_USER": "0x11e8fe1c902c8ebea23ee4b318306b9a",
+            "UID": "0x11f18f2ea2dfc6ec8f2e8bd9afe08dfc",
+            "OBJECT": "0x11eebdc39597022cbdc3025041000001",
+            "NAME": "Webservice",
+            "DESCRIPTION": "",
+            "APP": "0x11ebbc50679eacdabc50025041000001"
+        }
+    ],
+    "totals_rows": [],
+    "filters": {
+        "operator": "AND",
+        "base_object_alias": "exface.Core.MUTATION_TARGET",
+        "conditions": [
+            {
+                "expression": "APP",
+                "comparator": "=",
+                "value": "0x11ebbc50679eacdabc50025041000001",
+                "object_alias": "exface.Core.MUTATION_TARGET"
+            }
+        ]
+    },
+    "rows_limit": null,
+    "rows_offset": 0,
+    "sorters": [
+        {
+            "attribute_alias": "CREATED_ON",
+            "direction": "ASC"
+        },
+        {
+            "attribute_alias": "UID",
+            "direction": "ASC"
+        }
+    ]
+}

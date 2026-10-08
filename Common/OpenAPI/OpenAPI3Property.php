@@ -11,6 +11,7 @@ use exface\Core\DataTypes\BooleanDataType;
 use exface\Core\DataTypes\DateDataType;
 use exface\Core\DataTypes\DateTimeDataType;
 use exface\Core\DataTypes\IntegerDataType;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\NumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
@@ -62,6 +63,7 @@ class OpenAPI3Property implements APIPropertyInterface
     const X_CALCULATION = 'x-calculation';
     const X_CUSTOM_ATTRIBUTE = 'x-custom-attribute';
     const X_PROPERTIES_FROM_DATA = 'x-properties-from-data';
+    const X_EXCEL_COLUMN = 'x-excel-column';
 
     private $objectSchema = null;
     private $name = null;
@@ -101,7 +103,7 @@ class OpenAPI3Property implements APIPropertyInterface
      */
     public function hasLookup() : bool
     {
-        return null !== $this->jsonSchema[self::X_LOOKUP] ?? null;
+        return null !== $this->jsonSchema[self::X_LOOKUP];
     }
 
     /**
@@ -119,6 +121,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * of the to-object.
      * 
      * ```
+     * 
      * {
      *      "Country": {
      *          "type": "string",
@@ -147,6 +150,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * `x-lookup` now explicitly specifies a `to`-column to place the UID into. 
      * 
      * ```
+     * 
      * {
      *      "Country": {
      *          "type": "string",
@@ -197,12 +201,24 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-attribute-alias
      * @uxon-type metamodel:attribute
-     *
+     * 
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeAlias()
      */
     public function getAttributeAlias() : ?string
     {
         return $this->jsonSchema[self::X_ATTRIBUTE_ALIAS] ?? null;
+    }
+
+    /**
+     * Define an excel-column name for this property. When importing from or exporting to Excel sheets, this value will
+     * be used instead of the property name to identify the proper column.
+     * 
+     * @uxon-property x-excel-column
+     * @uxon-type string
+     */
+    public function getExcelColumnName() : ?string
+    {
+        return $this->jsonSchema[self::X_EXCEL_COLUMN] ?? null;
     }
 
     /**
@@ -222,14 +238,28 @@ class OpenAPI3Property implements APIPropertyInterface
      * done.
      * 
      * However, if we also need an x-excel-column for every generated property, we need some more configuration
-     * here. In the simplest case, we could use `"x-excel-column": "[#name#]"`, which would expect excel columns
-     * to be named after the attributes. 
+     * here. In the simplest case, we could use `"x-excel-column": "[#alias#]"`, which would expect excel columns
+     * to be named after the attribute aliases. 
+     * 
+     * ```
+     *
+     *  {
+     *   "properties": {
+     *       "CustomAttributes": {
+     *           "x-attribute-group-alias": "~CUSTOM",
+     *           "x-excel-column": "[#alias#]"
+     *       }
+     *   }
+     *  }
+     *
+     *  ```
      * 
      * Or we can even use a `=Lookup()` formula to take the excel column names from a special column in the definition 
      * of the attributes. Assume, our `ORDER` has a `CustomAttributesJsonBehavior` and the attribute definitions are 
      * stored in `my.App.ORDER_ATTRIBUTE`.
      * 
      * ```
+     * 
      * {
      *  "properties": {
      *      "CustomAttributes": {
@@ -243,6 +273,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * 
      * @uxon-property x-attribute-group-alias
      * @uxon-type metamodel:attribute_group
+     * @uxon-template ~CUSTOM
      *
      * @see \axenox\ETL\Interfaces\APISchema\APIPropertyInterface::getAttributeGroupAlias()
      */
@@ -267,6 +298,7 @@ class OpenAPI3Property implements APIPropertyInterface
      * For example, to generate properties for every available event type:
      * 
      * ```
+     * 
      * {
      *  "properties": {
      *      "EventTypes": {
@@ -457,6 +489,9 @@ class OpenAPI3Property implements APIPropertyInterface
             case 'array':
                 return DataTypeFactory::createFromString($workbench, ArrayDataType::class);
 
+            case 'object':
+                return DataTypeFactory::createFromString($workbench, JsonDataType::class);
+
             case 'string':
                 if ($format === 'datetime' || $format === 'date') {
                     return DataTypeFactory::createFromString($workbench, $format === 'datetime' ? DateTimeDataType::class : DateTimeDataType::class);
@@ -507,5 +542,13 @@ class OpenAPI3Property implements APIPropertyInterface
     public function isRequired() : bool
     {
         return $this->objectSchema->isRequiredProperty($this);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getExampleValue() : mixed
+    {
+        return $this->jsonSchema['example'];
     }
 }

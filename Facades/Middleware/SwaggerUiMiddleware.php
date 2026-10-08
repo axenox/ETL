@@ -10,13 +10,15 @@ use exface\Core\Interfaces\WorkbenchInterface;
 use GuzzleHttp\Psr7\Response;
 
 /**
- * This middleware creates a SwaggerUi html as an test enviornment.
+ * This middleware creates a SwaggerUi html as a test environment.
  * 
  * @author miriam.seitz
  *
  */
 final class SwaggerUiMiddleware implements MiddlewareInterface
 {
+    private const CFG_ALLOW_TRY_IT_OUT = 'SWAGGER_UI.ALLOW_TRY_IT_OUT';
+    
     private $facade = null;
     private $headers;
     private $routePattern;
@@ -59,6 +61,12 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
     	{
             $siteRoot = $this->facade->getWorkbench()->getUrl();
     		$swaggerUI = $siteRoot . 'vendor/npm-asset/swagger-ui-dist';
+            
+            $cfg = $this->getWorkbench()->getApp('axenox.ETL')->getConfig();
+            $supportedSubmitMethods = '';
+            if($cfg->hasOption(self::CFG_ALLOW_TRY_IT_OUT)) {
+                $supportedSubmitMethods = 'supportedSubmitMethods:' . $cfg->getOption(self::CFG_ALLOW_TRY_IT_OUT)->toJson();
+            }
     		
     		return <<<HTML
         <!-- HTML for static distribution bundle build -->
@@ -80,22 +88,69 @@ final class SwaggerUiMiddleware implements MiddlewareInterface
             <script>
                 window.onload = function() {
                 //<editor-fold desc='Changeable Configuration Block'>
+
+                /* Swagger UI plugin to show a badge on collapsible operation headers for x-status property
+                 * 
+                 * The x-status property will be used to indicate, if a route (flow) is disabled or not connected
+                 * to a flow at all. It is just for information, but helps a lot, when clicking through APIs
+                 */
+                const StatusBadgePlugin = () => ({
+                    wrapComponents: {
+                        OperationSummary: (Original, system) => (props) => {
+                            const React = system.React;
+                            const opData = props.operationProps && props.operationProps.toJS
+                                ? props.operationProps.toJS()
+                                : {};
+                            const xStatus = opData.op && opData.op["x-status"];
+
+                            if (!xStatus) return React.createElement(Original, props);
+
+                            return React.createElement(
+                                "div",
+                                { style: { position: "relative" } },
+                                React.createElement(Original, props),
+                                React.createElement(
+                                    "span",
+                                    {
+                                        style: {
+                                            position: "absolute",
+                                            top: "50%",
+                                            right: "50px",
+                                            transform: "translateY(-50%)",
+                                            padding: "3px 8px",
+                                            backgroundColor: "#89bf04",
+                                            color: "white",
+                                            borderRadius: "57px",
+                                            fontSize: "12px",
+                                            fontWeight: "bold",
+                                            fontFamily: "sans-serif",
+                                            pointerEvents: "none"
+                                        }
+                                    },
+                                    xStatus
+                                )
+                            );
+                        }
+                    }
+                });
                 
-                // the following lines will be replaced by docker/configurator, when it runs in a docker-container
+                // Initialize Swagger UI
                 window.ui = SwaggerUIBundle({
-                    url: '{$openapiUrl}',
-                    dom_id: '#swagger-ui',
-                    deepLinking: true,
-     				defaultModelsExpandDepth: 4,
-     				showExtensions: true,
-                    presets: [
-                        SwaggerUIBundle.presets.apis,
-                        SwaggerUIStandalonePreset
-                    ],
-                    plugins: [
-                        SwaggerUIBundle.plugins.DownloadUrl
-                    ],
-                    layout: 'StandaloneLayout'
+                        url: '{$openapiUrl}',
+                        dom_id: '#swagger-ui',
+                        deepLinking: true,
+                        defaultModelsExpandDepth: 4,
+                        showExtensions: true,
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIStandalonePreset
+                        ],
+                        plugins: [
+                            SwaggerUIBundle.plugins.DownloadUrl,
+                            StatusBadgePlugin
+                        ],
+                        layout: 'StandaloneLayout',
+                        {$supportedSubmitMethods}
                     });
                     
                     //</editor-fold>

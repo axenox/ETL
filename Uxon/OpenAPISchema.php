@@ -2,9 +2,11 @@
 namespace axenox\ETL\Uxon;
 
 use axenox\ETL\Common\OpenAPI\OpenAPI3;
+use axenox\ETL\Common\OpenAPI\OpenApi3Component;
 use axenox\ETL\Common\OpenAPI\OpenAPI3ObjectSchema;
 use axenox\ETL\Common\OpenAPI\OpenAPI3Property;
 use axenox\ETL\Common\OpenAPI\OpenAPI3Route;
+use cebe\openapi\spec\Components;
 use cebe\openapi\spec\OpenApi;
 use cebe\openapi\spec\PathItem;
 use cebe\openapi\spec\Paths;
@@ -20,7 +22,7 @@ use exface\Core\Uxon\UxonSchema;
 use exface\Core\DataTypes\SortingDirectionsDataType;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\DataTypes\ComparatorDataType;
-use axenox\ETL\Facades\Helper\MetaModelSchemaBuilder;
+use axenox\ETL\Common\OpenAPI\OpenAPI3MetaModelSchemaBuilder;
 use exface\Core\Factories\MetaObjectFactory;
 use exface\Core\Interfaces\Log\LoggerInterface;
 
@@ -39,10 +41,14 @@ class OpenAPISchema extends UxonSchema
      * requested, the corresponding OpenAPI attributes will be added automatically. If the prototype
      * is an OpenAPI class, properties of the first matching APISchema class will be added too.
      * 
+     * NOTE: All searches are case-sensitive! If auto-suggest doesn't load properly, make sure your
+     * `uxon-property` references the prototype class accurately (i.e. with the same capitalization as `YourClass::class`).
+     * 
      * @var string[]
      */
     const CLASS_MAP = [
         '\\' . OpenAPI3::class => '\\' . OpenApi::class,
+        '\\' . OpenApi3Component::class => '\\' . Components::class,
         // Caution: Object schema and property schema are both JSON schemas
         '\\' . OpenAPI3ObjectSchema::class => '\\' . Schema::class,
         '\\' . OpenAPI3Property::class => '\\' . Schema::class,
@@ -96,7 +102,7 @@ class OpenAPISchema extends UxonSchema
                 'ALIAS_WITH_NS'
             ]);
             $objectSheet->dataRead(50);
-            $schemaBuilder = new MetaModelSchemaBuilder(onlyReturnProperties: true, forceSchema: true, loadExamples: true);
+            $schemaBuilder = new OpenAPI3MetaModelSchemaBuilder(onlyReturnProperties: true, forceSchema: true, loadExamples: true);
             $allAttrRows = [];
             $editbaleAttrRows = [];
             foreach ($objectSheet->getRows() as $objRow) {
@@ -188,7 +194,7 @@ class OpenAPISchema extends UxonSchema
                 $ds = parent::loadPropertiesSheet($schmaClass, $aliasOfAnnotationObject);
                 break;
             // If it is schema class, that has a cebe-class mapping, remember to load the cebe-class
-            case null !== $openApiClass = self::CLASS_MAP[$prototypeClass] ?? null:
+            case null !== $openApiClass = (self::CLASS_MAP[$prototypeClass] ?? null):
                 $ds = parent::loadPropertiesSheet($prototypeClass, $aliasOfAnnotationObject);
                 break;
             default:

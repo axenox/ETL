@@ -87,7 +87,7 @@
         {
             "_EXPORT_SUMMARY": "OpenAPI preset [axenox.ETL.openapi_uxon_preset]",
             "CREATED_ON": "2023-12-18 08:43:34",
-            "MODIFIED_ON": "2023-12-18 08:43:34",
+            "MODIFIED_ON": "2025-09-16 11:52:10",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",
             "MODIFIED_BY_USER": "0x31000000000000000000000000000000",
             "UID": "0x11eebb8625e651aabb86025041000001",
@@ -102,7 +102,11 @@
             "SHORT_DESCRIPTION": "",
             "PARENT_OBJECT": "0x11e9a23da60d78a6949f106530e7aff7",
             "DATA_ADDRESS_PROPS": {
-                "SQL_SELECT_WHERE": "uxon_schema = '\\\\axenox\\\\ETL\\\\Uxon\\\\OpenAPISchema'"
+                "SQL_SELECT_WHERE": [
+                    "// Multiline text delimited by `\n`",
+                    "@T-SQL: uxon_schema = '\\axenox\\ETL\\Uxon\\OpenAPISchema'",
+                    "@MySQL: uxon_schema = '\\\\axenox\\\\ETL\\\\Uxon\\\\OpenAPISchema'"
+                ]
             },
             "DEFAULT_EDITOR_UXON": null,
             "ALIAS": "openapi_uxon_preset",

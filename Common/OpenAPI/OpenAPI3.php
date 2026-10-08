@@ -2,6 +2,7 @@
 namespace axenox\ETL\Common\OpenAPI;
 
 use axenox\ETL\Common\AbstractOpenApiPrototype;
+use axenox\ETL\Common\WebserviceInfo;
 use axenox\ETL\Interfaces\APISchema\APIObjectSchemaInterface;
 use axenox\ETL\Interfaces\APISchema\APIRouteInterface;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
@@ -11,22 +12,116 @@ use cebe\openapi\spec\OpenApi;
 use exface\Core\CommonLogic\UxonObject;
 use exface\Core\CommonLogic\Workbench;
 use exface\Core\DataTypes\JsonDataType;
+use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Exceptions\Model\MetaModelLoadingFailedError;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
 use exface\Core\Factories\MetaObjectFactory;
+use exface\Core\Interfaces\ConfigurationInterface;
 use exface\Core\Interfaces\Model\MetaObjectInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
+use JsonPath\InvalidJsonException;
+use JsonPath\JsonObject;
 use Psr\Http\Message\ServerRequestInterface;
 use Flow\JSONPath\JSONPath;
 use stdClass;
 
 /**
- * API schema for OpenAPI 3.0 allowing additional `x-` attributes to bind to the meta model
+ * API schema for OpenAPI 3.0 allowing additional `x-` attributes to bind to the metamodel
+ * 
+ * # Examples
+ * 
+ * OpenAPI supports examples, which can be used to communicate API expectations to users. They can be accessed via the
+ * SwaggerUI GUI or when calling the API end-points. To make our APIs more transparent, we want to provide meaningful
+ * examples for all our routes and have developed a suite of features to support us with that.
+ * 
+ * ## Config Options
+ * 
+ * You can configure examples for your environment by adjusting your `axenox.ETL.config.json`. The following options
+ * are
+ * available:
+ * 
+ * - `API_EXAMPLES.SUFFIX.REQUIRED`: Customize the suffix for the default example that contains only REQUIRED
+ * properties.  Default value is `"Required"`.
+ * - `API_EXAMPLES.SUFFIX.FULL`: Customize the suffix for the default example that contains ALL properties. Default
+ * value is `"Full"`.
+ * - `API_EXAMPLES.SCRAMBLE`: Scramble example values to obfuscate them. This will result in nonsensical data. 
+ * Default value is `false`.
+ * - `SWAGGER_UI.ALLOW_TRY_IT_OUT`: List all HTTP operations for which you wish to enable the "Try it out" feature of 
+ * SwaggerUI. Default value is `["get", "put", "post", "delete", "options", "head", "patch", "trace"]`
+ * 
+ * ## Writing Examples
+ * 
+ * Power-UI automagically generates two API examples for every object schema: "Minimum" (only required properties) and
+ * "Full" (all properties). You can expand upon these, by either writing additional manual examples or by
+ * adding more example generators. 
+ * 
+ * ### Manual Examples
+ * 
+ * To create a new example, you need to add a new property under `components > examples`. Its name will be displayed as
+ * the title of your example, make it descriptive. Manual examples must have the following structure:
+ * 
+ * ```
+ *  
+ *  "examples" : [
+ *      "Your_Example": {
+ *          "value": [
+ *              {
+ *                  "PropertyName": "Value",
+ *                  "PropertyName": "Value",
+ *                  ...
+ *              }
+ *          ]
+ *      }
+ *  ]
+ *  
+ * ```
+ * 
+ * This example will then be available for any user as a template. Use the property names as they are displayed in 
+ * your schema and use meaningful example values to help users understand how to format their data. Finally, you need
+ * to add a reference to your example to each `paths` endpoint you want to apply it to. Navigate to 
+ * `paths > /YourPath > post > requestBody > content > application/json > examples` and add 
+ * "#/components/examples/Your_Example".
+ * 
+ * ### Example Generators
+ * 
+ * Writing manual examples is a lot of hard work and there is a high risk of producing typos or forgetting
+ * properties. And whenever the schema needs to be updated, you also have to update all of its examples.
+ * Generators solve all these issues, by allowing you to automatically generate examples for a well-defined
+ * subset of all properties in a given schema.
+ * 
+ * To create a generator, simply add a new entry under `components > examples` and give it a descriptive name.
+ * Any example that has either of these properties, will be treated as a generator:
+ * 
+ * - `x-attribute-group-alias`: Filters all properties, based on which attribute groups they belong to. Properties
+ * that are not bound to an attribute will always be included.
+ * - `x-required-for-api`: Filters all properties, based on whether they have been declared as required by your 
+ * API-Definition. This filter does not check the underlying attributes.
+ * 
+ * For example, a generator that only shows required properties with their attributes visible would look like this 
+ * (note that you don't need to add the "value" property):
+ * 
+ * ```
+ * 
+ *  "examples": [
+ *      "Your_Generator":{
+ *          "x-attribute-group-alias": "~VISIBLE",
+ *          "x-required-for-api": true
+ *      }
+ *  ]
+ * 
+ * ```
  * 
  * @author Andrej Kabachnik
  */
 class OpenAPI3 implements APISchemaInterface
 {
+    public const X_REQUIRED_FOR_API = 'x-required-for-api';
+    private const CFG_EXAMPLE_REQUIRED = 'API_EXAMPLES.SUFFIX.REQUIRED';
+    private const CFG_EXAMPLE_FULL = 'API_EXAMPLES.SUFFIX.FULL';
+    private const CFG_EXAMPLE_SAMPLE_COUNT = 'API_EXAMPLES.SAMPLE_COUNT';
+    private const CFG_SCRAMBLE_EXAMPLES = 'API_EXAMPLES.SCRAMBLE';
+    
     use OpenAPI3UxonTrait;
 
     private ?Workbench $workbench;
@@ -35,8 +130,14 @@ class OpenAPI3 implements APISchemaInterface
     private mixed $openAPIJsonObj;
     private ?OpenApi $openAPISchema;
     private ?string $apiVersion = null;
+    private ?WebserviceInfo $info;
 
-    public function __construct(WorkbenchInterface $workbench, string $openAPIJson, string $apiVersion = null)
+    public function __construct(
+        WorkbenchInterface $workbench,
+        string $openAPIJson,
+        string $apiVersion = null,
+        WebserviceInfo $info = null
+    )
     {
         // Use local version of JSONPathLexer with edit to
         // Make sure to require BEFORE the JSONPath classes are loaded, so that the custom lexer replaces
@@ -52,11 +153,25 @@ class OpenAPI3 implements APISchemaInterface
         $this->workbench = $workbench;
         $this->openAPIJson = $openAPIJson;
         $this->apiVersion = $apiVersion;
+        $this->info = $info;
 
         $jsonArray = json_decode($openAPIJson, true);
         $jsonArray = $this->enhanceSchema($jsonArray);
+        $this->updateSchema($jsonArray);
+    }
+
+    /**
+     * Update the internal schema with a new value.
+     * 
+     * @param array $schemaArray
+     * @return void
+     * @throws \cebe\openapi\exceptions\TypeErrorException
+     * @throws \cebe\openapi\exceptions\UnresolvableReferenceException
+     */
+    protected function updateSchema(array $schemaArray) : void
+    {
         // Instatiate a cebe/openapi schema and use it to resolve references
-        $schema = new OpenApi($jsonArray);
+        $schema = new OpenApi($schemaArray);
         $schema->resolveReferences(new ReferenceContext($schema, "/"));
 
         $this->openAPIJsonObj = $schema->getSerializableData();
@@ -91,6 +206,26 @@ class OpenAPI3 implements APISchemaInterface
         return OpenAPISchema::class;
     }
 
+    /**
+     * @return WebserviceInfo|null
+     */
+    public function getWebserviceInfo() : WebserviceInfo|null
+    {
+        return $this->info;
+    }
+
+    /**
+     * Provide additional information about this webservice.
+     * 
+     * @param WebserviceInfo $info
+     * @return APISchemaInterface
+     */
+    public function setWebserviceInfo(WebserviceInfo $info) : APISchemaInterface
+    {
+        $this->info = $info;
+        return $this;
+    }
+    
     /**
      * @see APISchemaInterface::getRouteForRequest()
      */
@@ -160,7 +295,7 @@ class OpenAPI3 implements APISchemaInterface
     
     /**
      * @uxon-property components
-     * @uxon-type \cebe\openapi\spec\Components
+     * @uxon-type \axenox\ETL\Common\OpenAPI\OpenApi3Component[]
      * 
      * @return mixed
      */
@@ -168,17 +303,16 @@ class OpenAPI3 implements APISchemaInterface
     {
         return $this->openAPIJsonArray['components'];
     }
-    
+
     /**
-     * 
-     * 
-     * @return array|null
+     *
+     * @return array
      */
     protected function getSchemas() : array
     {
         return $this->openAPIJsonArray['components']['schemas'];
     }
-
+    
     public function __tostring()
     {
         return JsonDataType::encodeJson($this->openAPIJsonObj, true);
@@ -195,24 +329,224 @@ class OpenAPI3 implements APISchemaInterface
      *
      * @param array $json
      * @return array
+     * @throws InvalidJsonException
      */
     protected function enhanceSchema(array $json) : array
     {
+        $jsonPath = new JsonObject($json);
+        $apiTitle = $json['info']['title'] ?? '';
+
         if ($this->apiVersion !== null) {
-             $json['info']['version'] = $this->apiVersion;
+            $jsonPath->set('$.info.version', $this->apiVersion);
         }
+
+        $schemaPath = '$.components.schemas';
+        $examplesPath = '$.components.examples';
+        $config = $this->getWorkbench()->getApp('axenox.ETL')->getConfig();
         
-        foreach ($json['components']['schemas'] as $schemaName => $schema) {
+        // This needs to happen now, since it also strips the example generators from the JSON.
+        $examplesToGenerate = $this->extractExamplesGenerators($config, $jsonPath, $examplesPath);
+        
+        // Enhance the basic schema. We will use this as a fallback in case example generation fails.
+        foreach ($jsonPath->get($schemaPath)[0] as $schemaName => $schema) {
             $objectAlias = $schema['x-object-alias'];
             if(empty($objectAlias)) {
                 continue;
             }
             
             $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
-            $json['components']['schemas'][$schemaName] = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
+            $schema = OpenAPI3ObjectSchema::enhanceSchema($schema, $object);
+            $jsonPath->set($schemaPath . $this->toJsonPathKey($schemaName), $schema);
+        }
+
+        // Generate examples.
+        try {
+            $jsonPathWithExamples = $this->generateExamples(
+                new JsonObject($jsonPath->getValue()),
+                $config,
+                $apiTitle,
+                $schemaPath,
+                $examplesPath,
+                $examplesToGenerate
+            );
+            
+            // Ensure the new schema is functional. If an error is thrown, we use the schema without generated examples.
+            $jsonArray = $jsonPathWithExamples->getValue();
+            $schema = new OpenApi($jsonArray);
+            $schema->resolveReferences(new ReferenceContext($schema, "/"));
+            
+            $jsonPath = $jsonPathWithExamples;
+        } catch (\Throwable $e) {
+            $this->getWorkbench()->getLogger()->logException(new MetaModelLoadingFailedError(
+                'Failed to generate examples for API definition!', '83K3MPU', $e
+            ));
         }
         
-        return $json;
+        // Apply scrambling.
+        if($config->hasOption(self::CFG_SCRAMBLE_EXAMPLES) &&
+            $config->getOption(self::CFG_SCRAMBLE_EXAMPLES) === true) {
+            $this->scrambleExampleValues($jsonPath);
+        }
+        
+        // Document error messages.
+        $this->documentErrorMessages($jsonPath);
+        
+        return $jsonPath->getValue();
+    }
+
+    /**
+     * Generates and injects examples into an OpenAPI definition.
+     * 
+     * @param JsonObject             $jsonPath
+     * @param ConfigurationInterface $config
+     * @param string                 $apiTitle
+     * @param string                 $schemaPath
+     * @param string                 $examplesPath
+     * @param array                  $examplesToGenerate
+     * @return JsonObject
+     */
+    protected function generateExamples(
+        JsonObject             $jsonPath,
+        ConfigurationInterface $config,
+        string                 $apiTitle,
+        string                 $schemaPath,
+        string                 $examplesPath,
+        array                  $examplesToGenerate
+    ) : JsonObject
+    {
+        if($config->hasOption(self::CFG_EXAMPLE_SAMPLE_COUNT)) {
+            $sampleCount = $config->getOption(self::CFG_EXAMPLE_SAMPLE_COUNT);
+        } else {
+            $sampleCount = 40;
+        }
+
+        foreach ($jsonPath->get($schemaPath)[0] as $schemaName => $schema) {
+            $objectAlias = $schema['x-object-alias'];
+            if(empty($objectAlias)) {
+                continue;
+            }
+
+            $object = MetaObjectFactory::createFromString($this->getWorkbench(), $objectAlias);
+
+            $exampleNameFull = $this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config);
+            foreach ($examplesToGenerate as $exampleName => $exampleSchema) {
+                $exampleName = JsonDataType::sanitizeForJsonPath($exampleName);
+                $fillExampleValues = $exampleName === $exampleNameFull;
+                $exampleName = JsonDataType::sanitizeForJsonPath($schemaName) . '_' . $exampleName;
+
+                $pathToExample = $examplesPath . $this->toJsonPathKey($exampleName);
+                $injectExample = empty($jsonPath->get($pathToExample));
+
+                if(!$injectExample && !$fillExampleValues){
+                    continue;
+                }
+
+                $exampleJson = $this->generateExampleFromSchema(
+                    $object,
+                    '[' . $apiTitle . ']' . $exampleName,
+                    $schema,
+                    $exampleSchema,
+                    $sampleCount
+                );
+
+                // Inject example into definition.
+                if($injectExample) {
+                    // Ensure folder.
+                    if(empty($jsonPath->get($examplesPath))) {
+                        $jsonPath->add('$.components', [], 'examples');
+                    }
+                    $jsonPath->set($pathToExample, $exampleJson);
+
+                    // We have to add a reference to the example in "paths", but getting the correct path
+                    // is not trivial. The Path reference may be named differently than the component it
+                    // represents. To identify the correct path, we need to match object aliases, which would
+                    // be difficult with array accessors, which is why we use JSONPath.
+                    //
+                    // The path searches for all paths that have a property "content" anywhere in their structure
+                    // that matches these conditions:
+                    // - It has a child named "examples". 
+                    // - It has a child named "schema" with a property "x-attribute-alias".
+                    // - Said property is equal to the object alias of our $object.
+                    $schemaFilter = "[?(@.schema..x-object-alias == '{$object->getAliasWithNamespace()}')]";
+                    $referencePath = "$.paths..content{$schemaFilter}";
+
+                    // Ensure folder.
+                    if(empty($jsonPath->get($referencePath . ".examples"))) {
+                        $jsonPath->add($referencePath, [], 'examples');
+                    }
+
+                    // Add reference.
+                    $reference = '#/components/examples/' . $exampleName;
+                    $jsonPath->add(
+                        $referencePath . ".examples",
+                        [ '$ref' => $reference ],
+                        $exampleName
+                    );
+                }
+
+                // Fill missing example values.
+                if($fillExampleValues) {
+                    $path = "$.components.schemas{$this->toJsonPathKey($schemaName)}.properties";
+                    foreach ($exampleJson['value'][0] as $property => $example) {
+                        if($example === null) {
+                            continue;
+                        }
+
+                        $propertyPath = $path . '.' . $property;
+                        if(empty($jsonPath->get($propertyPath . '.example'))) {
+                            $jsonPath->add($propertyPath, $example, 'example');
+                        }
+                    }
+                }
+            }
+        }
+        
+        return $jsonPath;
+    }
+
+    /**
+     * Encloses a string in ['square brackets'], turning it into a key to ensure that special characters such as `.` do
+     * not affect JsonPath queries.
+     * 
+     * @param string $string
+     * @return string
+     */
+    protected function toJsonPathKey(string $string) : string
+    {
+        return "['" . $string . "']";
+    }
+    
+    protected function sanitizeForJsonPath(string $string) : string
+    {
+        return preg_replace('/\./', '_', $string);
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Performs a deep merge of the given UXON over the current OpenAPI JSON structure.
+     * Scalar values in the incoming UXON overwrite existing values; array/object values
+     * are merged recursively.
+     * 
+     * TODO geb 2026-07-01: Modifying an OpenAPI3 instance after instantiation does not really make sense. A lot of processing and enhancements happen
+     * TODO                 during construction, which have to be re-done upon modification. To be more transparent about the work performed and to avoid
+     * TODO                 issues with incomplete transformations (such as stale $.paths references), we should make this class largely immutable.
+     * 
+     * @deprecated
+     * 
+     * @see \axenox\ETL\Common\OpenAPI\OpenAPI3UxonTrait::importUxonObject()
+     */
+    public function importUxonObject(UxonObject $uxon, array $skip_property_names = []) : void
+    {
+        $incoming = $uxon->toArray();
+        if (! empty($skip_property_names)) {
+            foreach ($skip_property_names as $key) {
+                unset($incoming[$key]);
+            }
+        }
+        
+        $modifiedArray = array_replace_recursive($this->openAPIJsonArray ?? [], $incoming);
+        $this->updateSchema($modifiedArray);
     }
 
     public function publish(string $baseUrl) : string
@@ -255,6 +589,7 @@ class OpenAPI3 implements APISchemaInterface
                 || $name === OpenAPI3Property::X_CUSTOM_ATTRIBUTE
                 || $name === OpenAPI3Property::X_LOOKUP
                 || $name === OpenAPI3Property::X_PROPERTIES_FROM_DATA
+                || $name === OpenAPI3Property::X_CALCULATION
             ) {
                 continue;
             }
@@ -284,7 +619,7 @@ class OpenAPI3 implements APISchemaInterface
     /**
      * Selects data from a swaggerJson with the given json path.
      * Route path and method type are used to replace placeholders within the path.
-     *
+     * 
      * @param string $routePath
      * @param string $methodType
      * @return array|null
@@ -301,4 +636,257 @@ class OpenAPI3 implements APISchemaInterface
 			$data = (new JSONPath($this->openAPIJsonObj))->find($jsonPath)->getData()[0] ?? null;
 			return is_object($data) ? get_object_vars($data) : $data;
 	}
+
+    /**
+     * Extracts example generators from a given OpenAPI JSON and returns an array
+     * containing those definitions as well as some basic example generators.
+     *
+     * The following properties mark an example as a generator:
+     * - `x-attribute-group-alias`
+     * - `x-required-for-api`
+     *
+     * @param ConfigurationInterface $config
+     * @param JsonObject             $jsonPath
+     * @param string                 $examplePath
+     * @return array
+     */
+    protected function extractExamplesGenerators(
+        ConfigurationInterface $config,
+        JsonObject &$jsonPath, 
+        string $examplePath
+    ) : array
+    {
+        $examples = $jsonPath->get($examplePath)[0];
+
+        // Extract example generators.
+        foreach ($examples as $example => $schema) {
+            if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $schema) ||
+                key_exists(self::X_REQUIRED_FOR_API, $schema)) {
+                $jsonPath->remove($examplePath, $example);
+            } else {
+                unset($examples[$example]);
+            }
+        }
+
+        // Add default generators.
+        $examples[$this->getBuiltInExampleName(self::CFG_EXAMPLE_REQUIRED, $config)] = [
+            OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL',
+            self::X_REQUIRED_FOR_API => true
+        ];
+
+        $examples[$this->getBuiltInExampleName(self::CFG_EXAMPLE_FULL, $config)] = [
+            OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS => '~ALL'
+        ];
+
+        return $examples;
+    }
+
+    /**
+     * @param JsonObject $jsonPath
+     * @return void
+     */
+    protected function scrambleExampleValues(JsonObject &$jsonPath) : void
+    {
+        try {
+            // Scramble example properties.
+            foreach ($jsonPath->getJsonObjects('$.components.schemas..example') as $example) {
+                $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+
+            // Scramble example schemas.
+            foreach ($jsonPath->getJsonObjects('$.components.examples[*].value[*].*') as $example) {
+                $example->set('$', $this->scrambleValue($example->getValue()));
+            }
+        } catch (\Throwable $e) {
+
+        }
+    }
+
+    /**
+     * @param JsonObject $jsonPath
+     * @return void
+     */
+    protected function documentErrorMessages(JsonObject &$jsonPath) : void
+    {
+        try {
+            // Select all component properties that match these filters.
+            // TODO This only collects x-lookups at the moment. To extend the search append additional filters.
+            $filters = [
+                '@.x-lookup.if_not_found_error',
+                // For example, to collect enums add '@.enum'.
+            ];
+            $filters = implode(' or ', $filters);
+            $propertiesWithErrorHandling = $jsonPath->getJsonObjects('$.components.schemas.*.properties[?(' . $filters . ')]');
+            
+            // Scramble example properties.
+            foreach ($propertiesWithErrorHandling as &$property) {
+                $errors = [];
+                
+                $error = $property->get("$.x-lookup.if_not_found_error['//']")[0];
+                if($error !== null) {
+                    $errors['x-lookup'] = $error;
+                }
+                
+                // TODO Add additional error categories here.
+                
+                if(empty($errors)) {
+                    continue;
+                }
+                
+                $value = '';
+                $first = true;
+                foreach ($errors as $group => $message) {
+                    $value .= ($first ? '' : ', ') . $group . ': ' . $message;
+                    $first = false;
+                }
+                
+                $property->set('$.x-error-messages', $value);
+            }
+        } catch (\Throwable $e) {
+
+        }
+    }
+
+    /**
+     * @param mixed $value
+     * @return mixed
+     * @throws \Random\RandomException
+     */
+    protected function scrambleValue(mixed $value) : mixed
+    {
+        switch (true) {
+            case is_string($value):
+                return StringDataType::scramble($value);
+            case is_numeric($value):
+                return StringDataType::scramble($value, "/[-_\\\\,.\/ ()\[\]\{\}=\"'@\:]/", "0123456789");
+            case is_array($value):
+                foreach ($value as $k => $v) {
+                    $value[$k] = $this->scrambleValue($v);
+                }
+                return $value;
+            default:
+                return $value;
+        }
+    }
+
+    /**
+     * @param MetaObjectInterface $object
+     * @param string              $key
+     * @param array               $objectSchema
+     * @param array               $exampleSchema
+     * @param int                 $sampleCount
+     * @return array
+     */
+    protected function generateExampleFromSchema(
+        MetaObjectInterface $object, 
+        string $key,
+        array $objectSchema, 
+        array $exampleSchema,
+        int $sampleCount
+    ) : array
+    {
+        $objectSchema = new OpenAPI3ObjectSchema($this, $objectSchema);
+        $requiredFilter = $exampleSchema[self::X_REQUIRED_FOR_API];
+        
+        $groupFilter = null;
+        $customAttributes = $object->getAttributeGroup('~CUSTOM');
+        if(key_exists(OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS, $exampleSchema)) {
+            $groupFilter = $object->getAttributeGroup($exampleSchema[OpenAPI3Property::X_ATTRIBUTE_GROUP_ALIAS]);
+        }
+        
+        $values = [];
+        $attributesToLoad = [];
+        
+        foreach ($objectSchema->getProperties() as $property) {
+            if(!$property->isBoundToAttribute() || 
+                $property->isBoundToCalculation() || 
+                str_starts_with($property->getAttributeAlias(), '=')
+            ) {
+                continue;
+            }
+
+            try {
+                $attribute = $property->getAttribute();
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            // Filter for attribute groups, if the example schema contains such a filter.
+            if($groupFilter !== null) {
+                try {
+                    $groupFilter->getByAttributeId($attribute->getId());
+                } catch (\Throwable) {
+                    continue;
+                }
+            }
+
+            $attributesToLoad[] = $attribute;
+        }
+        
+        $loadedValues = OpenAPI3MetaModelSchemaBuilder::getExampleRow(
+            $object, 
+            $key, 
+            $attributesToLoad,
+            false,
+            $sampleCount
+        );
+        
+        foreach ($objectSchema->getProperties() as $name => $property) {
+            $exampleValue = null;
+            $attribute = null;
+            
+            if($property->isBoundToAttribute()) {
+                try {
+                    $attribute = $property->getAttribute();
+                    $exampleValue = $loadedValues[$attribute->getAlias()];
+                } catch (\Throwable $e) {
+                    
+                }
+            }
+
+            // Filter for property optionality, if the example generator contains such a filter.
+            if($requiredFilter !== null) {
+                try {
+                    $customAttributes->getByAttributeId($attribute->getId());
+                    $isCustom = true;
+                } catch (\Throwable) {
+                    $isCustom = false;
+                }
+
+                $isRequired = $property->isRequired() || ($isCustom && $attribute->isRequired());
+                
+                if($isRequired !== $requiredFilter) {
+                    continue;
+                }
+            }
+            
+            try {
+                $exampleValue = 
+                    $property->getExampleValue() ?? 
+                    $exampleValue;
+                
+                $decoded = json_decode($exampleValue);
+                $exampleValue = $decoded ?? $exampleValue;
+            } catch (\Throwable) {
+                
+            }
+            
+            $values[$name] = $exampleValue;
+        }
+        
+        return ['value' => [$values]]; 
+    }
+    
+    protected function getBuiltInExampleName(string $key, ConfigurationInterface $config) : string
+    {
+        if($config->hasOption($key)) {
+            return $config->getOption($key);
+        }
+        
+        return match ($key) {
+            self::CFG_EXAMPLE_FULL => 'Full',
+            self::CFG_EXAMPLE_REQUIRED => 'Required',
+            default => 'Default'
+        };
+    }
 }

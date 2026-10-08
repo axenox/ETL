@@ -18,12 +18,32 @@ interface DataFlowStepInterface extends WorkbenchDependantInterface, iCanBeConve
      * @return \Generator|string[]|ETLStepResultInterface
      */
     public function run(ETLStepDataInterface $stepData) : \Generator;
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @return DataFlowStepInterface
+     */
+    public function runPrepare(ETLStepDataInterface $stepData) : DataFlowStepInterface;
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @return DataFlowStepInterface
+     */
+    public function runTeardown(ETLStepDataInterface $stepData) : DataFlowStepInterface;
     
     public function isDisabled() : bool;
     
     public function setDisabled(bool $value) : DataFlowStepInterface;
     
     public function getName() : string;
+
+    /**
+     * Sets the display name of the step.
+     *
+     * @param string $name
+     * @return DataFlowStepInterface
+     */
+    public function setName(string $name) : DataFlowStepInterface;
     
     /**
      * Returns the maximum time this step is allowed to run in seconds.

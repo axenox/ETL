@@ -98,18 +98,33 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
                                     'details' => $e->getErrors()
                                 ];
                                 $eDetails = new JsonSchemaValidationError($errors, 'Invalid request body', null, null, $json);
-                                throw new HttpBadRequestError($request, $e2->getMessage(), null, $eDetails);
+                                throw new HttpBadRequestError($request, $e->getMessage(), null, $eDetails);
                             } catch (Throwable $e) {
                                 throw $prev;
                             }
                         }
 
-                        throw new HttpBadRequestError($request, $exception->getMessage(), null, $exception);
+                        $path = $this->buildJsonPathToMismatch($prev);
+                        if ($path !== false) {
+                            $path = " (JSON-Path to affected property: '" . $path . "')";
+                        } else {
+                            $path = '';
+                        }
+                        
+                        throw new HttpBadRequestError($request, $exception->getMessage() . $path, null, $exception);
                     case $prev instanceof InvalidParameter:
                         $schemaError = $prev->getPrevious();
                         $context = 'Invalid request parameter';
-                        $msg = $prev->getMessage() . '. ' . $schemaError->getMessage();
-                        throw new HttpBadRequestError($request, $context . $msg, null, $exception);
+                        // Reflect the offending parameter value, but HTML-encode it so any attacker-controlled
+                        // content (e.g. XSS probes) is rendered inert in every context - even if the response
+                        // were ever interpreted as HTML. json_encode + application/json + nosniff already
+                        // protect the JSON response; this is defense-in-depth.
+                        $safeValue = htmlspecialchars($prev->value(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        $msg = "Parameter '" . $prev->name() . "' has invalid value '" . $safeValue . "'";
+                        if ($schemaError !== null) {
+                            $msg .= '. ' . $schemaError->getMessage();
+                        }
+                        throw new HttpBadRequestError($request, $context . ': ' . $msg, null, $exception);
                 }
             }
 
@@ -171,5 +186,30 @@ final class OpenApiValidationMiddleware implements MiddlewareInterface
             return $request->getQueryParams()[$this->verboseUrlParam] === 'true';
         }
         return false;
+    }
+
+    /**
+     * Builds a JSON path to a SchemaMismatch error, by parsing its data breadcrumbs.
+     * 
+     * Returns FALSE if there were no breadcrumbs to follow.
+     * 
+     * @param SchemaMismatch $schemaMismatch
+     * @return bool|string
+     */
+    protected function buildJsonPathToMismatch(SchemaMismatch $schemaMismatch) : bool|string
+    {
+        $breadCrumb = $schemaMismatch->dataBreadCrumb()->buildChain();
+        
+        if(empty($breadCrumb)) {
+            return false;
+        } 
+        
+        foreach ($breadCrumb as $idx => $breadCrumbItem) {
+            if (is_numeric($breadCrumbItem)) {
+                $breadCrumb[$idx] = '[' . $breadCrumbItem . ']';
+            }
+        }
+
+        return '$.' . implode('.', $breadCrumb);
     }
 }

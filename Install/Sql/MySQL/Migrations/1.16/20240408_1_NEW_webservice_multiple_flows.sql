@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS `etl_webservice_flow`(
     `webservice_oid` binary(16) NOT NULL,
     `flow_oid` binary(16) NOT NULL,
     `route` NVARCHAR(30),
-    CONSTRAINT `FK route to flow` FOREIGN KEY (`flow_oid`) REFERENCES `etl_flow` (`oid`),
-    CONSTRAINT `FK flow to route` FOREIGN KEY (`webservice_oid`) REFERENCES `etl_webservice` (`oid`));
+    CONSTRAINT `FK webservice route to flow` FOREIGN KEY (`flow_oid`) REFERENCES `etl_flow` (`oid`),
+    CONSTRAINT `FK webservice route to webservice` FOREIGN KEY (`webservice_oid`) REFERENCES `etl_webservice` (`oid`));
 
 INSERT INTO `etl_webservice_flow`
 SELECT UNHEX(REPLACE(UUID(), '-', '')), CURDATE(), CURDATE(), created_by_user_oid, created_by_user_oid, oid, flow_oid, NULL FROM etl_webservice w
@@ -60,4 +60,3 @@ UPDATE `etl_webservice` w
 SET w.`flow_oid` = wf.`flow_oid`;
 
 DROP TABLE IF EXISTS `etl_webservice_flow`;
-
