@@ -2,6 +2,8 @@
 namespace axenox\ETL\ETLPrototypes;
 
 use axenox\ETL\Common\AbstractETLPrototype;
+use axenox\ETL\Common\NoteTaker;
+use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use axenox\ETL\Common\AbstractNoteTaker;
 use axenox\ETL\Common\StepNote;
 use axenox\ETL\Common\StepNoteTaker;
@@ -405,6 +407,14 @@ class StepGroup implements DataFlowStepInterface
         $row['debug_widget'] = $widgetJson;
         
         try {
+            if($step instanceof AbstractETLPrototype) {
+                $logBook = $step->getLogBook($stepData);
+                $logBook->setIndentActive(0);
+                $logBook->addSection('ERROR - ID "' . $exception->getId() . '"');
+                $logBook->addLine('**' . $exception->getMessage() . '**');
+                $this->getWorkbench()->eventManager()->dispatch(new OnAfterETLStepRun($step, $logBook));
+            }
+            
             $widgetJson = $exception->createWidget(UiPageFactory::createEmpty($this->getWorkbench()))->exportUxonObject()->toJson();
             $row['error_widget'] = $widgetJson;
         } catch (\Throwable $e) {
