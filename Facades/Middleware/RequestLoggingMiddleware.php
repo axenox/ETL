@@ -2,6 +2,7 @@
 namespace axenox\ETL\Facades\Middleware;
 
 use axenox\ETL\DataTypes\WebRequestStatusDataType;
+use exface\Core\Behaviors\TimeStampingBehavior;
 use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Factories\DataSheetFactory;
@@ -24,7 +25,8 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
     private $excludePatterns = [];
     private $finished = false;
 
-    private DataSheetInterface|null $logData = null;
+    private DataSheetInterface|null $logDataRequest = null;
+    private DataSheetInterface|null $logDataResponse = null;
 
     private DataSheetInterface|null $taskData = null;
 
@@ -77,6 +79,7 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         $logData = DataSheetFactory::createFromObjectIdOrAlias(
             $this->facade->getWorkbench(),
             'axenox.ETL.webservice_request');
+        
         $logData->addRow([
             'status' => WebRequestStatusDataType::RECEIVED,
             'url' => $request->getUri()->__toString(),
@@ -86,11 +89,12 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
                 $request->getUri()->getPath()),
             'http_method' => $request->getMethod(),
             'http_headers' => JsonDataType::encodeJson($request->getHeaders()),
-            'http_body' => $request->getBody()->__toString(),
+            'body_file__CONTENTS' => $request->getBody()->__toString(),
             'http_content_type' => implode(';', $request->getHeader('Content-Type'))]);
-
+        
         $logData->dataCreate(false);
-        $this->logData = $logData;
+        $logData->getFilters()->addConditionFromColumnValues($logData->getUidColumn());
+        $this->logDataRequest = $logData;
     }
 
     /**
@@ -105,17 +109,19 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         string $flowRunUID): void
     {
         // create request log if missing
-        if ($this->logData === null) {
+        if ($this->logDataRequest === null) {
             $this->logRequestReceived($request);
         }
 
-        $taskData = $this->logData->extractSystemColumns();
+        $taskData = $this->logDataRequest->extractSystemColumns();
+        
         $taskData->setCellValue('route', 0, $routeUID);
         $taskData->setCellValue('status', 0, WebRequestStatusDataType::PROCESSING);
         $taskData->setCellValue('flow_run', 0, $flowRunUID);
-        $taskData->dataUpdate(false);
+        $this->dataUpdateWithoutTimeStamping($taskData, false);
+
         $this->taskData = $taskData;
-        $this->logData->merge($taskData);
+        $this->logDataRequest->merge($taskData);
     }
 
     /**
@@ -130,26 +136,26 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         ResponseInterface $response = null): void
     {
         // do not log errors in request log prior to a valid request
-        if ($this->logData === null) {
+        if ($this->logDataRequest === null) {
             return;
         }
 
-        $logData = $this->logData->extractSystemColumns();
+        if ($response !== null) {
+            $this->logResponse($request, $response, $e ? $e->getMessage() : '');
+        }
+        
+        $logData = $this->logDataRequest->extractSystemColumns();
         $logData->setCellValue('status', 0, WebRequestStatusDataType::ERROR);
+
         if ($e !== null) {
             $logData->setCellValue('error_message', 0, $e->getMessage());
             $logData->setCellValue('error_logid', 0, $e->getId());
-            $logData->setCellValue('http_response_code', 0, $e->getStatusCode());
         }
-        if ($response !== null) {
-            $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
-            $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
-            $logData->setCellValue('response_body', 0, $response->getBody()->__toString());
-        }
+
         try {
             $this->finished = true;
-            $logData->dataUpdate(false);
-            $this->logData->merge($logData);
+            $this->dataUpdateWithoutTimeStamping($logData, false);
+            $this->logDataRequest->merge($logData);
         } catch (\Throwable $eUpdate) {
             // Do not throw an error if the logging fails, just log it to the main log.
             // The web service should still output the regular error result even if
@@ -169,24 +175,102 @@ final class RequestLoggingMiddleware implements MiddlewareInterface
         string $output,
         ResponseInterface $response): void
     {
-        $logData = $this->logData->extractSystemColumns();
+        $this->logResponse($request, $response, $output);
+        
+        $logData = $this->logDataRequest->extractSystemColumns();
+
         $logData->setCellValue('status', 0, WebRequestStatusDataType::DONE);
-        $logData->setCellValue('result_text', 0, $output);
-        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
-        $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
-        $logData->setCellValue('response_body', 0, $response->getBody()->__toString());
-        $logData->dataUpdate(false);
-        $this->logData->merge($logData);
+        $this->dataUpdateWithoutTimeStamping($logData, false);
+
+        $this->logDataRequest->merge($logData);
         $this->finished = true;
     }
 
     /**
      * @param ServerRequestInterface $request
+     * @param ResponseInterface      $response
+     * @param string                 $output
+     * @return void
+     */
+    protected function logResponse(ServerRequestInterface $request, ResponseInterface $response, string $output) : void
+    {
+        $logData = $this->getLogDataResponse($request)->extractSystemColumns();
+        
+        $logData->setCellValue('webservice_request', 0, $this->logDataRequest->getRow()[$this->logDataRequest->getUidColumnName()]);
+        $logData->setCellValue('http_response_code', 0, $response->getStatusCode());
+        $logData->setCellValue('response_header', 0, json_encode($response->getHeaders()));
+        $logData->setCellValue('body_file__CONTENTS', 0, $response->getBody()->__toString());
+        $logData->setCellValue('result_text', 0, $output);
+
+        $this->dataUpdateWithoutTimeStamping($logData, false);
+        $this->logDataResponse->merge($logData);
+    }
+
+    /**
+     * Call `$sheet->dataUpdate()`, while suppressing TimeStampingBehavior on the updated object.
+     * 
+     * NOTE: Does not affect sub-sheets!
+     * 
+     * @param DataSheetInterface $sheet
+     * @param bool               $createIfUidNotFound
+     * @return void
+     */
+    protected function dataUpdateWithoutTimeStamping(DataSheetInterface $sheet, bool $createIfUidNotFound = false) : void
+    {
+        $object = $sheet->getMetaObject();
+        $stateChanged = TimeStampingBehavior::disableForObject($object);
+        
+        $sheet->dataUpdate($createIfUidNotFound);
+        
+        if($stateChanged) {
+            TimeStampingBehavior::enableForObject($object);
+        }
+    }
+    
+    /**
+     * @param ServerRequestInterface $request
      * @return DataSheetInterface|null
      */
-    public function getLogData(ServerRequestInterface $request) : ?DataSheetInterface
+    public function getLogDataRequest(ServerRequestInterface $request) : ?DataSheetInterface
     {
-        return $this->logData;
+        return $this->logDataRequest;
+    }
+    
+    public function getLogDataResponse(ServerRequestInterface $request) : ?DataSheetInterface
+    {
+        if($this->logDataResponse === null) {
+            $dataSheet = DataSheetFactory::createFromObjectIdOrAlias(
+                $this->facade->getWorkbench(),
+                'axenox.ETL.webservice_response');
+            
+            $dataSheet->getColumns()->addFromSystemAttributes();
+            $dataSheet->getColumns()->addFromExpression('webservice_request');
+            
+            $requestData = $this->getLogDataRequest($request);
+            if($requestData) {
+                $requestUid = $requestData->getUidColumn()->getValues();
+                $dataSheet->getFilters()->addConditionFromValueArray(
+                    'webservice_request',
+                    $requestUid
+                );
+                
+                $dataSheet->dataRead();
+                
+                if($dataSheet->countRows() === 0) {
+                    $dataSheet->addRow([
+                        'webservice_request' => $requestUid[0],
+                        'http_response_code' => 200
+                    ]);
+                    $dataSheet->dataCreate();
+                    $dataSheet->dataRead();
+                }
+            } 
+            
+            $this->logDataResponse = $dataSheet;
+        }
+        
+        
+        return $this->logDataResponse;
     }
 
     /**

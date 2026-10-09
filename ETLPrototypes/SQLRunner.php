@@ -301,8 +301,9 @@ class SQLRunner extends AbstractETLPrototype
      * {@inheritDoc}
      * @see \exface\Core\Interfaces\iCanGenerateDebugWidgets::createDebugWidget()
      */
-    public function createDebugWidget(DebugMessage $debug_widget)
+    public function createDebugWidget(DebugMessage $debug_widget, ?ETLStepDataInterface $stepData = null)
     {
+        $debug_widget = parent::createDebugWidget($debug_widget, $stepData);
         if ($this->query !== null) {
             $debug_widget = $this->query->createDebugWidget($debug_widget);
         }

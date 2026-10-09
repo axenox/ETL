@@ -2,23 +2,16 @@
 
 namespace axenox\ETL\Common;
 
-use axenox\ETL\Common\AbstractETLPrototype;
-use axenox\ETL\Interfaces\ETLStepDataInterface;
-use axenox\ETL\Interfaces\ETLStepResultInterface;
-use exface\Core\CommonLogic\DataSheets\DataSheet;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Facades\AbstractHttpFacade\Middleware\RouteConfigLoader;
-use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Factories\FormulaFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Widgets\DebugMessage;
 use Flow\JSONPath\JSONPath;
 use Flow\JSONPath\JSONPathException;
 use Psr\Http\Message\ServerRequestInterface;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
-use exface\Core\Exceptions\RuntimeException;
 use axenox\ETL\Interfaces\OpenApiFacadeInterface;
 
 abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
@@ -129,29 +122,9 @@ abstract class AbstractOpenApiPrototype extends AbstractETLPrototype
         return json_decode(json_encode($data), true);
     }
 
-
     /**
-     * @param ETLStepDataInterface $stepData
-     * @param array $requestedColumns
-     * @return DataSheet|DataSheetInterface
-     */
-    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheet|DataSheetInterface
-    {
-        $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
-        $requestLogData->getColumns()->addFromSystemAttributes();
-        $requestLogData->getColumns()->addMultiple($requestedColumns);
-        $requestLogData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
-        $requestLogData->dataRead();
-
-        if ($requestLogData->countRows() > 1) {
-            throw new InvalidArgumentException('Ambiguous web requests!');
-        }
-
-        return $requestLogData;
-    }
-
-    /**
-     * Adds additional data provided by the ´additional_rows´ config within the step to given row into the given datasheet.
+     * Adds additional data provided by the ´additional_rows´ config within the step to given row into the given
+     * datasheet.
      *
      * @param DataSheetInterface $dataSheet
      * @param array $placeholder

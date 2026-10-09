@@ -65,7 +65,7 @@
     ],
     "rows": [
         {
-            "_EXPORT_SUMMARY": "Web message: Retry [WebserviceRequestRunFlow]",
+            "_EXPORT_SUMMARY": "Web request: Retry [WebserviceRequestRunFlow]",
             "CREATED_ON": "2023-10-23 15:44:51",
             "MODIFIED_ON": "2024-06-26 13:18:46",
             "CREATED_BY_USER": "0x31000000000000000000000000000000",

@@ -105,11 +105,11 @@ class StepGroup implements DataFlowStepInterface
                 $log = '';
                 $stepData = new ETLStepData($stepData->getTask(), $flowRunUid, $stepRunUid, $prevStepResult, $prevRunResult);
                 
-                $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step) {
+                $this->getWorkbench()->eventManager()->addListener(OnBeforeETLStepRun::getEventName(), function(OnBeforeETLStepRun $event) use (&$logRow, $step, $stepData) {
                     if ($event->getStep() !== $step) {
                         return;
                     }
-                    $ds = $this->logRunDebug($event, $logRow);
+                    $ds = $this->logRunDebug($event, $logRow, $stepData);
                     $logRow = $ds->getRow(0);
                 });
                 
@@ -270,12 +270,12 @@ class StepGroup implements DataFlowStepInterface
      * @param array $row
      * @return \exface\Core\Interfaces\DataSheets\DataSheetInterface
      */
-    protected function logRunDebug(OnBeforeETLStepRun $event, array $row)
+    protected function logRunDebug(OnBeforeETLStepRun $event, array $row, ETLStepDataInterface $stepData)
     {
         $ds = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.step_run');
         try {
             $debugContainer = WidgetFactory::createDebugMessage($this->getWorkbench(), $ds->getMetaObject());
-            $widgetJson = $event->getStep()->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
+            $widgetJson = $event->getStep()->createDebugWidget($debugContainer, $stepData)->exportUxonObject()->toJson();
             $row['debug_widget'] = $widgetJson;
             $ds->addRow($row);
             $ds->dataUpdate();
@@ -320,7 +320,7 @@ class StepGroup implements DataFlowStepInterface
         }
 
         $debugContainer = WidgetFactory::createDebugMessage($this->getWorkbench(), $ds->getMetaObject());
-        $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
+        $widgetJson = $step->createDebugWidget($debugContainer, $stepData)->exportUxonObject()->toJson();
         $row['debug_widget'] = $widgetJson;
         
         if($step instanceof AbstractETLPrototype && $result->countProcessedRows() > 0) {
@@ -362,7 +362,7 @@ class StepGroup implements DataFlowStepInterface
         $row['error_log_id'] = $exception->getId();
         
         $debugContainer = WidgetFactory::createDebugMessage($this->getWorkbench(), $ds->getMetaObject());
-        $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
+        $widgetJson = $step->createDebugWidget($debugContainer, $stepData)->exportUxonObject()->toJson();
         $row['debug_widget'] = $widgetJson;
         
         try {
@@ -410,6 +410,7 @@ class StepGroup implements DataFlowStepInterface
         ];
         try {
             $debugContainer = WidgetFactory::createDebugMessage($this->getWorkbench(), $ds->getMetaObject());
+            // TODO how to get the $stepData into createDebugWidget() here???
             $widgetJson = $step->createDebugWidget($debugContainer)->exportUxonObject()->toJson();
             $row['error_widget'] = $widgetJson;
         } catch (\Throwable $e) {

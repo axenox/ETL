@@ -11,6 +11,7 @@ use exface\Core\DataTypes\BooleanDataType;
 use exface\Core\DataTypes\DateDataType;
 use exface\Core\DataTypes\DateTimeDataType;
 use exface\Core\DataTypes\IntegerDataType;
+use exface\Core\DataTypes\JsonDataType;
 use exface\Core\DataTypes\NumberDataType;
 use exface\Core\DataTypes\StringDataType;
 use exface\Core\DataTypes\StringEnumDataType;
@@ -456,6 +457,9 @@ class OpenAPI3Property implements APIPropertyInterface
 
             case 'array':
                 return DataTypeFactory::createFromString($workbench, ArrayDataType::class);
+
+            case 'object':
+                return DataTypeFactory::createFromString($workbench, JsonDataType::class);
 
             case 'string':
                 if ($format === 'datetime' || $format === 'date') {

@@ -2,8 +2,6 @@
 
 namespace axenox\ETL\Common;
 
-use axenox\ETL\Common\AbstractETLPrototype;
-use axenox\ETL\Common\OpenAPI\OpenAPI3;
 use axenox\ETL\Interfaces\APISchema\APISchemaInterface;
 use axenox\ETL\Interfaces\ETLStepDataInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -12,7 +10,6 @@ use exface\Core\DataTypes\StringDataType;
 use exface\Core\Exceptions\InvalidArgumentException;
 use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
-use exface\Core\Widgets\DebugMessage;
 use exface\Core\Interfaces\Tasks\TaskInterface;
 use exface\Core\Interfaces\Tasks\HttpTaskInterface;
 use axenox\ETL\Interfaces\OpenApiFacadeInterface;
@@ -61,27 +58,6 @@ abstract class AbstractAPISchemaPrototype extends AbstractETLPrototype
             'model' => $model
         ];
         return $model;
-    }
-
-
-    /**
-     * @param ETLStepDataInterface $stepData
-     * @param array $requestedColumns
-     * @return DataSheetInterface
-     */
-    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns): DataSheetInterface
-    {
-        $requestLogData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
-        $requestLogData->getColumns()->addFromSystemAttributes();
-        $requestLogData->getColumns()->addMultiple($requestedColumns);
-        $requestLogData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
-        $requestLogData->dataRead();
-
-        if ($requestLogData->countRows() > 1) {
-            throw new InvalidArgumentException('Ambiguous web requests!');
-        }
-
-        return $requestLogData;
     }
 
     /**

@@ -6,6 +6,8 @@ use axenox\ETL\Events\Flow\OnAfterETLStepRun;
 use exface\Core\CommonLogic\DataSheets\CrudCounter;
 use exface\Core\CommonLogic\Debugger\LogBooks\FlowStepLogBook;
 use exface\Core\Exceptions\DataSheets\DataCheckFailedErrorMultiple;
+use exface\Core\Exceptions\InvalidArgumentException;
+use exface\Core\Factories\DataSheetFactory;
 use exface\Core\Interfaces\DataSheets\DataSheetInterface;
 use exface\Core\Interfaces\WorkbenchInterface;
 use exface\Core\CommonLogic\UxonObject;
@@ -287,24 +289,24 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      *
      * @param DataSheetInterface   $dataSheet
      * @param UxonObject|null      $uxon
-     * @param string               $sectionTitle
+     * @param string               $logbookIntro
      * @param ETLStepDataInterface $stepData
      * @param FlowStepLogBook      $logBook
      * @return void
      */
     protected function performDataChecks(
-        DataSheetInterface $dataSheet, 
-        ?UxonObject $uxon,
-        string $sectionTitle,
+        DataSheetInterface   $dataSheet,
+        ?UxonObject          $uxon,
+        string               $uxonProperty,
         ETLStepDataInterface $stepData,
-        FlowStepLogBook $logBook) : void
+        FlowStepLogBook      $logBook) : void
     {
-        if($uxon === null) {
-            $logBook->addLine('No checks to perform.');
+        if($uxon === null || $uxon->isEmpty()) {
+            $logBook->addLine('No data checks defined in `' . $uxonProperty . '`');
             return;
         }
         
-        $logBook->addSection($sectionTitle);
+        $logBook->addLine('Applying ' . $uxon->countProperties() . ' data checks from `' . $uxonProperty . '`');
         $logBook->addIndent(1);
         
         $errors = null;
@@ -334,7 +336,6 @@ abstract class AbstractETLPrototype implements ETLStepInterface
 
         if($errors === null) {
             $logBook->addLine('Data PASSED all checks.');
-            $logBook->addIndent(-1);
         } else if ($stopOnError) {
             $logBook->addIndent(-1);
             $logBook->addLine('Terminating step, because one or more data checks FAILED.');
@@ -343,6 +344,7 @@ abstract class AbstractETLPrototype implements ETLStepInterface
             
             throw $errors;
         }
+        $logBook->addIndent(-1);
     }
 
     /**
@@ -431,12 +433,72 @@ abstract class AbstractETLPrototype implements ETLStepInterface
      * @inheritdoc 
      * @see iCanGenerateDebugWidgets::createDebugWidget()
      */
-    public function createDebugWidget(DebugMessage $debug_widget)
+    public function createDebugWidget(DebugMessage $debug_widget, ?ETLStepDataInterface $stepData = null)
     {
         if(empty($this->logBooks)) {
             return $debug_widget;
         }
+        if ($stepData === null) {
+            return $this->logBooks[0]->createDebugWidget($debug_widget);
+        }
+        return $this->getLogBook($stepData)->createDebugWidget($debug_widget);
+    }
+
+    /**
+     * @param ETLStepDataInterface $stepData
+     * @param array $requestedColumns
+     * @return DataSheetInterface
+     */
+    protected function loadRequestData(ETLStepDataInterface $stepData, array $requestedColumns = []): DataSheetInterface
+    {
+        $requestData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_request');
+        $requestData->getColumns()->addFromSystemAttributes();
+        $requestData->getColumns()->addMultiple($requestedColumns);
+        $requestData->getFilters()->addConditionFromString('flow_run', $stepData->getFlowRunUid());
+        $requestData->dataRead();
+
+        if ($requestData->countRows() > 1) {
+            throw new InvalidArgumentException('Ambiguous web requests!');
+        }
+
+        return $requestData;
+    }
+
+    /**
+     * @param string $requestUid
+     * @param array  $requestedColumns
+     * @param bool   $createIfNotFound
+     * @return DataSheetInterface
+     */
+    protected function loadResponseData(
+        string $requestUid, 
+        array $requestedColumns = [], 
+        bool $createIfNotFound = true): DataSheetInterface
+    {
+        if(empty($requestUid)) {
+            throw new InvalidArgumentException('Cannot load response: Missing request UID!');
+        }
         
-        return $this->logBooks[0]->createDebugWidget($debug_widget);
+        $responseData = DataSheetFactory::createFromObjectIdOrAlias($this->getWorkbench(), 'axenox.ETL.webservice_response');
+        $responseData->getColumns()->addFromSystemAttributes();
+        $responseData->getColumns()->addMultiple($requestedColumns);
+        $responseData->getColumns()->addFromExpression('webservice_request');
+        $responseData->getFilters()->addConditionFromString('webservice_request', $requestUid);
+        $responseData->dataRead();
+
+        if ($responseData->countRows() > 1) {
+            throw new InvalidArgumentException('Cannot load response: Ambiguous web requests!');
+        }
+        
+        if($createIfNotFound && $responseData->countRows() === 0) {
+            $responseData->addRow([
+                'webservice_request' => $requestUid,
+                'http_response_code' => 200,
+            ]);
+            $responseData->dataCreate();
+            $responseData->dataRead();
+        }
+
+        return $responseData;
     }
 }
