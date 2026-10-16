@@ -14,7 +14,7 @@ UPDATE
 				SELECT 
 					r.flow_run_oid AS oid,
 					r.flow_oid,
-					r.created_on,
+					MIN(r.created_on) AS created_on,
 					IF (SUM(r.success_flag) + SUM(r.step_disabled_flag) + SUM(r.skipped_flag) - SUM(r.invalidated_flag) = COUNT(1), 1, 0) AS 'valid_flag'
 				FROM etl_step_run r
 				GROUP BY r.flow_run_oid, r.flow_oid
