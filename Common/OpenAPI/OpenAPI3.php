@@ -567,7 +567,7 @@ class OpenAPI3 implements APISchemaInterface
     {
         $baseUrls = $this->getWorkbench()->getConfig()->getOption('SERVER.BASE_URLS')->toArray();
         foreach (array_reverse($baseUrls) as $baseUrl) {
-            // prepend entry to array
+            $baseUrl = rtrim($baseUrl, '/') . '/';
             array_unshift($swaggerArray['servers'], ['url' => $baseUrl . $path]);
         }
 

@@ -14,7 +14,8 @@ UPDATE
 				SELECT 
 					r.flow_run_oid AS oid,
 					r.flow_oid,
-					r.created_on,
+					/* Match the flow-run view and satisfy ONLY_FULL_GROUP_BY. */
+					MIN(r.created_on) AS created_on,
 					IF (SUM(r.success_flag) + SUM(r.step_disabled_flag) + SUM(r.skipped_flag) - SUM(r.invalidated_flag) = COUNT(1), 1, 0) AS 'valid_flag'
 				FROM etl_step_run r
 				GROUP BY r.flow_run_oid, r.flow_oid
@@ -38,14 +39,19 @@ SET step_flow_sequence = srs.flow_run_pos
 WHERE step_flow_sequence IS NULL OR step_flow_sequence = -1;
 
 /* Simple flows with only one step get the sequence 1 if not processed already */
+/*
+ * GROUP BY forces materialization of the derived table, avoiding MySQL
+ * error 1093 when reading etl_step while updating it.
+ */
 UPDATE etl_step AS s
+INNER JOIN (
+    SELECT flow_oid
+    FROM etl_step
+    GROUP BY flow_oid
+    HAVING COUNT(*) = 1
+) AS single_step_flows ON single_step_flows.flow_oid = s.flow_oid
 SET s.step_flow_sequence = 1
-WHERE (
-      SELECT COUNT(s1.oid)
-      FROM etl_step AS s1
-      WHERE s1.flow_oid = s.flow_oid
-  ) = 1
-AND (s.step_flow_sequence IS NULL OR s.step_flow_sequence = -1);
+WHERE s.step_flow_sequence IS NULL OR s.step_flow_sequence = -1;
 
 /* All other steps get -1 to indicate, that they must be reviewed! */
 UPDATE etl_step SET step_flow_sequence = -1 WHERE step_flow_sequence IS NULL;
