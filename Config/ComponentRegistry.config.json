@@ -1,0 +1,53 @@
+{
+  "dataflow": {
+    "name": "DataFlow",
+    "description": "Configurable step-based background data transformation",
+    "selector":  {
+      "class": "\\axenox\\ETL\\Common\\Selectors\\DataFlowSelector",
+      "factory": "\\axenox\\ETL\\Factories\\DataFlowFactory::createFromSelector"
+    },
+    "documentation": {
+      "app_docs": "https://github.com/axenox/ETL/blob/1.x-dev/Docs/DataFlows/index.md"
+    },
+    "search_selector_data": {
+      "object_alias": "axenox.ETL.flow",
+      "filters": {
+        "operator": "OR",
+        "conditions": [
+          {"expression": "name", "comparator": "=", "value": "[#~query#]"}
+        ]
+      },
+      "columns": [
+        {"attribute_alias": "name"},
+        {"attribute_alias": "UID", "name": "Selector"}
+      ]
+    }
+  },
+  "dataflow_step": {
+    "name": "DataFlow step",
+    "description": "Configurable data flow steps that read, transform or write data. Step prototypes require source and target object context.",
+    "documentation": {
+      "app_docs": "https://github.com/axenox/ETL/blob/1.x-dev/Docs/DataFlows/index.md"
+    },
+    "search_prototype_data": {
+      "object_alias": "axenox.ETL.etl_prototype",
+      "filters": {
+        "operator": "OR",
+        "conditions": [
+          {"expression": "NAME", "comparator": "=", "value": "[#~query#]"}
+        ]
+      },
+      "columns": [
+        {"attribute_alias": "NAME"},
+        {"attribute_alias": "PATHNAME_RELATIVE", "name": "Selector"}
+      ]
+    }
+  },
+  "dataflow_webservice": {
+    "name": "WebService",
+    "description": "Webservices, that call data flows.",
+    "documentation": {
+      "app_docs": "https://github.com/axenox/ETL/blob/1.x-dev/Docs/WebServices/index.md"
+    }
+  }
+}
